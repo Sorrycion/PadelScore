@@ -375,3 +375,28 @@ def test_stylesheet_link_works_behind_https(client):
     page = client.get("/", headers={"x-forwarded-proto": "https"}).text
     assert '<link rel="stylesheet" href="/static/style.css">' in page
     assert client.get("/static/style.css").status_code == 200
+
+
+def test_delete_tournament_removes_its_matchdays_and_sets(league):
+    league.post("/tournaments", data={"name": "Otra liga", "held_on": "2026-11-01"})  # id 2
+    league.post("/tournaments/2/matchdays", data={"played_on": "2026-11-01"})        # matchday 2
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4, matchday_id=1))
+    league.post("/matches", data=set_form((5, 6, 7, 8), 6, 4, matchday_id=2))
+
+    assert "Delete tournament" in league.get("/tournaments/1").text
+    r = league.post("/tournaments/1/delete")
+    assert r.status_code == 200 and str(r.url).endswith("/tournaments")
+    assert "Liga Amigos" not in r.text and "Otra liga" in r.text
+    assert league.get("/tournaments/1").status_code == 404
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM matchdays").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM players").fetchone()[0] == len(NAMES)
+    assert league.post("/tournaments/99/delete").status_code == 404
+
+
+def test_delete_tournament_needs_the_password(locked):
+    assert "Delete tournament" not in locked.get("/tournaments/1").text
+    r = locked.post("/tournaments/1/delete", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")
+    assert locked.get("/tournaments/1").status_code == 200

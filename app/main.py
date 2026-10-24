@@ -248,6 +248,19 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
         })
 
 
+@app.post("/tournaments/{tournament_id}/delete", dependencies=EDIT)
+def delete_tournament(tournament_id: int):
+    """Delete a tournament with all its matchdays and sets; players are kept."""
+    with db.connect() as conn:
+        get_or_404(conn, "tournaments", tournament_id)
+        conn.execute(
+            "DELETE FROM matches WHERE matchday_id IN "
+            "(SELECT id FROM matchdays WHERE tournament_id = ?)", (tournament_id,))
+        conn.execute("DELETE FROM matchdays WHERE tournament_id = ?", (tournament_id,))
+        conn.execute("DELETE FROM tournaments WHERE id = ?", (tournament_id,))
+    return redirect("/tournaments")
+
+
 @app.post("/tournaments/{tournament_id}/matchdays", dependencies=EDIT)
 def add_matchday(tournament_id: int, played_on: str = Form("")):
     played_on = parse_date(played_on)

@@ -78,6 +78,10 @@ TEXT = {
     "no_tournaments": {"es": "Aún no hay torneos.", "en": "No tournaments yet."},
     "no_matchdays": {"es": "Aún no hay jornadas.", "en": "No matchdays yet."},
     "add_matchday_n": {"es": "Agregar jornada {n}", "en": "Add matchday {n}"},
+    "delete_tournament": {"es": "Eliminar torneo", "en": "Delete tournament"},
+    "confirm_delete_tournament": {
+        "es": "¿Eliminar este torneo con todas sus jornadas y sets? No se puede deshacer.",
+        "en": "Delete this tournament with all its matchdays and sets? This cannot be undone."},
     "six_matchdays": {"es": "El reglamento contempla 6 jornadas por liga.",
                       "en": "The rules plan 6 matchdays per league."},
 

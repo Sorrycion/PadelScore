@@ -17,6 +17,8 @@ nav a { color: var(--text); text-decoration: none; }
 .lang-switch a { color: var(--muted); }
 form.nav-form { margin: 0; }
 button.plain-link { color: var(--text); }
+form.danger-zone { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); }
+button.danger { background: var(--error); color: var(--bg); }
 a { color: var(--accent); }
 main { max-width: 760px; margin: 0 auto; padding: 16px; }
 .button, button { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 8px;

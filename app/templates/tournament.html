@@ -26,4 +26,10 @@
 </form>
 {% endif %}
 {% if results|length >= 6 %}<p class="muted">{{ _("six_matchdays") }}</p>{% endif %}
+{% if editor %}
+<form method="post" action="/tournaments/{{ tournament.id }}/delete" class="danger-zone"
+      onsubmit="return confirm('{{ _('confirm_delete_tournament') }}')">
+  <button type="submit" class="danger">{{ _("delete_tournament") }}</button>
+</form>
+{% endif %}
 {% endblock %}
