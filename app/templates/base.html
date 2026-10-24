@@ -4,7 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}PadelScore{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+  {# A relative link: behind Azure's HTTPS front end url_for() would build an http:// URL,
+     which browsers block on an https:// page. #}
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <header>

@@ -367,3 +367,11 @@ def test_database_folder_is_created(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "DB_PATH", str(path))
     db.init_db()
     assert path.exists()
+
+
+def test_stylesheet_link_works_behind_https(client):
+    # Azure's front end talks plain HTTP to the app; an absolute http:// link would be
+    # blocked by browsers on the https:// site.
+    page = client.get("/", headers={"x-forwarded-proto": "https"}).text
+    assert '<link rel="stylesheet" href="/static/style.css">' in page
+    assert client.get("/static/style.css").status_code == 200
