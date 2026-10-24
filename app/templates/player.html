@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ player.name }} · PadelScore{% endblock %}
+{% block content %}
+<h1>{{ player.name }}</h1>
+
+{% for t in tournaments %}
+<section class="court-block">
+  <h2><a class="plain" href="/tournaments/{{ t.id }}">{{ t.name }}</a></h2>
+  {% if t.total %}
+  <p class="muted">{{ _("position_n", n=t.position) }} · {{ _("n_points", n=t.total.points) }} · {{ _("n_sets_won", n=t.total.sets_won) }} · {{ _("n_matchdays_played", n=t.total.played) }}</p>
+  {% endif %}
+  <table>
+    <thead><tr><th>{{ _("matchday") }}</th><th>{{ _("court") }}</th><th title="{{ _('games_diff_title') }}">{{ _("games_diff") }}</th><th>{{ _("sets_won") }}</th><th>{{ _("pts") }}</th></tr></thead>
+    <tbody>
+    {% for h in t.history %}
+      <tr>
+        <td><a class="plain" href="/matchdays/{{ h.id }}">{{ _("matchday_short", n=h.number) }}</a> <span class="tag">{{ h.played_on }}</span></td>
+        <td>{{ h.court }}</td>
+        <td><span class="diff {% if h.diff > 0 %}up{% elif h.diff < 0 %}down{% endif %}">{{ "%+d"|format(h.diff) if h.diff else 0 }}</span></td>
+        <td>{{ h.sets_won }} / {{ h.sets }}</td>
+        <td class="pts">{{ h.points }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+<p class="empty">{{ _("no_matchdays_played") }}</p>
+{% endfor %}
+
+{% if partners %}
+<h2>{{ _("partners") }}</h2>
+<ul class="players">
+  {% for p in partners %}
+  <li><a class="plain" href="/players/{{ p.id }}">{{ p.name }}</a>
+      <span class="tag">{{ _("n_sets", n=p.count) }}</span></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if matches %}
+<h2>{{ _("sets") }}</h2>
+<ul class="matches">{% for m in matches %}{% include "_match_row.html" %}{% endfor %}</ul>
+{% endif %}
+{% endblock %}

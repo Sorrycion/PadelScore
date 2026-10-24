@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ _("sets") }} · PadelScore{% endblock %}
+{% block content %}
+<h1>{{ _("sets") }}</h1>
+<form method="get" action="/matches" class="inline">
+  <select name="tournament">
+    <option value="">{{ _("all_tournaments") }}</option>
+    {% for t in tournaments %}
+      <option value="{{ t.id }}" {% if filter.tournament == t.id %}selected{% endif %}>{{ t.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="player">
+    <option value="">{{ _("all_players") }}</option>
+    {% for p in players %}
+      <option value="{{ p.id }}" {% if filter.player == p.id %}selected{% endif %}>{{ p.name }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">{{ _("filter") }}</button>
+  {% if filter.tournament or filter.player %}<a href="/matches">{{ _("clear") }}</a>{% endif %}
+</form>
+{% if matches %}
+<ul class="matches">{% for m in matches %}{% include "_match_row.html" %}{% endfor %}</ul>
+{% elif filter.tournament or filter.player %}
+<p class="empty">{{ _("no_sets_filter") }}</p>
+{% else %}
+<p class="empty">{{ _("no_sets_yet", url="/matches/new") }}</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+{% if tournament %}
+<h1>{{ _("standings") }}: <a class="plain" href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a></h1>
+<p class="muted">{{ tournament.held_on }}{% if latest_matchday %} · {{ _("latest") }}: <a href="/matchdays/{{ latest_matchday.id }}">{{ _("matchday_n", n=latest_matchday.number) }}</a> ({{ latest_matchday.played_on }}){% endif %}</p>
+{% include "_standings.html" %}
+
+<h2>{{ _("latest_sets") }}</h2>
+{% if matches %}
+<ul class="matches">{% for m in matches %}{% include "_match_row.html" %}{% endfor %}</ul>
+<p><a href="/matches?tournament={{ tournament.id }}">{{ _("all_sets_tournament") }}</a></p>
+{% elif not results %}
+<p class="empty">{{ _("no_matchdays_add", url="/tournaments/%d"|format(tournament.id)) }}</p>
+{% else %}
+<p class="empty">{{ _("no_sets_record", url="/matches/new?matchday=%d"|format(latest_matchday.id)) }}</p>
+{% endif %}
+{% else %}
+<h1>{{ _("standings") }}</h1>
+<p class="empty">{{ _("no_tournaments_start", url="/tournaments") }}</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}PadelScore{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">🎾 PadelScore</a>
+    <nav>
+      <a href="/">{{ _("nav_standings") }}</a>
+      <a href="/tournaments">{{ _("nav_tournaments") }}</a>
+      <a href="/matches">{{ _("nav_sets") }}</a>
+      <a href="/players">{{ _("nav_players") }}</a>
+      <a href="/rules">{{ _("nav_rules") }}</a>
+      <a class="button" href="/matches/new">{{ _("nav_new_set") }}</a>
+      {% set here = request.url.path ~ ('?' ~ request.url.query if request.url.query else '') %}
+      <span class="lang-switch">
+        {% for code in langs %}
+          {% if code == lang %}<strong>{{ code|upper }}</strong>{% else %}<a href="/lang/{{ code }}?next={{ here|urlencode }}" hreflang="{{ code }}">{{ code|upper }}</a>{% endif %}
+        {% endfor %}
+      </span>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ _("matchday_n", n=matchday.number) }} · {{ tournament.name }} · PadelScore{% endblock %}
+{% block content %}
+<div class="title-row">
+  <h1>{{ _("matchday_n", n=matchday.number) }}</h1>
+  <a class="button" href="/matches/new?matchday={{ matchday.id }}">{{ _("record_set_button") }}</a>
+</div>
+<p class="muted"><a href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · {{ matchday.played_on }}</p>
+
+{% if matchday.courts %}
+<p class="muted">{{ _("places_note", url="/rules") }}</p>
+{% for court, rows in matchday.courts.items() %}
+<section class="court-block">
+  <div class="title-row">
+    <h2>{{ _("court_n", n=court) }}</h2>
+    <a href="/matches/new?matchday={{ matchday.id }}&court={{ court }}">{{ _("add_set_on_court", n=court) }}</a>
+  </div>
+  {% include "_court_table.html" %}
+  {% set sets_here = sets|selectattr("court", "equalto", court)|list %}
+  <ul class="matches">{% for m in sets_here %}{% include "_match_row.html" %}{% endfor %}</ul>
+  {% if sets_here|length < 3 %}<p class="muted">{{ _("sets_recorded", n=sets_here|length) }}</p>{% endif %}
+</section>
+{% endfor %}
+
+<h2>{{ _("court_changes") }}</h2>
+<p class="muted">{{ _("per_draw_move") }}
+  {% if move == 1 %}<strong>{{ _("n_players", n=1) }}</strong> · <a href="?move=2">{{ _("n_players", n=2) }}</a>{% else %}<a href="?move=1">{{ _("n_players", n=1) }}</a> · <strong>{{ _("n_players", n=2) }}</strong>{% endif %}
+</p>
+<ul class="moves">
+  {% for mv in moves %}
+  <li><strong>{{ _("court_n", n=mv.court) }}</strong>
+    {% if mv.up %}<span class="up">{{ _("move_up", n=mv.up_to) }} {{ mv.up|join(", ") }}</span>{% endif %}
+    {% if mv.down %}<span class="down">{{ _("move_down", n=mv.down_to) }} {{ mv.down|join(", ") }}</span>{% endif %}
+    {% if not mv.up and not mv.down %}<span class="muted">{{ _("no_changes") }}</span>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty">{{ _("no_sets_record", url="/matches/new?matchday=%d"|format(matchday.id)) }}</p>
+{% endif %}
+{% endblock %}

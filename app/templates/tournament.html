@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ tournament.name }} · PadelScore{% endblock %}
+{% block content %}
+<h1>{{ tournament.name }}</h1>
+<p class="muted">{{ tournament.held_on }}</p>
+
+<h2>{{ _("standings") }}</h2>
+{% include "_standings.html" %}
+
+<h2>{{ _("matchdays") }}</h2>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+{% if results %}
+<ul class="players">
+  {% for md in results %}
+  <li><a class="plain" href="/matchdays/{{ md.id }}">{{ _("matchday_n", n=md.number) }}</a>
+      <span class="tag">{{ md.played_on }} · {{ _("n_courts", n=md.courts|length) }} · {{ _("n_sets", n=md.sets|length) }}</span></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty">{{ _("no_matchdays") }}</p>
+{% endif %}
+<form method="post" action="/tournaments/{{ tournament.id }}/matchdays" class="inline">
+  <input type="date" name="played_on" value="{{ today }}" required>
+  <button type="submit">{{ _("add_matchday_n", n=results|length + 1) }}</button>
+</form>
+{% if results|length >= 6 %}<p class="muted">{{ _("six_matchdays") }}</p>{% endif %}
+{% endblock %}

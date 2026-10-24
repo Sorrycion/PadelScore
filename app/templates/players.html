@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ _("players") }} · PadelScore{% endblock %}
+{% block content %}
+<h1>{{ _("players") }}</h1>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+<form method="post" action="/players" class="inline">
+  <input name="name" placeholder="{{ _('player_name') }}" required>
+  <button type="submit">{{ _("add_player") }}</button>
+</form>
+{% if players %}
+<ul class="players">
+  {% for p in players %}<li><a class="plain" href="/players/{{ p.id }}">{{ p.name }}</a></li>{% endfor %}
+</ul>
+{% else %}
+<p class="empty">{{ _("no_players") }}</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}{{ _("nav_rules") }} · PadelScore{% endblock %}
+{% block content %}
+{% if _("rules_spanish_only") %}<p class="muted">{{ _("rules_spanish_only") }}</p>{% endif %}
+<article class="rules" lang="es">
+{{ rules|safe }}
+</article>
+{% endblock %}

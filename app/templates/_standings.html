@@ -1,0 +1,27 @@
+{# Tournament standings. Needs: standings, results (matchdays, for the per-matchday columns). #}
+{% if standings %}
+<div class="scroll">
+<table class="standings">
+  <thead><tr>
+    <th>#</th><th>{{ _("player") }}</th><th>{{ _("pts") }}</th>
+    {% for md in results %}<th title="{{ _('matchday_n', n=md.number) }}"><a class="plain" href="/matchdays/{{ md.id }}">{{ _("matchday_short", n=md.number) }}</a></th>{% endfor %}
+    <th title="{{ _('sets_won') }}">{{ _("sets") }}</th>
+  </tr></thead>
+  <tbody>
+  {% for r in standings %}
+    <tr>
+      <td>{{ r.position }}</td>
+      <td><a class="plain" href="/players/{{ r.id }}">{{ r.name }}</a></td>
+      <td class="pts">{{ r.points }}</td>
+      {% for md in results %}
+        <td class="muted-cell">{% if md.number in r.by_matchday %}{{ r.by_matchday[md.number] }}{% else %}–{% endif %}</td>
+      {% endfor %}
+      <td>{{ r.sets_won }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="empty">{{ _("no_results") }}</p>
+{% endif %}

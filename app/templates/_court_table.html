@@ -1,0 +1,15 @@
+{# One court's placings on a matchday. Needs: court, rows. #}
+<table class="court">
+  <thead><tr><th>#</th><th>{{ _("player") }}</th><th title="{{ _('games_diff_title') }}">{{ _("games_diff") }}</th><th>{{ _("sets_won") }}</th><th>{{ _("pts") }}</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td><a class="plain" href="/players/{{ r.id }}">{{ r.name }}</a></td>
+      <td><span class="diff {% if r.diff > 0 %}up{% elif r.diff < 0 %}down{% endif %}">{{ "%+d"|format(r.diff) if r.diff else 0 }}</span></td>
+      <td>{{ r.sets_won }} / {{ r.sets }}</td>
+      <td class="pts">{{ r.points }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
