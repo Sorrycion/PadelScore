@@ -3,10 +3,12 @@
 {% block content %}
 <h1>{{ _("players") }}</h1>
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+{% if editor %}
 <form method="post" action="/players" class="inline">
   <input name="name" placeholder="{{ _('player_name') }}" required>
   <button type="submit">{{ _("add_player") }}</button>
 </form>
+{% endif %}
 {% if players %}
 <ul class="players">
   {% for p in players %}<li><a class="plain" href="/players/{{ p.id }}">{{ p.name }}</a></li>{% endfor %}

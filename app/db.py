@@ -56,5 +56,7 @@ def connect():
 
 
 def init_db():
+    # On Azure the database lives in a folder that may not exist yet (/home/data).
+    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
     with connect() as conn:
         conn.executescript(SCHEMA)

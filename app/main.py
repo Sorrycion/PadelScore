@@ -1,8 +1,10 @@
 """PadelScore web app."""
+import time
 from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
+from urllib.parse import quote
 
 import markdown
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
@@ -10,7 +12,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import db
+from . import auth, db
+from .auth import LoginRequired, require_editor
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
 from .scoring import ScoreError, check_set, court_moves, tournament_results
 
@@ -26,7 +29,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="PadelScore", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
-templates = Jinja2Templates(directory=BASE / "templates", context_processors=[i18n_context])
+templates = Jinja2Templates(directory=BASE / "templates",
+                            context_processors=[i18n_context, auth.auth_context])
+EDIT = [Depends(require_editor)]  # routes that change data need the club password
+
+
+@app.exception_handler(LoginRequired)
+def login_required(request: Request, exc: LoginRequired):
+    return redirect(f"/login?next={quote(exc.next_url, safe='/')}")
+
+
+def safe_next(url: str) -> str:
+    """Only redirect within this site."""
+    if not url.startswith("/") or url.startswith(("//", "/\\")):
+        return "/"
+    return url
 
 
 def opt_int(value: str | None) -> int | None:
@@ -155,11 +172,37 @@ def home(request: Request):
 @app.get("/lang/{lang}")
 def set_language(lang: str, next: str = "/"):
     """Remember the UI language in a cookie and go back to the page the user was on."""
-    if not next.startswith("/") or next.startswith(("//", "/\\")):
-        next = "/"  # only redirect within this site
-    response = redirect(next)
+    response = redirect(safe_next(next))
     if lang in LANGS:
         response.set_cookie(COOKIE, lang, max_age=365 * 24 * 3600, samesite="lax")
+    return response
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, next: str = "/"):
+    if auth.is_editor(request):
+        return redirect(safe_next(next))
+    return templates.TemplateResponse(request, "login.html", {"next": safe_next(next)})
+
+
+@app.post("/login")
+def login(request: Request, password: str = Form(""), next: str = Form("/")):
+    if not auth.password_matches(password):
+        time.sleep(1)  # slow down password guessing
+        return templates.TemplateResponse(request, "login.html", {
+            "next": safe_next(next), "error": "err_wrong_password",
+        }, status_code=401)
+    response = redirect(safe_next(next))
+    response.set_cookie(auth.COOKIE, auth.editor_token(auth.edit_password()),
+                        max_age=auth.COOKIE_MAX_AGE, httponly=True, samesite="lax",
+                        secure=auth.is_https(request))
+    return response
+
+
+@app.post("/logout")
+def logout():
+    response = redirect("/")
+    response.delete_cookie(auth.COOKIE)
     return response
 
 
@@ -178,7 +221,7 @@ def tournaments_page(request: Request, error: str | None = None):
         })
 
 
-@app.post("/tournaments")
+@app.post("/tournaments", dependencies=EDIT)
 def add_tournament(name: str = Form(...), held_on: str = Form("")):
     name, held_on = name.strip(), parse_date(held_on)
     if not name:
@@ -205,7 +248,7 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
         })
 
 
-@app.post("/tournaments/{tournament_id}/matchdays")
+@app.post("/tournaments/{tournament_id}/matchdays", dependencies=EDIT)
 def add_matchday(tournament_id: int, played_on: str = Form("")):
     played_on = parse_date(played_on)
     with db.connect() as conn:
@@ -248,7 +291,7 @@ def players_page(request: Request, error: str | None = None):
         })
 
 
-@app.post("/players")
+@app.post("/players", dependencies=EDIT)
 def add_player(name: str = Form(...)):
     name = name.strip()
     if not name:
@@ -359,7 +402,7 @@ def validate_match(conn, form, _):
         return _("err_set"), None
 
 
-@app.get("/matches/new", response_class=HTMLResponse)
+@app.get("/matches/new", response_class=HTMLResponse, dependencies=EDIT)
 def new_match_page(request: Request, matchday: str | None = None,
                    court: str | None = None):
     with db.connect() as conn:
@@ -374,7 +417,7 @@ def new_match_page(request: Request, matchday: str | None = None,
         })
 
 
-@app.post("/matches")
+@app.post("/matches", dependencies=EDIT)
 def add_match(request: Request, form: dict = Depends(match_form_data)):
     with db.connect() as conn:
         error, winner = validate_match(conn, form, translator(get_lang(request)))
@@ -389,7 +432,7 @@ def add_match(request: Request, form: dict = Depends(match_form_data)):
     return redirect(f"/matchdays/{form['matchday_id']}")
 
 
-@app.get("/matches/{match_id}/edit", response_class=HTMLResponse)
+@app.get("/matches/{match_id}/edit", response_class=HTMLResponse, dependencies=EDIT)
 def edit_match_page(request: Request, match_id: int):
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
@@ -397,7 +440,7 @@ def edit_match_page(request: Request, match_id: int):
                                  match_id=match_id)
 
 
-@app.post("/matches/{match_id}")
+@app.post("/matches/{match_id}", dependencies=EDIT)
 def update_match(request: Request, match_id: int,
                  form: dict = Depends(match_form_data)):
     with db.connect() as conn:
@@ -414,7 +457,7 @@ def update_match(request: Request, match_id: int,
     return redirect(f"/matchdays/{form['matchday_id']}")
 
 
-@app.post("/matches/{match_id}/delete")
+@app.post("/matches/{match_id}/delete", dependencies=EDIT)
 def delete_match(match_id: int):
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)

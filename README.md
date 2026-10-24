@@ -32,6 +32,26 @@ Then open http://127.0.0.1:8000 in your browser.
 
 The database is a file named `padelscore.db` created in the project folder. Set the `PADELSCORE_DB` environment variable to store it somewhere else.
 
+## Editing password
+
+Anyone can view the site. To add or change data, set a club password in the
+`PADELSCORE_EDIT_PASSWORD` environment variable; people then use **Entrar / Log in**
+once per browser. Without it (e.g. on your own computer) editing is open.
+
+## Deploy to Azure (free F1 plan)
+
+The app runs on Azure App Service (Linux, Python 3.12) with these app settings:
+
+| Setting | Value |
+|---|---|
+| `PADELSCORE_DB` | `/home/data/padelscore.db` (`/home` is the only folder that survives restarts) |
+| `PADELSCORE_EDIT_PASSWORD` | the club password |
+| `SCM_DO_BUILD_DURING_DEPLOYMENT` | `true` (installs `requirements.txt` on deploy) |
+
+Startup command: `gunicorn -w 1 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 app.main:app`
+
+Keep the plan at one instance: SQLite must not be shared between servers.
+
 ## Run the tests
 
 ```powershell

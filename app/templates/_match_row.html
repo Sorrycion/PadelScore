@@ -3,10 +3,12 @@
   <span class="team {% if m.winner == 'A' %}winner{% endif %}"><a href="/players/{{ m.a1_id }}">{{ m.a1 }}</a> &amp; <a href="/players/{{ m.a2_id }}">{{ m.a2 }}</a></span>
   <span class="score">{{ m.team_a_games }}-{{ m.team_b_games }}</span>
   <span class="team b {% if m.winner == 'B' %}winner{% endif %}"><a href="/players/{{ m.b1_id }}">{{ m.b1 }}</a> &amp; <a href="/players/{{ m.b2_id }}">{{ m.b2 }}</a></span>
+  {% if editor %}
   <span class="actions">
     <a href="/matches/{{ m.id }}/edit">{{ _("edit") }}</a>
     <form method="post" action="/matches/{{ m.id }}/delete" onsubmit="return confirm('{{ _('confirm_delete_set') }}')">
       <button type="submit" class="link">{{ _("delete") }}</button>
     </form>
   </span>
+  {% endif %}
 </li>

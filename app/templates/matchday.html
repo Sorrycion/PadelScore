@@ -3,7 +3,9 @@
 {% block content %}
 <div class="title-row">
   <h1>{{ _("matchday_n", n=matchday.number) }}</h1>
+  {% if editor %}
   <a class="button" href="/matches/new?matchday={{ matchday.id }}">{{ _("record_set_button") }}</a>
+  {% endif %}
 </div>
 <p class="muted"><a href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · {{ matchday.played_on }}</p>
 
@@ -13,7 +15,9 @@
 <section class="court-block">
   <div class="title-row">
     <h2>{{ _("court_n", n=court) }}</h2>
+    {% if editor %}
     <a href="/matches/new?matchday={{ matchday.id }}&court={{ court }}">{{ _("add_set_on_court", n=court) }}</a>
+    {% endif %}
   </div>
   {% include "_court_table.html" %}
   {% set sets_here = sets|selectattr("court", "equalto", court)|list %}

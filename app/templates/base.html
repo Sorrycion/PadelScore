@@ -15,7 +15,14 @@
       <a href="/matches">{{ _("nav_sets") }}</a>
       <a href="/players">{{ _("nav_players") }}</a>
       <a href="/rules">{{ _("nav_rules") }}</a>
-      <a class="button" href="/matches/new">{{ _("nav_new_set") }}</a>
+      {% if editor %}<a class="button" href="/matches/new">{{ _("nav_new_set") }}</a>{% endif %}
+      {% if login_enabled %}
+        {% if editor %}
+          <form method="post" action="/logout" class="nav-form"><button type="submit" class="link plain-link">{{ _("logout") }}</button></form>
+        {% else %}
+          <a href="/login?next={{ request.url.path|urlencode }}">{{ _("login") }}</a>
+        {% endif %}
+      {% endif %}
       {% set here = request.url.path ~ ('?' ~ request.url.query if request.url.query else '') %}
       <span class="lang-switch">
         {% for code in langs %}

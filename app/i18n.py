@@ -137,6 +137,17 @@ TEXT = {
     "no_matchdays_played": {"es": "Aún no ha jugado ninguna jornada.",
                             "en": "No matchdays played yet."},
 
+    # Login
+    "login": {"es": "Entrar", "en": "Log in"},
+    "logout": {"es": "Salir", "en": "Log out"},
+    "login_title": {"es": "Entrar para editar", "en": "Log in to edit"},
+    "login_hint": {"es": "Cualquiera puede ver los resultados. Para registrar o cambiar datos "
+                         "se necesita la contraseña del club.",
+                   "en": "Anyone can see the results. Recording or changing data needs the "
+                         "club password."},
+    "club_password": {"es": "Contraseña del club", "en": "Club password"},
+    "err_wrong_password": {"es": "Contraseña incorrecta.", "en": "Wrong password."},
+
     # Rules
     "rules_spanish_only": {"es": "", "en": "The rules are only available in Spanish."},
 

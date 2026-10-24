@@ -16,8 +16,10 @@ APP_DIR = Path(__file__).parent.parent / "app"
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    """A client using the English UI (most assertions below check English texts)."""
+    """A client using the English UI (most assertions below check English texts).
+    No club password is set, so editing is open (as on a developer's machine)."""
     monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.delenv("PADELSCORE_EDIT_PASSWORD", raising=False)
     with TestClient(app) as c:
         c.cookies.set("lang", "en")
         yield c
@@ -287,3 +289,81 @@ def test_new_set_form_selects_the_latest_matchday(league):
     assert form.count(" selected>") == 1
     # A link naming a matchday still wins.
     assert re.search(r'<option value="1" selected>', league.get("/matches/new?matchday=1").text)
+
+
+# --- Club password ---------------------------------------------------------------
+
+@pytest.fixture
+def locked(league, monkeypatch):
+    """The league, with a club password set and this browser not logged in."""
+    monkeypatch.setenv("PADELSCORE_EDIT_PASSWORD", "secreto")
+    monkeypatch.setattr("app.main.time.sleep", lambda s: None)  # skip the wrong-password delay
+    league.cookies.delete("editor")
+    return league
+
+
+def test_viewing_needs_no_password(locked):
+    for url in ["/", "/tournaments", "/tournaments/1", "/matchdays/1", "/players", "/matches", "/rules"]:
+        assert locked.get(url).status_code == 200, url
+    page = locked.get("/tournaments").text
+    assert "Add tournament" not in page and "+ Set" not in page and ">Log in<" in page
+
+
+@pytest.mark.parametrize("method,url,data", [
+    ("post", "/players", {"name": "Zed"}),
+    ("post", "/tournaments", {"name": "Otra", "held_on": "2026-11-01"}),
+    ("post", "/tournaments/1/matchdays", {"played_on": "2026-11-01"}),
+    ("post", "/matches", set_form((1, 2, 3, 4), 6, 4)),
+    ("get", "/matches/new", None),
+])
+def test_changes_need_the_password(locked, method, url, data):
+    r = getattr(locked, method)(url, data=data, follow_redirects=False) if data else \
+        getattr(locked, method)(url, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM players").fetchone()[0] == len(NAMES)
+        assert conn.execute("SELECT COUNT(*) FROM tournaments").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM matchdays").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0] == 0
+
+
+def test_login_page_remembers_where_to_go(locked):
+    r = locked.get("/matches/new?matchday=1")
+    assert "Log in to edit" in r.text and 'value="/matches/new?matchday=1"' in r.text
+
+
+def test_wrong_password_is_rejected(locked):
+    r = locked.post("/login", data={"password": "nope", "next": "/"})
+    assert r.status_code == 401 and "Wrong password." in r.text
+    assert locked.post("/players", data={"name": "Zed"}, follow_redirects=False).status_code == 303
+
+
+def test_login_then_edit_then_logout(locked):
+    r = locked.post("/login", data={"password": "secreto", "next": "/players"})
+    assert r.status_code == 200 and str(r.url).endswith("/players") and "Add player" in r.text
+    assert "Zed" in locked.post("/players", data={"name": "Zed"}).text
+    assert locked.post("/matches", data=set_form((1, 2, 3, 4), 6, 4)).status_code == 200
+    assert ">Log out<" in locked.get("/").text
+
+    locked.post("/logout")
+    r = locked.post("/players", data={"name": "Yan"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")
+
+
+def test_changing_the_password_logs_everyone_out(locked, monkeypatch):
+    locked.post("/login", data={"password": "secreto", "next": "/"})
+    monkeypatch.setenv("PADELSCORE_EDIT_PASSWORD", "nuevo")
+    assert locked.post("/players", data={"name": "Zed"}, follow_redirects=False).status_code == 303
+
+
+def test_login_only_redirects_within_the_site(locked):
+    r = locked.post("/login", data={"password": "secreto", "next": "https://evil.example"},
+                    follow_redirects=False)
+    assert r.headers["location"] == "/"
+
+
+def test_database_folder_is_created(tmp_path, monkeypatch):
+    path = tmp_path / "data" / "nested" / "padelscore.db"
+    monkeypatch.setattr(db, "DB_PATH", str(path))
+    db.init_db()
+    assert path.exists()
