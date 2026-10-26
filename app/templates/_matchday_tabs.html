@@ -1,0 +1,10 @@
+{# Numbered tabs for a tournament's matchdays. Needs: tournament, results; optional current (matchday id). #}
+{% if results or editor %}
+<nav class="tabs" aria-label="{{ _('matchdays') }}">
+  {% for md in results %}
+  <a href="/matchdays/{{ md.id }}" {% if md.id == current %}class="active" aria-current="page"{% endif %} title="{{ _('matchday_n', n=md.number) }} · {{ md.played_on }}">{{ md.number }}</a>
+  {% endfor %}
+  {% if editor %}<a class="add" href="/tournaments/{{ tournament.id }}/matchdays/new" title="{{ _('add_matchday_n', n=results|length + 1) }}">+</a>{% endif %}
+</nav>
+<p class="tabs-label">{{ _("matchdays") }}</p>
+{% endif %}

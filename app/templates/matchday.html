@@ -1,31 +1,39 @@
 {% extends "base.html" %}
 {% block title %}{{ _("matchday_n", n=matchday.number) }} · {{ tournament.name }} · PadelScore{% endblock %}
 {% block content %}
-<div class="title-row">
-  <h1>{{ _("matchday_n", n=matchday.number) }}</h1>
-  {% if editor %}
-  <a class="button" href="/matchdays/{{ matchday.id }}/courts">{{ _("assign_courts") }}</a>
-  {% endif %}
+{% set player_count = matchday.courts.values()|map("length")|sum %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow"><a class="plain" href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · {{ tournament.rule_type }}</p>
+    <h1>{{ _("matchday_n", n=matchday.number) }}</h1>
+    <div class="muted">{{ matchday.played_on }}</div>
+  </div>
+  <div class="stats">
+    <div><strong>{{ matchday.courts|length }}</strong> 🎾</div>
+    <div><strong>{{ player_count }}</strong> 👥</div>
+  </div>
 </div>
-<p class="muted"><a href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · {{ matchday.played_on }}</p>
+{% set current = matchday.id %}
+{% include "_matchday_tabs.html" %}
+{% if editor %}
+<p><a class="button" href="/matchdays/{{ matchday.id }}/courts">{{ _("assign_courts") }}</a></p>
+{% endif %}
 
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if matchday.courts %}
-<p class="muted">{{ _("places_note", url="/rules") }}</p>
-<p class="muted">{{ _("absent_note") }}</p>
 {% for court, rows in matchday.courts.items() %}
 <section class="court-block">
-  <div class="title-row">
+  <div class="court-head">
     <h2>{{ _("court_n", n=court) }}</h2>
     {% if editor %}
     <a href="/matches/new?matchday={{ matchday.id }}&court={{ court }}">{{ _("add_set_on_court", n=court) }}</a>
     {% endif %}
   </div>
-  {% include "_court_table.html" %}
   {% set sets_here = sets|selectattr("court", "equalto", court)|list %}
   <ul class="matches">{% for m in sets_here %}{% include "_match_row.html" %}{% endfor %}</ul>
   {% set played_here = sets_here|rejectattr("team_a_games", "none")|list %}
   {% if played_here|length < 3 %}<p class="muted">{{ _("sets_recorded", n=played_here|length) }}</p>{% endif %}
+  <div class="scroll">{% include "_court_table.html" %}</div>
 </section>
 {% endfor %}
 
@@ -50,6 +58,9 @@
 </form>
 <p class="muted">{{ _("new_matchday_hint", n=move) }}</p>
 {% endif %}
+
+<p class="muted">{{ _("places_note", url="/rules") }}</p>
+<p class="muted">{{ _("absent_note") }}</p>
 {% else %}
 <p class="empty">{{ _("no_courts_yet", url="/matchdays/%d/courts"|format(matchday.id)) }}</p>
 {% endif %}

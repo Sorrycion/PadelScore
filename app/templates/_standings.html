@@ -10,7 +10,7 @@
   <tbody>
   {% for r in standings %}
     <tr>
-      <td>{{ r.position }}</td>
+      <td><span class="pos pos-{{ r.position }}">{{ r.position }}</span></td>
       <td><a class="plain" href="/players/{{ r.id }}">{{ r.name }}</a></td>
       <td class="pts">{{ r.points }}</td>
       {% for md in results %}

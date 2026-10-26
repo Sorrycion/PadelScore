@@ -1,31 +1,31 @@
 {% extends "base.html" %}
 {% block title %}{{ tournament.name }} · PadelScore{% endblock %}
 {% block content %}
-<h1>{{ tournament.name }}</h1>
-<p class="muted">{{ tournament.held_on }} · {{ _("rule_type") }}: <a href="/rules">{{ tournament.rule_type }}</a></p>
-
-<h2>{{ _("standings") }}</h2>
-{% include "_standings.html" %}
-
-<h2>{{ _("matchdays") }}</h2>
+<div class="page-head">
+  <div>
+    <p class="eyebrow"><a class="plain" href="/rules">{{ tournament.rule_type }}</a></p>
+    <h1>{{ tournament.name }}</h1>
+    <div class="muted">{{ tournament.held_on }}</div>
+  </div>
+  <div class="stats">
+    <div><strong>{{ results|length }}</strong> 📅</div>
+    <div><strong>{{ standings|length }}</strong> 👥</div>
+  </div>
+</div>
+{% include "_matchday_tabs.html" %}
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
-{% if results %}
-<ul class="players">
-  {% for md in results %}
-  <li><a class="plain" href="/matchdays/{{ md.id }}">{{ _("matchday_n", n=md.number) }}</a>
-      <span class="tag">{{ md.played_on }} · {{ _("n_courts", n=md.courts|length) }} · {{ _("n_sets", n=md.sets|length) }}</span></li>
-  {% endfor %}
-</ul>
-{% else %}
-<p class="empty">{{ _("no_matchdays") }}</p>
-{% endif %}
+{% if not results %}<p class="empty">{{ _("no_matchdays") }}</p>{% endif %}
 {% if editor %}
 <form method="get" action="/tournaments/{{ tournament.id }}/matchdays/new" class="inline">
-  <input type="date" name="played_on" value="{{ today }}" required>
+  <input type="date" name="played_on" value="{{ today }}" aria-label="{{ _('date') }}" required>
   <button type="submit">{{ _("add_matchday_n", n=results|length + 1) }}</button>
 </form>
 {% endif %}
 {% if results|length >= 6 %}<p class="muted">{{ _("six_matchdays") }}</p>{% endif %}
+
+<h2>{{ _("standings") }}</h2>
+{% include "_standings.html" %}
+
 {% if editor %}
 <form method="post" action="/tournaments/{{ tournament.id }}/delete" class="danger-zone"
       onsubmit="return confirm('{{ _('confirm_delete_tournament') }}')">

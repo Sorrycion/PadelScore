@@ -77,6 +77,11 @@ TEXT = {
     # Tournaments
     "tournament_name": {"es": "Nombre del torneo", "en": "Tournament name"},
     "rule_type": {"es": "Tipo de reglas", "en": "Rules type"},
+    "create_tournament": {"es": "Crear torneo", "en": "Create tournament"},
+    "n_players_bold": {"es": ("<strong>{n}</strong> jugador", "<strong>{n}</strong> jugadores"),
+                       "en": ("<strong>{n}</strong> player", "<strong>{n}</strong> players")},
+    "n_matchdays_bold": {"es": ("<strong>{n}</strong> jornada", "<strong>{n}</strong> jornadas"),
+                         "en": ("<strong>{n}</strong> matchday", "<strong>{n}</strong> matchdays")},
     "add_tournament": {"es": "Agregar torneo", "en": "Add tournament"},
     "no_tournaments": {"es": "Aún no hay torneos.", "en": "No tournaments yet."},
     "no_matchdays": {"es": "Aún no hay jornadas.", "en": "No matchdays yet."},

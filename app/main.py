@@ -95,7 +95,17 @@ def get_tournament(conn, tournament_id):
 
 
 def all_tournaments(conn):
-    return conn.execute(
+    """Tournaments, newest first, with their rule type, matchdays and players."""
+    players = dict(conn.execute(
+        """
+        SELECT d.tournament_id, COUNT(DISTINCT p.id)
+        FROM matches m
+        JOIN matchdays d ON d.id = m.matchday_id
+        JOIN players p ON p.id IN (m.a1, m.a2, m.b1, m.b2)
+        GROUP BY d.tournament_id
+        """
+    ).fetchall())
+    return [{**t, "players": players.get(t["id"], 0)} for t in conn.execute(
         """
         SELECT t.*, r.name AS rule_type, COUNT(d.id) AS matchdays
         FROM tournaments t
@@ -104,7 +114,7 @@ def all_tournaments(conn):
         GROUP BY t.id
         ORDER BY t.held_on DESC, t.id DESC
         """
-    ).fetchall()
+    )]
 
 
 def all_matchdays(conn):
@@ -308,6 +318,7 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
         return templates.TemplateResponse(request, "matchday.html", {
             "tournament": tournament,
             "matchday": result,
+            "results": results,
             "sets": set_rows(conn, matchday_id=matchday_id),
             "moves": court_moves(result["courts"], move),
             "move": move,

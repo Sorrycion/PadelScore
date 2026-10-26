@@ -2,37 +2,45 @@
 <html lang="{{ lang }}">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#6aa5ff">
   <title>{% block title %}PadelScore{% endblock %}</title>
   {# A relative link: behind Azure's HTTPS front end url_for() would build an http:// URL,
      which browsers block on an https:// page. #}
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
+  {% set path = request.url.path %}
+  <header class="topbar">
     <a class="brand" href="/">🎾 PadelScore</a>
-    <nav>
-      <a href="/">{{ _("nav_standings") }}</a>
-      <a href="/tournaments">{{ _("nav_tournaments") }}</a>
-      <a href="/matches">{{ _("nav_sets") }}</a>
-      <a href="/players">{{ _("nav_players") }}</a>
-      <a href="/rules">{{ _("nav_rules") }}</a>
+    <div class="top-actions">
       {% if editor %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
       {% if login_enabled %}
         {% if editor %}
           <form method="post" action="/logout" class="nav-form"><button type="submit" class="link plain-link">{{ _("logout") }}</button></form>
         {% else %}
-          <a href="/login?next={{ request.url.path|urlencode }}">{{ _("login") }}</a>
+          <a href="/login?next={{ path|urlencode }}">{{ _("login") }}</a>
         {% endif %}
       {% endif %}
-      {% set here = request.url.path ~ ('?' ~ request.url.query if request.url.query else '') %}
+      {% set here = path ~ ('?' ~ request.url.query if request.url.query else '') %}
       <span class="lang-switch">
         {% for code in langs %}
           {% if code == lang %}<strong>{{ code|upper }}</strong>{% else %}<a href="/lang/{{ code }}?next={{ here|urlencode }}" hreflang="{{ code }}">{{ code|upper }}</a>{% endif %}
         {% endfor %}
       </span>
-    </nav>
+    </div>
   </header>
+  {# Main sections: a row of pills on wide screens, a bottom tab bar on phones. #}
+  <nav class="tabbar">
+    {% for url, icon, key, active in [
+         ("/", "🏆", "nav_standings", path == "/"),
+         ("/tournaments", "📅", "nav_tournaments", path.startswith(("/tournaments", "/matchdays"))),
+         ("/matches", "🎾", "nav_sets", path.startswith("/matches")),
+         ("/players", "👥", "nav_players", path.startswith("/players")),
+         ("/rules", "📖", "nav_rules", path == "/rules")] %}
+    <a href="{{ url }}" {% if active %}class="active" aria-current="page"{% endif %}><span class="icon" aria-hidden="true">{{ icon }}</span>{{ _(key) }}</a>
+    {% endfor %}
+  </nav>
   <main>
     {% block content %}{% endblock %}
   </main>
