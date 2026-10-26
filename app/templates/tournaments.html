@@ -20,12 +20,16 @@
         {% for n in (16, 21, 24, 32) %}<option value="{{ n }}" {% if n == 24 %}selected{% endif %}>{{ n }}</option>{% endfor %}
       </select>
     </label>
-    <fieldset class="player-picks">
+    <fieldset class="player-combo">
       <legend>{{ _("tournament_players") }}</legend>
       <p class="muted">{{ _("tournament_players_hint") }}</p>
-      {% for p in players %}
-      <label class="check"><input type="checkbox" name="players" value="{{ p.id }}"> {{ p.name }}</label>
-      {% endfor %}
+      <div class="inline">
+        <input id="player-search" list="all-players" autocomplete="off" placeholder="{{ _('search_player') }}" aria-label="{{ _('search_player') }}">
+        <button type="button" id="add-player">{{ _("add") }}</button>
+      </div>
+      <p class="error" id="player-not-found" hidden>{{ _("err_unknown_player") }}</p>
+      <ul class="chips" id="chosen-players"></ul>
+      <p class="muted" id="chosen-count"></p>
     </fieldset>
     <label>{{ _("player_password") }}
       <input type="text" name="player_password" id="player-password" autocomplete="off" required>
@@ -34,6 +38,43 @@
     <button type="submit">{{ _("add_tournament") }}</button>
   </form>
 </details>
+<datalist id="all-players">
+  {% for p in players %}<option value="{{ p.name }}" data-id="{{ p.id }}"></option>{% endfor %}
+</datalist>
+<script>
+  // Tournament players: search by name, add as chips (each carries a hidden players=<id>).
+  (function () {
+    var search = document.getElementById("player-search"), list = document.getElementById("chosen-players");
+    var missing = document.getElementById("player-not-found"), count = document.getElementById("chosen-count");
+    var ids = {};
+    document.querySelectorAll("#all-players option").forEach(function (o) { ids[o.value.toLowerCase()] = o.dataset.id; });
+    var countText = {{ {"one": _("n_players", n=1)|string, "many": _("n_players", n=0)|string}|tojson }};
+    function updateCount() {
+      var n = list.children.length;
+      count.textContent = n === 1 ? countText.one : countText.many.replace("0", n);
+    }
+    function add() {
+      var name = search.value.trim(), id = ids[name.toLowerCase()];
+      missing.hidden = !name || !!id;
+      if (!id) return;
+      if (!list.querySelector('input[value="' + id + '"]')) {
+        var li = document.createElement("li"), input = document.createElement("input"), remove = document.createElement("button");
+        input.type = "hidden"; input.name = "players"; input.value = id;
+        remove.type = "button"; remove.className = "link"; remove.textContent = "✖️";
+        remove.setAttribute("aria-label", {{ _("remove_court")|string|tojson }} + " " + name);
+        remove.addEventListener("click", function () { li.remove(); updateCount(); });
+        li.append("👤 " + document.querySelector('#all-players option[data-id="' + id + '"]').value, input, remove);
+        list.appendChild(li);
+      }
+      search.value = "";
+      search.focus();
+      updateCount();
+    }
+    document.getElementById("add-player").addEventListener("click", add);
+    search.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); add(); } });
+    updateCount();
+  })();
+</script>
 <script>
   (function () {
     var select = document.getElementById("rule-type"), extra = document.querySelector(".round-only");

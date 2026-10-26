@@ -54,10 +54,9 @@
 {% set others = players|rejectattr("id", "in", member_ids)|list %}
 {% if others %}
 <form method="post" action="/tournaments/{{ tournament.id }}/players" class="inline">
-  <select name="player_id" aria-label="{{ _('player') }}" required>
-    <option value="">{{ _("choose") }}</option>
-    {% for p in others %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
-  </select>
+  <input name="player_name" list="other-players" autocomplete="off" required
+         placeholder="{{ _('search_player') }}" aria-label="{{ _('search_player') }}">
+  <datalist id="other-players">{% for p in others %}<option value="{{ p.name }}"></option>{% endfor %}</datalist>
   <button type="submit">{{ _("add_to_tournament") }}</button>
 </form>
 {% endif %}

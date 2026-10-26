@@ -370,13 +370,16 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
 
 
 @app.post("/tournaments/{tournament_id}/players", dependencies=EDIT)
-def add_tournament_player(tournament_id: int, player_id: int = Form(...)):
-    """Add a player to the tournament (e.g. to replace one who left)."""
+def add_tournament_player(tournament_id: int, player_name: str = Form("")):
+    """Add a player, found by name, to the tournament (e.g. to replace one who left)."""
     with db.connect() as conn:
         get_or_404(conn, "tournaments", tournament_id)
-        get_or_404(conn, "players", player_id)
+        player = conn.execute("SELECT id FROM players WHERE lower(name) = lower(?)",
+                              (player_name.strip(),)).fetchone()
+        if player is None:
+            return redirect(f"/tournaments/{tournament_id}?error=err_unknown_player#players")
         conn.execute("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
-                     "VALUES (?, ?)", (tournament_id, player_id))
+                     "VALUES (?, ?)", (tournament_id, player["id"]))
     return redirect(f"/tournaments/{tournament_id}#players")
 
 

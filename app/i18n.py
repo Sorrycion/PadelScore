@@ -100,6 +100,8 @@ TEXT = {
         "en": "✅ Only admins see it. Type a new one to change it, or save it empty to go back "
               "to the default (the tournament's name in lowercase, with _ between words)."},
     "new_password": {"es": "Nueva contraseña", "en": "New password"},
+    "search_player": {"es": "🔍 Buscar jugador…", "en": "🔍 Search player…"},
+    "add": {"es": "➕ Agregar", "en": "➕ Add"},
     "add_to_tournament": {"es": "➕ Agregar al torneo", "en": "➕ Add to tournament"},
     "confirm_remove_player": {
         "es": "¿Quitar a este jugador del torneo? Sus resultados anteriores se conservan.",
@@ -350,6 +352,8 @@ TEXT = {
     "err_rule_type": {"es": "Elige un tipo de reglas.", "en": "Pick a rules type."},
     "err_round_players": {"es": "Elige al menos 4 jugadores para Americano o Mexicano.",
                           "en": "Pick at least 4 players for Americano or Mexicano."},
+    "err_unknown_player": {"es": "No hay ningún jugador con ese nombre: elígelo de la lista.",
+                           "en": "There's no player with that name: pick one from the list."},
     "err_set": {"es": "Los juegos no pueden ser negativos.",
                 "en": "Games can't be negative."},
 }

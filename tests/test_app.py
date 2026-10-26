@@ -911,7 +911,9 @@ def test_round_draft_with_rests_and_courts(league):
 def test_tournament_players_can_be_added_and_removed(league):
     r = new_tournament(league, 1, players=(1, 2, 3, 4), name="Liga 2")
     assert "👤 Ana" in r.text and "👤 Elena" not in r.text
-    league.post("/tournaments/2/players", data={"player_id": "5"})   # Elena replaces Ana
+    league.post("/tournaments/2/players", data={"player_name": "elena "})  # Elena replaces Ana
+    r = league.post("/tournaments/2/players", data={"player_name": "Nadie"})
+    assert "There's no player with that name" in r.text
     league.post("/tournaments/2/players/1/remove")
     with db.connect() as conn:
         ids = [r[0] for r in conn.execute(
