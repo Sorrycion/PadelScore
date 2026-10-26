@@ -80,6 +80,10 @@ li.match .score.pending { color: var(--muted); font-weight: 400; font-size: .85r
 /* Court assignment: four players per court. */
 #courts { display: grid; gap: 12px; }
 fieldset.court-pick .remove-court { grid-column: 1 / -1; justify-self: end; font-size: .85rem; }
+form.move-question { background: var(--card); padding: 4px 16px 16px; border-radius: 8px; }
+form.move-question .inline { display: flex; gap: 8px; }
+.form-actions { display: flex; gap: 16px; align-items: center; }
+label.date-field { max-width: 14rem; }
 button.secondary { background: none; color: var(--accent); border: 1px dashed var(--accent); }
 @media (max-width: 560px) {
   /* Players stacked on the left, the team's games beside them on the right. */

@@ -20,7 +20,7 @@
 <p class="empty">{{ _("no_matchdays") }}</p>
 {% endif %}
 {% if editor %}
-<form method="post" action="/tournaments/{{ tournament.id }}/matchdays" class="inline">
+<form method="get" action="/tournaments/{{ tournament.id }}/matchdays/new" class="inline">
   <input type="date" name="played_on" value="{{ today }}" required>
   <button type="submit">{{ _("add_matchday_n", n=results|length + 1) }}</button>
 </form>

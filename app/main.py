@@ -4,7 +4,7 @@ from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import markdown
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
@@ -267,24 +267,6 @@ def delete_tournament(tournament_id: int):
     return redirect("/tournaments")
 
 
-@app.post("/tournaments/{tournament_id}/matchdays", dependencies=EDIT)
-def add_matchday(tournament_id: int, played_on: str = Form("")):
-    played_on = parse_date(played_on)
-    with db.connect() as conn:
-        get_or_404(conn, "tournaments", tournament_id)
-        if played_on is None:
-            return redirect(f"/tournaments/{tournament_id}?error=err_invalid_date")
-        number = conn.execute(
-            "SELECT COALESCE(MAX(number), 0) + 1 FROM matchdays WHERE tournament_id = ?",
-            (tournament_id,),
-        ).fetchone()[0]
-        cur = conn.execute(
-            "INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
-            (tournament_id, number, played_on),
-        )
-    return redirect(f"/matchdays/{cur.lastrowid}/courts")
-
-
 @app.get("/matchdays/{matchday_id}", response_class=HTMLResponse)
 def matchday_page(request: Request, matchday_id: int, move: int = 1,
                   error: str | None = None):
@@ -323,36 +305,140 @@ def courts_of(sets):
     return players, played
 
 
-def suggest_courts(conn, matchday):
-    """Courts for a matchday with no sets yet: the previous matchday's courts after
-    moving one player up and one down, or empty courts for everyone."""
-    previous = conn.execute(
-        "SELECT * FROM matchdays WHERE tournament_id = ? AND number < ? "
-        "ORDER BY number DESC LIMIT 1",
-        (matchday["tournament_id"], matchday["number"]),
-    ).fetchone()
+def next_number(conn, tournament_id):
+    return conn.execute(
+        "SELECT COALESCE(MAX(number), 0) + 1 FROM matchdays WHERE tournament_id = ?",
+        (tournament_id,),
+    ).fetchone()[0]
+
+
+def previous_matchday(conn, tournament_id, number):
+    """The last matchday before `number` that has courts (with its "courts"), or None."""
+    results, _ = load_results(conn, tournament_id)
+    before = [r for r in results if r["number"] < number and r["courts"]]
+    return before[-1] if before else None
+
+
+def suggest_courts(conn, previous, move):
+    """Courts for a new matchday: the previous matchday's courts after `move` players
+    of each court go up and `move` go down, or empty courts for everyone."""
     if previous:
-        results, _ = load_results(conn, matchday["tournament_id"])
-        courts = next(r for r in results if r["id"] == previous["id"])["courts"]
-        if courts:
-            return [ids for _, ids in sorted(next_courts(courts, 1).items())], previous
-    count = len(all_players(conn)) // 4
-    return [[None] * 4 for _ in range(max(count, 1))], None
+        return [ids for _, ids in sorted(next_courts(previous["courts"], move).items())]
+    return [[None] * 4 for _ in range(max(len(all_players(conn)) // 4, 1))]
 
 
-def render_courts(request, conn, matchday, courts, previous=None, error=None,
-                  status_code=200):
-    tournament = get_or_404(conn, "tournaments", matchday["tournament_id"])
+def read_courts(form):
+    """Player ids per court from the court-<n> selects, in court order."""
+    numbered = sorted((int(k[6:]), form.getlist(k)) for k in form
+                      if k.startswith("court-") and k[6:].isdigit())
+    return [[opt_int(v) for v in values] for _, values in numbered]
+
+
+def check_courts(conn, courts, _):
+    """Return (courts to save, error); empty courts are left out."""
+    names = {p["id"]: p["name"] for p in all_players(conn)}
+    chosen = [ids for ids in courts if any(ids)]
+    if not chosen:
+        return None, _("err_need_court")
+    seen = set()
+    for n, ids in enumerate(chosen, 1):
+        if len(ids) != 4 or None in ids or len(set(ids)) != 4 \
+                or not all(p in names for p in ids):
+            return None, _("err_court_four", n=n)
+        for p in ids:
+            if p in seen:
+                return None, _("err_player_two_courts", name=names[p])
+            seen.add(p)
+    return chosen, None
+
+
+def add_court_sets(conn, matchday_id, court, players):
+    """The court's three sets, every player partnering each of the others once."""
+    for (a1, a2), (b1, b2) in court_rotation(players):
+        conn.execute(
+            "INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
+            "VALUES (?, ?, ?, ?, ?, ?)", (matchday_id, court, a1, a2, b1, b2))
+
+
+def move_choice(previous, move):
+    """`move` (1 or 2) from the query string; None means ask, which only makes sense
+    when there is a previous matchday to move players from."""
+    if not previous:
+        return 1
+    return move if move in (1, 2) else None
+
+
+def move_urls(**params):
+    return {n: "?" + urlencode({**params, "move": n}) for n in (1, 2)}
+
+
+def render_courts(request, conn, tournament, courts, *, matchday=None, number=None,
+                  played_on=None, previous=None, move=None, error=None, status_code=200):
+    """The courts screen: for a new matchday (nothing is saved until the form is sent)
+    or to change the courts of an existing one."""
     return templates.TemplateResponse(request, "courts.html", {
         "tournament": tournament, "matchday": matchday, "courts": courts,
-        "players": all_players(conn), "previous": previous, "error": error,
-        "has_sets": bool(set_rows(conn, matchday_id=matchday["id"], limit=1)),
+        "number": matchday["number"] if matchday else number,
+        "played_on": played_on, "players": all_players(conn),
+        "previous": previous, "move": move,
+        "move_urls": move_urls(**({} if matchday else {"played_on": played_on})),
+        "action": f"/matchdays/{matchday['id']}/courts" if matchday
+                  else f"/tournaments/{tournament['id']}/matchdays",
+        "has_sets": bool(matchday and set_rows(conn, matchday_id=matchday["id"], limit=1)),
+        "error": error,
     }, status_code=status_code)
+
+
+@app.get("/tournaments/{tournament_id}/matchdays/new", response_class=HTMLResponse,
+         dependencies=EDIT)
+def new_matchday_page(request: Request, tournament_id: int, played_on: str = "",
+                      move: str | None = None):
+    """Draft of the next matchday: choose how many players change court, then review
+    the courts. Nothing is saved here."""
+    with db.connect() as conn:
+        tournament = get_or_404(conn, "tournaments", tournament_id)
+        played_on = parse_date(played_on or date.today().isoformat())
+        if played_on is None:
+            return redirect(f"/tournaments/{tournament_id}?error=err_invalid_date")
+        number = next_number(conn, tournament_id)
+        previous = previous_matchday(conn, tournament_id, number)
+        move = move_choice(previous, opt_int(move))
+        courts = suggest_courts(conn, previous, move) if move else []
+        return render_courts(request, conn, tournament, courts, number=number,
+                             played_on=played_on, previous=previous, move=move)
+
+
+@app.post("/tournaments/{tournament_id}/matchdays", dependencies=EDIT)
+async def add_matchday(request: Request, tournament_id: int):
+    """Save a new matchday together with its courts and their sets."""
+    _ = translator(get_lang(request))
+    form = await request.form()
+    courts = read_courts(form)
+    with db.connect() as conn:
+        tournament = get_or_404(conn, "tournaments", tournament_id)
+        played_on = parse_date(form.get("played_on", ""))
+        number = next_number(conn, tournament_id)
+        chosen, error = check_courts(conn, courts, _)
+        if played_on is None:
+            error = _("err_invalid_date")
+        if error:
+            return render_courts(
+                request, conn, tournament, courts, number=number,
+                played_on=form.get("played_on", ""), move=opt_int(form.get("move")),
+                previous=previous_matchday(conn, tournament_id, number),
+                error=error, status_code=400)
+        matchday_id = conn.execute(
+            "INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
+            (tournament_id, number, played_on),
+        ).lastrowid
+        for n, ids in enumerate(chosen, 1):
+            add_court_sets(conn, matchday_id, n, ids)
+    return redirect(f"/matchdays/{matchday_id}")
 
 
 @app.get("/courts", dependencies=EDIT)
 def latest_courts():
-    """The '+ Courts' button: assign courts on the latest matchday."""
+    """The '+ Courts' button: the courts of the latest matchday."""
     with db.connect() as conn:
         latest = conn.execute(
             "SELECT id FROM matchdays ORDER BY played_on DESC, number DESC, id DESC LIMIT 1"
@@ -361,66 +447,46 @@ def latest_courts():
 
 
 @app.get("/matchdays/{matchday_id}/courts", response_class=HTMLResponse, dependencies=EDIT)
-def courts_page(request: Request, matchday_id: int):
+def courts_page(request: Request, matchday_id: int, move: str | None = None):
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
+        tournament = get_or_404(conn, "tournaments", matchday["tournament_id"])
         players, _ = courts_of(set_rows(conn, matchday_id=matchday_id))
         if players:
             courts = [ids or [None] * 4 for _, ids in sorted(players.items())]
-            previous = None
-        else:
-            courts, previous = suggest_courts(conn, matchday)
-        return render_courts(request, conn, matchday, courts, previous)
+            return render_courts(request, conn, tournament, courts, matchday=matchday)
+        previous = previous_matchday(conn, tournament["id"], matchday["number"])
+        move = move_choice(previous, opt_int(move))
+        courts = suggest_courts(conn, previous, move) if move else []
+        return render_courts(request, conn, tournament, courts, matchday=matchday,
+                             previous=previous, move=move)
 
 
 @app.post("/matchdays/{matchday_id}/courts", dependencies=EDIT)
 async def save_courts(request: Request, matchday_id: int):
-    """Save who plays on each court. A court with new players gets its three sets
-    (every player partnering each of the others once); a court with the same four
-    players keeps its sets."""
+    """Change who plays on each court. A court with new players gets its three sets
+    again; a court with the same four players keeps its sets."""
     _ = translator(get_lang(request))
-    form = await request.form()
-    numbered = sorted((int(k[6:]), form.getlist(k)) for k in form
-                      if k.startswith("court-") and k[6:].isdigit())
-    courts = [[opt_int(v) for v in values] for _, values in numbered]
+    courts = read_courts(await request.form())
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
-        names = {p["id"]: p["name"] for p in all_players(conn)}
-        chosen = [ids for ids in courts if any(ids)]  # empty courts are left out
-
-        def error(text):
-            return render_courts(request, conn, matchday, courts, error=text,
-                                 status_code=400)
-
-        if not chosen:
-            return error(_("err_need_court"))
-        seen = set()
-        for n, ids in enumerate(chosen, 1):
-            if len(ids) != 4 or None in ids or len(set(ids)) != 4 \
-                    or not all(p in names for p in ids):
-                return error(_("err_court_four", n=n))
-            for p in ids:
-                if p in seen:
-                    return error(_("err_player_two_courts", name=names[p]))
-                seen.add(p)
-
+        tournament = get_or_404(conn, "tournaments", matchday["tournament_id"])
+        chosen, error = check_courts(conn, courts, _)
         existing, played = courts_of(set_rows(conn, matchday_id=matchday_id))
         changed = sorted(c for c in existing
-                         if c > len(chosen) or existing[c] is None
+                         if not chosen or c > len(chosen) or existing[c] is None
                          or set(existing[c]) != set(chosen[c - 1]))
-        for c in changed:
-            if c in played:
-                return error(_("err_court_has_scores", n=c))
+        if not error:
+            error = next((_("err_court_has_scores", n=c) for c in changed if c in played), None)
+        if error:
+            return render_courts(request, conn, tournament, courts, matchday=matchday,
+                                 error=error, status_code=400)
         for c in changed:
             conn.execute("DELETE FROM matches WHERE matchday_id = ? AND court = ?",
                          (matchday_id, c))
         for n, ids in enumerate(chosen, 1):
-            if n in existing and n not in changed:
-                continue
-            for (a1, a2), (b1, b2) in court_rotation(ids):
-                conn.execute(
-                    "INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
-                    "VALUES (?, ?, ?, ?, ?, ?)", (matchday_id, n, a1, a2, b1, b2))
+            if n not in existing or n in changed:
+                add_court_sets(conn, matchday_id, n, ids)
     return redirect(f"/matchdays/{matchday_id}")
 
 

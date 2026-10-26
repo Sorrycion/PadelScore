@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}{{ _("assign_courts") }} · {{ _("matchday_n", n=matchday.number) }} · PadelScore{% endblock %}
+{% set heading = _("assign_courts") if matchday else _("new_matchday_n", n=number) %}
+{% block title %}{{ heading }} · {{ tournament.name }} · PadelScore{% endblock %}
 {# One court: four player selects, all named court-<n>. "__N__" is filled in by the script below. #}
 {% macro court_fieldset(n, ids) %}
 <fieldset class="court-pick">
@@ -14,22 +15,50 @@
 </fieldset>
 {% endmacro %}
 {% block content %}
-<h1>{{ _("assign_courts") }}</h1>
-<p class="muted"><a href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · <a href="/matchdays/{{ matchday.id }}">{{ _("matchday_n", n=matchday.number) }}</a> · {{ matchday.played_on }}</p>
+<h1>{{ heading }}</h1>
+<p class="muted"><a href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a>
+  {% if matchday %} · <a href="/matchdays/{{ matchday.id }}">{{ _("matchday_n", n=matchday.number) }}</a> · {{ matchday.played_on }}{% endif %}</p>
 {% if players|length < 4 %}
 <p class="empty">{{ _("need_4_players", url="/players") }}</p>
+
+{% elif not move and not has_sets and not error %}
+{# First step of a new matchday after another one: how many players change court? #}
+<form method="get" class="move-question">
+  {% if not matchday %}<input type="hidden" name="played_on" value="{{ played_on }}">{% endif %}
+  <h2>{{ _("move_question") }}</h2>
+  <p class="muted">{{ _("move_note", n=previous.number) }}</p>
+  <div class="inline">
+    <button type="submit" name="move" value="1">{{ _("n_players", n=1) }}</button>
+    <button type="submit" name="move" value="2">{{ _("n_players", n=2) }}</button>
+  </div>
+</form>
+<p><a href="/tournaments/{{ tournament.id }}">{{ _("cancel") }}</a></p>
+
 {% else %}
 <p>{{ _("assign_courts_hint") }}</p>
-{% if previous %}<p class="muted">{{ _("suggested_from", n=previous.number) }}</p>{% endif %}
+{% if previous and move and not has_sets %}
+<p class="muted">{{ _("suggested_from", n=previous.number) }}
+  {{ _("moves_per_court") }}
+  {% for n in (1, 2) %}{% if n == move %}<strong>{{ _("n_players", n=n) }}</strong>{% else %}<a href="{{ move_urls[n] }}">{{ _("n_players", n=n) }}</a>{% endif %}{% if loop.first %} · {% endif %}{% endfor %}
+</p>
+{% endif %}
 {% if has_sets %}<p class="muted">{{ _("courts_change_warning") }}</p>{% endif %}
+{% if not matchday %}<p class="muted">{{ _("nothing_saved_yet") }}</p>{% endif %}
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
-<form method="post" action="/matchdays/{{ matchday.id }}/courts" class="stack" id="courts-form"
+<form method="post" action="{{ action }}" class="stack" id="courts-form"
       data-legend="{{ _('court_n', n='__N__') }}">
+  {% if not matchday %}
+  <label class="date-field">{{ _("date") }} <input type="date" name="played_on" value="{{ played_on }}" required></label>
+  <input type="hidden" name="move" value="{{ move or '' }}">
+  {% endif %}
   <div id="courts">
     {% for ids in courts %}{{ court_fieldset(loop.index, ids) }}{% endfor %}
   </div>
   <button type="button" class="secondary" id="add-court">{{ _("add_court") }}</button>
-  <button type="submit">{{ _("save_courts") }}</button>
+  <div class="inline form-actions">
+    <button type="submit">{{ _("save_matchday") if not matchday else _("save_courts") }}</button>
+    <a href="{{ '/matchdays/%d'|format(matchday.id) if matchday else '/tournaments/%d'|format(tournament.id) }}">{{ _("cancel") }}</a>
+  </div>
 </form>
 <template id="new-court">{{ court_fieldset("__N__", [none, none, none, none]) }}</template>
 <script>
@@ -37,8 +66,7 @@
     var form = document.getElementById("courts-form"), list = document.getElementById("courts");
     function renumber() {
       list.querySelectorAll("fieldset").forEach(function (fs, i) {
-        var label = form.dataset.legend.replace("__N__", i + 1);
-        fs.querySelector("legend").textContent = label;
+        fs.querySelector("legend").textContent = form.dataset.legend.replace("__N__", i + 1);
         fs.querySelectorAll("select").forEach(function (s) { s.name = "court-" + (i + 1); });
       });
     }

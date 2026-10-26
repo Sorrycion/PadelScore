@@ -120,10 +120,8 @@ TEXT = {
               "different partner in each set. Results are entered afterwards on the "
               "matchday page."},
     "suggested_from": {
-        "es": "Sugerencia según la jornada {n}: en cada cancha sube el mejor y baja el último. "
-              "Cámbiala si hace falta.",
-        "en": "Suggested from matchday {n}: on each court the best player moves up and the "
-              "last moves down. Change it as needed."},
+        "es": "Sugerencia según la jornada {n}; cámbiala si hace falta.",
+        "en": "Suggested from matchday {n}; change it as needed."},
     "courts_change_warning": {
         "es": "Si cambias los jugadores de una cancha, sus sets se crean de nuevo. Una cancha "
               "que ya tiene resultados no se puede cambiar.",
@@ -132,6 +130,22 @@ TEXT = {
     "add_court": {"es": "+ Agregar cancha", "en": "+ Add court"},
     "remove_court": {"es": "Quitar", "en": "Remove"},
     "save_courts": {"es": "Guardar y crear sets", "en": "Save and create sets"},
+    "new_matchday_n": {"es": "Nueva jornada {n}", "en": "New matchday {n}"},
+    "save_matchday": {"es": "Guardar jornada", "en": "Save matchday"},
+    "nothing_saved_yet": {
+        "es": "La jornada aún no está guardada: revisa las canchas y pulsa «Guardar jornada».",
+        "en": "The matchday isn't saved yet: review the courts and press “Save matchday”."},
+    "move_question": {"es": "¿Cuántos jugadores suben y bajan en cada cancha?",
+                      "en": "How many players move up and down on each court?"},
+    "move_note": {
+        "es": "Según la jornada {n}. En la cancha 1 los mejores se quedan (no pueden subir) y "
+              "en la última cancha los últimos se quedan (no pueden bajar). Luego podrás mover "
+              "a los jugadores.",
+        "en": "From matchday {n}. On court 1 the best stay (they can't go up) and on the last "
+              "court the last ones stay (they can't go down). You can move players afterwards."},
+    "moves_per_court": {"es": "Suben y bajan por cancha:", "en": "Moving per court:"},
+    "cancel": {"es": "Cancelar", "en": "Cancel"},
+    "date": {"es": "Fecha", "en": "Date"},
 
     # Sets list
     "all_tournaments": {"es": "Todos los torneos", "en": "All tournaments"},

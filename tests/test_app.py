@@ -25,13 +25,22 @@ def client(tmp_path, monkeypatch):
         yield c
 
 
+def add_matchday(tournament_id, played_on):
+    """A matchday with no courts yet (the app itself only saves one with its courts)."""
+    with db.connect() as conn:
+        number = conn.execute("SELECT COALESCE(MAX(number), 0) + 1 FROM matchdays "
+                              "WHERE tournament_id = ?", (tournament_id,)).fetchone()[0]
+        conn.execute("INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
+                     (tournament_id, number, played_on))
+
+
 @pytest.fixture
 def league(client):
-    """Players 1-8, tournament 1 and its matchday 1."""
+    """Players 1-8, tournament 1 and its matchday 1 (no courts yet)."""
     for name in NAMES:
         client.post("/players", data={"name": name})
     client.post("/tournaments", data={"name": "Liga Amigos", "held_on": "2026-10-23"})
-    client.post("/tournaments/1/matchdays", data={"played_on": "2026-10-23"})
+    add_matchday(1, "2026-10-23")
     return client
 
 
@@ -210,8 +219,14 @@ def test_tournament_date_must_be_valid(client, held_on):
 
 @pytest.mark.parametrize("played_on", ["", "next friday", "2026-02-30"])
 def test_matchday_date_must_be_valid(league, played_on):
-    r = league.post("/tournaments/1/matchdays", data={"played_on": played_on})
-    assert "Enter a valid date" in r.text and "Matchday 2<" not in r.text
+    data = {"played_on": played_on, "court-1": ["1", "2", "3", "4"]}
+    r = league.post("/tournaments/1/matchdays", data=data)
+    assert r.status_code == 400 and "Enter a valid date" in r.text
+    if played_on:
+        r = league.get("/tournaments/1/matchdays/new", params={"played_on": played_on})
+        assert "Enter a valid date" in r.text
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM matchdays").fetchone()[0] == 1
 
 
 @pytest.mark.parametrize("sql", [
@@ -282,8 +297,8 @@ def test_values_are_escaped_in_translated_texts(league):
 
 
 def test_new_set_form_selects_the_latest_matchday(league):
-    league.post("/tournaments/1/matchdays", data={"played_on": "2026-10-30"})  # matchday 2
-    league.post("/tournaments/1/matchdays", data={"played_on": "2026-10-16"})  # 3, but older
+    add_matchday(1, "2026-10-30")  # matchday 2
+    add_matchday(1, "2026-10-16")  # 3, but older
     form = league.get("/matches/new").text
     assert re.search(r'<option value="2" selected>[^<]*Matchday 2', form)
     assert form.count(" selected>") == 1
@@ -312,7 +327,8 @@ def test_viewing_needs_no_password(locked):
 @pytest.mark.parametrize("method,url,data", [
     ("post", "/players", {"name": "Zed"}),
     ("post", "/tournaments", {"name": "Otra", "held_on": "2026-11-01"}),
-    ("post", "/tournaments/1/matchdays", {"played_on": "2026-11-01"}),
+    ("post", "/tournaments/1/matchdays", {"played_on": "2026-11-01", "court-1": ["1", "2", "3", "4"]}),
+    ("get", "/tournaments/1/matchdays/new", None),
     ("post", "/matches", set_form((1, 2, 3, 4), 6, 4)),
     ("get", "/matches/new", None),
     ("get", "/matchdays/1/courts", None),
@@ -383,7 +399,7 @@ def test_stylesheet_link_works_behind_https(client):
 
 def test_delete_tournament_removes_its_matchdays_and_sets(league):
     league.post("/tournaments", data={"name": "Otra liga", "held_on": "2026-11-01"})  # id 2
-    league.post("/tournaments/2/matchdays", data={"played_on": "2026-11-01"})        # matchday 2
+    add_matchday(2, "2026-11-01")                                                   # matchday 2
     league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4, matchday_id=1))
     league.post("/matches", data=set_form((5, 6, 7, 8), 6, 4, matchday_id=2))
 
@@ -438,11 +454,36 @@ def test_next_courts_moves_one_up_and_one_down():
     assert sorted(new[1]) == [1, 2, 3, 5] and sorted(new[2]) == [4, 6, 7, 8]
 
 
-def test_new_matchday_opens_the_courts_screen(league):
-    r = league.post("/tournaments/1/matchdays", data={"played_on": "2026-10-30"})
-    assert str(r.url).endswith("/matchdays/2/courts") and "Assign courts" in r.text
-    assert court_count(r.text) == 2  # 8 players: 2 empty courts
-    assert league.get("/courts", follow_redirects=False).headers["location"] == "/matchdays/2/courts"
+def matchday_count():
+    with db.connect() as conn:
+        return conn.execute("SELECT COUNT(*) FROM matchdays").fetchone()[0]
+
+
+def test_new_matchday_is_saved_only_with_its_courts(client):
+    for name in NAMES:
+        client.post("/players", data={"name": name})
+    client.post("/tournaments", data={"name": "Liga Amigos", "held_on": "2026-10-23"})
+    # The tournament page's button opens a draft; nothing is saved yet.
+    page = client.get("/tournaments/1").text
+    assert 'action="/tournaments/1/matchdays/new"' in page
+    r = client.get("/tournaments/1/matchdays/new", params={"played_on": "2026-10-23"})
+    assert "New matchday 1" in r.text and "isn't saved yet" in r.text
+    assert court_count(r.text) == 2  # 8 players: 2 empty courts; no question on matchday 1
+    assert "How many players" not in r.text and matchday_count() == 0
+
+    data = {"played_on": "2026-10-23", **courts_form((1, 2, 3, 4), (5, 6, 7, 8))}
+    r = client.post("/tournaments/1/matchdays", data=data)
+    assert r.status_code == 200 and str(r.url).endswith("/matchdays/1")
+    assert matchday_count() == 1 and pending_count() == 6
+    assert client.get("/courts", follow_redirects=False).headers["location"] == "/matchdays/1/courts"
+
+
+def test_new_matchday_with_bad_courts_is_not_saved(league):
+    data = {"played_on": "2026-10-30", **courts_form((1, 2, 3, 4), (4, 5, 6, 7))}
+    r = league.post("/tournaments/1/matchdays", data=data)
+    assert r.status_code == 400 and "Diego is on more than one court" in r.text
+    assert 'value="2026-10-30"' in r.text and court_count(r.text) == 2  # the draft is kept
+    assert matchday_count() == 1 and pending_count() == 0
 
 
 def test_assigning_courts_creates_three_pending_sets_each(league):
@@ -522,11 +563,22 @@ def test_next_matchday_suggests_courts_after_moves(league):
     league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 8)))
     for match_id in range(1, 7):  # team A wins every set
         league.post(f"/matches/{match_id}/score", data={"team_a_games": "6", "team_b_games": "0"})
-    page = league.post("/tournaments/1/matchdays", data={"played_on": "2026-10-30"}).text
-    assert "Suggested from matchday 1" in page
-    court_1, court_2 = page.split('<fieldset class="court-pick">')[1:3]
-    # Court 1: Ana won all three sets, Diego none, so Diego goes down and Elena comes up.
-    assert selected(court_1) == {"1", "2", "3", "5"} and selected(court_2) == {"4", "6", "7", "8"}
+    # Court order after matchday 1: Ana, Bea, Carlos, Diego and Elena, Fer, Gabi, Hugo.
+    new = "/tournaments/1/matchdays/new"
+    page = league.get(new, params={"played_on": "2026-10-30"}).text
+    assert "How many players move up and down" in page and court_count(page) == 0
+
+    def suggested(move):
+        page = league.get(new, params={"played_on": "2026-10-30", "move": move}).text
+        assert "Suggested from matchday 1" in page and 'value="2026-10-30"' in page
+        return [selected(c) for c in page.split("<template")[0]
+                .split('<fieldset class="court-pick">')[1:]]
+
+    # One moves: Diego down, Elena up. The best of court 1 and the last of court 2 stay.
+    assert suggested(1) == [{"1", "2", "3", "5"}, {"4", "6", "7", "8"}]
+    # Two move: Carlos and Diego down, Elena and Fer up.
+    assert suggested(2) == [{"1", "2", "5", "6"}, {"3", "4", "7", "8"}]
+    assert matchday_count() == 1  # still only a draft
 
 
 def test_set_form_can_save_a_pending_set(league):
@@ -577,3 +629,10 @@ def test_old_database_is_upgraded_for_pending_sets(tmp_path, monkeypatch):
         with pytest.raises(sqlite3.IntegrityError):  # both games or neither
             conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, team_a_games) "
                          "VALUES (1, 1, 1, 4, 2, 3, 6)")
+
+
+def test_next_courts_keeps_court_1_winners_and_last_court_losers():
+    courts = {c: [{"id": c * 10 + i} for i in range(4)] for c in (1, 2, 3)}
+    new = next_courts(courts, 2)
+    assert {10, 11} <= set(new[1]) and {32, 33} <= set(new[3])  # they stay
+    assert sorted(new[2]) == sorted([12, 13, 30, 31])
