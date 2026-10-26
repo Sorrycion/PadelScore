@@ -740,3 +740,18 @@ def test_marking_absent_needs_the_password(locked):
     locked.cookies.delete("editor")
     r = locked.post("/matchdays/1/absent/1", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/login")
+
+
+def test_latest_matchday_offers_the_next_one(league):
+    league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 8)))
+    for match_id in range(1, 7):
+        league.post(f"/matches/{match_id}/score", data={"team_a_games": "6", "team_b_games": "0"})
+    page = league.get("/matchdays/1?move=2").text
+    assert "+ New matchday 2" in page and 'value="2026-10-30"' in page
+    assert '<input type="hidden" name="move" value="2">' in page
+    # The button opens the draft with those moves; nothing is saved yet.
+    r = league.get("/tournaments/1/matchdays/new", params={"move": "2", "played_on": "2026-10-30"})
+    assert "Suggested from matchday 1" in r.text and matchday_count() == 1
+    # An older matchday doesn't offer it.
+    add_matchday(1, "2026-10-30")
+    assert "+ New matchday" not in league.get("/matchdays/1").text

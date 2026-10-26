@@ -42,6 +42,14 @@
   </li>
   {% endfor %}
 </ul>
+{% if editor and next_number %}
+<form method="get" action="/tournaments/{{ tournament.id }}/matchdays/new" class="inline next-matchday">
+  <input type="hidden" name="move" value="{{ move }}">
+  <input type="date" name="played_on" value="{{ next_date }}" aria-label="{{ _('date') }}" required>
+  <button type="submit">{{ _("new_matchday_button", n=next_number) }}</button>
+</form>
+<p class="muted">{{ _("new_matchday_hint", n=move) }}</p>
+{% endif %}
 {% else %}
 <p class="empty">{{ _("no_courts_yet", url="/matchdays/%d/courts"|format(matchday.id)) }}</p>
 {% endif %}

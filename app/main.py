@@ -2,7 +2,7 @@
 import time
 from collections import Counter
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import quote, urlencode
 
@@ -312,6 +312,9 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
             "moves": court_moves(result["courts"], move),
             "move": move,
             "error": error,
+            # Only the latest matchday offers to start the next one, a week later.
+            "next_number": results[-1]["number"] + 1 if results[-1]["id"] == matchday_id else None,
+            "next_date": (date.fromisoformat(matchday["played_on"]) + timedelta(days=7)).isoformat(),
             "score_inline": True,  # pending sets get their games entered right here
         })
 

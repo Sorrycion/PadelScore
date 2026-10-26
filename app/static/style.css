@@ -87,6 +87,7 @@ label.date-field { max-width: 14rem; }
 .tag.absent { color: var(--error); font-weight: 600; }
 form.absent-form { display: inline; margin: 0 0 0 6px; }
 form.absent-form button { font-size: .8rem; color: var(--muted); text-decoration: underline; }
+form.next-matchday { margin-top: 16px; }
 button.secondary { background: none; color: var(--accent); border: 1px dashed var(--accent); }
 @media (max-width: 560px) {
   /* Players stacked on the left, the team's games beside them on the right. */

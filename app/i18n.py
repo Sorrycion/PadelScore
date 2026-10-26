@@ -146,6 +146,12 @@ TEXT = {
     "remove_court": {"es": "Quitar", "en": "Remove"},
     "save_courts": {"es": "Guardar y crear sets", "en": "Save and create sets"},
     "new_matchday_n": {"es": "Nueva jornada {n}", "en": "New matchday {n}"},
+    "new_matchday_button": {"es": "+ Nueva jornada {n}", "en": "+ New matchday {n}"},
+    "new_matchday_hint": {
+        "es": ("Con estos cambios ({n} jugador por cancha); podrás revisar las canchas antes de guardar.",
+               "Con estos cambios ({n} jugadores por cancha); podrás revisar las canchas antes de guardar."),
+        "en": ("With these changes ({n} player per court); you can review the courts before saving.",
+               "With these changes ({n} players per court); you can review the courts before saving.")},
     "save_matchday": {"es": "Guardar jornada", "en": "Save matchday"},
     "nothing_saved_yet": {
         "es": "La jornada aún no está guardada: revisa las canchas y pulsa «Guardar jornada».",
