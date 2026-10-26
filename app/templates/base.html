@@ -8,6 +8,9 @@
   {# A relative link: behind Azure's HTTPS front end url_for() would build an http:// URL,
      which browsers block on an https:// page. #}
   <link rel="stylesheet" href="/static/style.css?v={{ css_version }}">
+  {# Windows has no flag emojis (it shows "US", "MX"): a font with just the flags we use. #}
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap&text=%F0%9F%87%BA%F0%9F%87%B8%F0%9F%87%B2%F0%9F%87%BD">
 </head>
 <body>
   {% set path = request.url.path %}

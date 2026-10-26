@@ -16,7 +16,8 @@
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+/* "Flags" comes first but only holds the 🇺🇸 🇲🇽 flags (see base.html). */
+body { margin: 0; font-family: "Noto Color Emoji", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
        background: var(--bg) linear-gradient(180deg, var(--sky) 0, var(--bg) 220px) no-repeat;
        color: var(--text); line-height: 1.4; }
 a { color: var(--accent); }
