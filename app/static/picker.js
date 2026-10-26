@@ -12,11 +12,13 @@
 */
 (function () {
   function norm(text) {
-    return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+    return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/\s+/).join(" ").trim();
   }
 
   document.querySelectorAll(".picker").forEach(function (box) {
-    var players = JSON.parse(box.dataset.players);
+    var players = JSON.parse(box.dataset.players).sort(function (a, b) {
+      return a.name.localeCompare(b.name, undefined, {sensitivity: "base"});
+    });
     var multi = box.dataset.mode === "multi";
     var input = box.querySelector(".picker-input");
     var list = box.querySelector(".picker-suggestions");
@@ -37,15 +39,15 @@
     }
 
     function render() {
-      var q = norm(input.value), name = input.value.trim();
+      // An empty box lists the first players (by name); typing searches them all.
+      var q = norm(input.value), name = input.value.split(/\s+/).join(" ").trim();
       list.innerHTML = "";
-      if (!q) return;
       var used = taken();
       players.filter(function (p) { return norm(p.name).indexOf(q) >= 0 && used.indexOf("id:" + p.id) < 0; })
-        .slice(0, 8)
+        .slice(0, q ? 50 : 10)
         .forEach(function (p) { option("👤 " + p.name, function () { choose(p); }); });
       var exists = players.some(function (p) { return norm(p.name) === q; });
-      if (!exists && used.indexOf("new:" + q) < 0) {
+      if (q && !exists && used.indexOf("new:" + q) < 0) {
         option(box.dataset.create.replace("{name}", name), function () { choose({name: name}); }, "create");
       }
     }
@@ -80,12 +82,18 @@
       li.append((p.id ? "👤 " : "🆕 ") + p.name, hidden, remove);
       chosen.appendChild(li);
       input.value = "";
-      list.innerHTML = "";
       input.focus();
+      render();
       updateCount();
     }
 
     input.addEventListener("input", render);
+    input.addEventListener("focus", render);
+    input.addEventListener("click", render);
+    document.addEventListener("click", function (e) {
+      // (A chosen suggestion is already gone from the page: that click was inside.)
+      if (e.target.isConnected && !box.contains(e.target)) list.innerHTML = "";
+    });
     input.addEventListener("keydown", function (e) {
       if (e.key !== "Enter") return;
       e.preventDefault();  // never submit the whole form from the search box

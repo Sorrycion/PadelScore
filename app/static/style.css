@@ -194,7 +194,8 @@ details.create { margin-bottom: 20px; }
 /* Player search (picker.js): suggestions listed under the box. */
 fieldset.picker { grid-template-columns: 1fr; }
 .picker .picker-input { width: 100%; }
-.picker-suggestions { display: grid; gap: 4px; }
+.picker-suggestions { display: grid; gap: 4px; max-height: 300px; overflow-y: auto;
+                      overscroll-behavior: contain; }
 .picker-suggestions:empty { display: none; }
 .picker-suggestions .suggestion { background: var(--bg); color: var(--text); text-align: left;
                                   font-weight: 500; border-radius: 10px; padding: 10px 14px; }

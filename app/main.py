@@ -1,6 +1,7 @@
 """PadelScore web app."""
 import hashlib
 import time
+import unicodedata
 from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
@@ -159,12 +160,30 @@ def tournament_players(conn, tournament_id):
     ).fetchall()
 
 
+def clean_name(name):
+    """A player name with single spaces between words."""
+    return " ".join(name.split())
+
+
+def name_key(name):
+    """What makes two names the same player: case, accents and spacing don't count."""
+    plain = unicodedata.normalize("NFD", clean_name(name).casefold())
+    return "".join(c for c in plain if not unicodedata.combining(c))
+
+
+def find_player(conn, name, exclude=None):
+    """The id of the player with this name (see `name_key`), or None."""
+    key = name_key(name)
+    return next((p["id"] for p in conn.execute("SELECT id, name FROM players")
+                 if p["id"] != exclude and name_key(p["name"]) == key), None)
+
+
 def player_id(conn, name):
-    """The id of the player with this name (any case), adding them if there is none."""
-    name = name.strip()
-    row = conn.execute("SELECT id FROM players WHERE lower(name) = lower(?)", (name,)).fetchone()
-    if row:
-        return row["id"]
+    """The id of the player with this name, adding them if there is none."""
+    name = clean_name(name)
+    found = find_player(conn, name)
+    if found:
+        return found
     return conn.execute("INSERT INTO players (name) VALUES (?)", (name,)).lastrowid
 
 
@@ -388,15 +407,14 @@ def add_tournament_player(tournament_id: int, player_name: str = Form(""),
                           create: str = Form("")):
     """Add a player, found by name, to the tournament (e.g. to replace one who left);
     with `create`, a name that isn't a player yet becomes a new player."""
-    name = player_name.strip()
+    name = clean_name(player_name)
     with db.connect() as conn:
         get_or_404(conn, "tournaments", tournament_id)
-        player = conn.execute("SELECT id FROM players WHERE lower(name) = lower(?)",
-                              (name,)).fetchone()
-        if player is None and not (create and name):
+        found = find_player(conn, name)
+        if found is None and not (create and name):
             return redirect(f"/tournaments/{tournament_id}?error=err_unknown_player#players")
         conn.execute("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
-                     "VALUES (?, ?)", (tournament_id, player["id"] if player else player_id(conn, name)))
+                     "VALUES (?, ?)", (tournament_id, found or player_id(conn, name)))
     return redirect(f"/tournaments/{tournament_id}#players")
 
 
@@ -769,14 +787,11 @@ def players_page(request: Request, error: str | None = None):
 
 @app.post("/players", dependencies=EDIT)
 def add_player(name: str = Form(...)):
-    name = name.strip()
+    name = clean_name(name)
     if not name:
         return redirect("/players?error=err_name_required")
     with db.connect() as conn:
-        exists = conn.execute(
-            "SELECT 1 FROM players WHERE lower(name) = lower(?)", (name,)
-        ).fetchone()
-        if exists:
+        if find_player(conn, name):
             return redirect("/players?error=err_player_exists")
         conn.execute("INSERT INTO players (name) VALUES (?)", (name,))
     return redirect("/players")
@@ -784,15 +799,12 @@ def add_player(name: str = Form(...)):
 
 @app.post("/players/{player_id}", dependencies=EDIT)
 def rename_player(player_id: int, name: str = Form(...)):
-    name = name.strip()
+    name = clean_name(name)
     with db.connect() as conn:
         get_or_404(conn, "players", player_id)
         if not name:
             return redirect(f"/players/{player_id}?error=err_name_required")
-        exists = conn.execute(
-            "SELECT 1 FROM players WHERE lower(name) = lower(?) AND id != ?", (name, player_id)
-        ).fetchone()
-        if exists:
+        if find_player(conn, name, exclude=player_id):
             return redirect(f"/players/{player_id}?error=err_player_exists")
         conn.execute("UPDATE players SET name = ? WHERE id = ?", (name, player_id))
     return redirect(f"/players/{player_id}")

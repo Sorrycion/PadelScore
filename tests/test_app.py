@@ -1116,3 +1116,16 @@ def test_tournament_page_adds_or_creates_a_player(league):
         names = {r[0] for r in conn.execute(
             "SELECT p.name FROM tournament_players tp JOIN players p ON p.id = tp.player_id")}
     assert names == {"Yuri", "Bea"}
+
+
+def test_player_names_cannot_repeat_ignoring_case_accents_and_spaces(league):
+    for name in ("ANA", " Ána ", "Bea"):
+        assert "That player already exists" in league.post("/players", data={"name": name}).text
+    assert "That player already exists" in league.post("/players/2", data={"name": "ana"}).text
+    league.post("/players", data={"name": "Luis   Pérez"})
+    assert "That player already exists" in league.post(
+        "/players", data={"name": "luis perez"}).text
+    league.post("/tournaments/1/players", data={"player_name": "LUIS PEREZ", "create": "1"})
+    with db.connect() as conn:
+        names = [r[0] for r in conn.execute("SELECT name FROM players WHERE name LIKE 'Luis%'")]
+    assert names == ["Luis Pérez"]
