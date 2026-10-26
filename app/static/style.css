@@ -17,10 +17,11 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
-/* "Flags" comes first but only holds the 🇺🇸 🇲🇽 flags (see base.html). */
-body { margin: 0; font-family: "Noto Color Emoji", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
        background: var(--bg) linear-gradient(180deg, var(--sky) 0, var(--bg) 220px) no-repeat;
        color: var(--text); line-height: 1.4; }
+/* Windows only: a font holding just the 🇺🇸 🇲🇽 flags, tried first (see base.html). */
+.win-flags body { font-family: "Noto Color Emoji", system-ui, "Segoe UI", sans-serif; }
 a { color: var(--accent); }
 a.plain, .team a { color: inherit; text-decoration: none; }
 a.plain:hover, .team a:hover { text-decoration: underline; }
