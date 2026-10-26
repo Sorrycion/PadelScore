@@ -152,6 +152,14 @@ TEXT = {
               "sortean entre ellos.",
         "en": "For Americano and Mexicano: choose who plays (at least 4). Rounds are drawn "
               "among them."},
+    "courts_available": {"es": "🎾 Canchas disponibles", "en": "🎾 Courts available"},
+    "who_rests": {"es": "🛋️ ¿Quién descansa esta ronda?", "en": "🛋️ Who rests this round?"},
+    "who_rests_hint": {
+        "es": "Marca a quien pidió descansar. Si sobran jugadores, el resto de descansos se "
+              "reparte según las reglas: descansa primero quien menos ha descansado.",
+        "en": "Tick whoever asked to rest. If players are left over, the other rests follow "
+              "the rules: whoever has rested least rests first."},
+    "update_suggestion": {"es": "🔄 Actualizar sugerencia", "en": "🔄 Update suggestion"},
     "resting": {"es": "🛋️ Descansan", "en": "🛋️ Resting"},
     "round_hint": {
         "es": "En cada cancha, los dos de arriba juegan contra los dos de abajo: se crea un "
@@ -159,9 +167,9 @@ TEXT = {
         "en": "On each court the top two play the bottom two: one match per court is "
               "created. Review the suggestion and change what you need."},
     "americano_note": {
-        "es": "🔁 Americano: las parejas rotan para que juegues con todos. Cada jugador suma "
+        "es": "🇺🇸 Americano: las parejas rotan para que juegues con todos. Cada jugador suma "
               "los puntos que gana su pareja.",
-        "en": "🔁 Americano: partners rotate so you play with everyone. Each player scores "
+        "en": "🇺🇸 Americano: partners rotate so you play with everyone. Each player scores "
               "the points their pair wins."},
     "mexicano_note": {
         "es": "🇲🇽 Mexicano: la ronda 1 es un sorteo; después manda la clasificación: en cada "
@@ -211,6 +219,9 @@ TEXT = {
     "nothing_saved_yet": {
         "es": "La jornada aún no está guardada: revisa las canchas y pulsa «Guardar jornada».",
         "en": "The matchday isn't saved yet: review the courts and press “Save matchday”."},
+    "nothing_saved_round": {
+        "es": "La ronda aún no está guardada: revisa las canchas y pulsa «Guardar ronda».",
+        "en": "The round isn't saved yet: review the courts and press “Save round”."},
     "move_question": {"es": "¿Cuántos jugadores suben y bajan en cada cancha?",
                       "en": "How many players move up and down on each court?"},
     "move_note": {

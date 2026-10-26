@@ -50,7 +50,26 @@
 
 {% else %}
 <p>{{ _("round_hint") if round_mode else _("assign_courts_hint") }}</p>
-{% if resting %}<p class="muted">{{ _("resting") }}: {% for name in resting %}🛋️ {{ name }}{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+{% if round_mode and not has_sets and participants|length >= 4 %}
+{# Round settings: fewer courts or players who ask to rest; the rules fill the other rests. #}
+<form method="get" class="card stack round-setup">
+  {% if not matchday %}<input type="hidden" name="played_on" value="{{ played_on }}">{% endif %}
+  <label>{{ _("courts_available") }}
+    <select name="courts">
+      {% for n in range(1, (participants|length - asked|length) // 4 + 1) %}<option value="{{ n }}" {% if n == court_count %}selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select>
+  </label>
+  <fieldset class="player-picks">
+    <legend>{{ _("who_rests") }}</legend>
+    <p class="muted">{{ _("who_rests_hint") }}</p>
+    {% for p in participants %}
+    <label class="check"><input type="checkbox" name="rest" value="{{ p.id }}" {% if p.id in asked %}checked{% endif %}> {{ p.name }}</label>
+    {% endfor %}
+  </fieldset>
+  <button type="submit" class="secondary">{{ _("update_suggestion") }}</button>
+</form>
+{% endif %}
+{% if resting %}<p class="resting-line">{{ _("resting") }}: {% for name in resting %}🛋️ {{ name }}{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
 {% if previous and move and not has_sets %}
 <p class="muted">{{ _("suggested_from", n=previous.number) }}
   {{ _("moves_per_court") }}
@@ -58,7 +77,7 @@
 </p>
 {% endif %}
 {% if has_sets %}<p class="muted">{{ _("courts_change_warning") }}</p>{% endif %}
-{% if not matchday %}<p class="muted">{{ _("nothing_saved_yet") }}</p>{% endif %}
+{% if not matchday %}<p class="muted">{{ _("nothing_saved_round" if round_mode else "nothing_saved_yet") }}</p>{% endif %}
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 <form method="post" action="{{ action }}" class="stack" id="courts-form"
       data-legend="{{ _('court_n', n='__N__') }}">

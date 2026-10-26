@@ -43,7 +43,7 @@ nav.tabbar .icon { font-size: 1.05rem; }
 main { max-width: 820px; margin: 0 auto; padding: 8px 16px 48px; }
 
 /* --- Type --- */
-h1 { font-size: 2rem; line-height: 1.15; margin: 18px 0 6px; letter-spacing: -.02em; }
+h1 { font-size: 2rem; line-height: 1.15; margin: 18px 0 16px; letter-spacing: -.02em; }
 h2 { font-size: 1.2rem; margin: 28px 0 10px; }
 .eyebrow { color: var(--muted); font-size: .9rem; margin: 18px 0 0; }
 .muted { color: var(--muted); margin-top: 0; font-size: .92rem; }
@@ -54,7 +54,8 @@ h2 { font-size: 1.2rem; margin: 28px 0 10px; }
 .tag { font-size: .8rem; color: var(--muted); }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px;
              padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
-.page-head h1 { margin-top: 2px; }
+.page-head h1 { margin: 2px 0 4px; }
+h1 + .muted { margin-top: -8px; }
 .page-head .stats { text-align: right; color: var(--muted); font-size: .9rem; white-space: nowrap; }
 .page-head .stats strong { color: var(--text); }
 
@@ -83,11 +84,15 @@ fieldset.team-row .games input { width: 100%; font-size: 1.3rem; font-weight: 70
 details.card > summary { cursor: pointer; font-weight: 600; list-style: none; }
 details.card[open] > summary { margin-bottom: 12px; }
 .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
+/* Space between the blocks of a page (cards, lists, tables, forms). */
+.card, .empty, .scroll, ul.cards, ul.players, ul.moves, ul.chips, form.stack, .rules,
+main > table { margin-bottom: 20px; }
 
 /* --- Lists of cards (tournaments, players, matchdays) --- */
-ul.cards, ul.players, ul.matches, ul.moves { list-style: none; padding: 0; margin: 0; }
+ul.cards, ul.players, ul.matches, ul.moves { list-style: none; padding: 0; margin-top: 0; }
+.card form.stack { margin-bottom: 0; }
 ul.cards li, ul.players li { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
-                             margin-bottom: 10px; }
+                             margin-bottom: 12px; }
 ul.players li { padding: 12px 16px; }
 ul.players .tag { margin-left: 6px; }
 .t-card { display: block; padding: 14px 18px; color: inherit; text-decoration: none; }
@@ -182,12 +187,16 @@ fieldset.player-picks .muted { grid-column: 1 / -1; }
 label.check { display: flex !important; align-items: center; gap: 8px; }
 .tabs .done { font-size: .8rem; }
 .error::before { content: "⚠️ "; }
+.resting-line { font-weight: 600; }
 form.filters select { flex: 1 1 180px; }
 
 /* --- Rules --- */
 .rules { background: var(--card); padding: 4px 20px 12px; border-radius: var(--radius); box-shadow: var(--shadow);
          line-height: 1.55; }
 .rules li { margin-bottom: 6px; }
+.rules { scroll-margin-top: 16px; }
+.rules-tabs { margin-bottom: 16px; }
+.rules-tabs a { font-size: .95rem; }
 .rules table { width: auto; border: 1px solid var(--border); box-shadow: none; }
 
 /* --- Phones: navigation becomes a bottom tab bar --- */

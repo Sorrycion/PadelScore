@@ -2,8 +2,8 @@
 
 Both are individual formats played in rounds: on each court one match of two pairs,
 to a fixed number of points; every player scores the points their pair won. With a
-player count that isn't a multiple of four, the rest rotate: nobody rests twice before
-everyone has rested once.
+player count that isn't a multiple of four (or fewer courts, or players who ask to
+rest), the rests rotate: nobody rests twice before everyone has rested once.
 
 - Americano: partners rotate so that everyone partners everyone (as evenly as the
   numbers allow) and meets varied opponents.
@@ -28,17 +28,22 @@ def rests(players, history):
     return count
 
 
-def _resting(players, history, tiebreak):
-    """Who rests this round: those who rested least, then by `tiebreak`."""
-    resting = len(players) % 4
-    order = sorted(players, key=lambda p: (rests(players, history)[p], tiebreak(p)))
-    return order[:resting]
+def _resting(players, history, tiebreak, courts=None, rest=()):
+    """Who rests this round. `rest`: players who asked to rest. `courts`: how many
+    courts are available (all that the players fill if None). The other places to rest
+    go to those who rested least, then by `tiebreak`."""
+    asked = [p for p in players if p in set(rest)]
+    free = [p for p in players if p not in asked]
+    most = len(free) // 4
+    courts = most if courts is None else max(0, min(courts, most))
+    order = sorted(free, key=lambda p: (rests(players, history)[p], tiebreak(p)))
+    return asked + order[:len(free) - 4 * courts]
 
 
-def americano_round(players, history, seed):
+def americano_round(players, history, seed, courts=None, rest=()):
     """The next Americano round: (courts, resting players)."""
     rng = random.Random(seed)
-    resting = _resting(players, history, lambda p: rng.random())
+    resting = _resting(players, history, lambda p: rng.random(), courts, rest)
     active = [p for p in players if p not in resting]
     partners, opponents = Counter(), Counter()
     for courts in history:
@@ -75,7 +80,7 @@ def americano_round(players, history, seed):
     return best, resting
 
 
-def mexicano_round(players, history, ranking, seed):
+def mexicano_round(players, history, ranking, seed, courts=None, rest=()):
     """The next Mexicano round: (courts, resting players).
 
     ranking: player ids, best first (players not in it go after, in draw order).
@@ -88,7 +93,8 @@ def mexicano_round(players, history, ranking, seed):
         rank = {p: i for i, p in enumerate(ranking)}
         order.sort(key=lambda p: rank.get(p, len(rank)))
     place = {p: i for i, p in enumerate(order)}
-    resting = _resting(players, history, lambda p: -place[p])  # the lowest ranked rest first
+    # Among those who rested least, the lowest ranked rest first.
+    resting = _resting(players, history, lambda p: -place[p], courts, rest)
     active = [p for p in order if p not in resting]
     courts = []
     for i in range(0, len(active) - 3, 4):

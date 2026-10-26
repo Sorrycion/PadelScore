@@ -877,3 +877,27 @@ def test_filter_sets_by_matchday(league):
     assert '<option value="2" selected>' in page
     # A matchday of another tournament is ignored.
     assert league.get("/matches?tournament=1&matchday=99").text.count('class="match"') == 2
+
+
+def test_players_can_ask_to_rest_and_courts_can_be_fewer():
+    players = list(range(1, 10))
+    courts, resting = rounds.americano_round(players, [], seed=3, rest=[4, 7])
+    assert {4, 7} <= set(resting) and len(resting) == 5 and len(courts) == 1  # 7 left: one court, 3 more rest
+    courts, resting = rounds.americano_round(players, [], seed=3, courts=1)
+    assert len(courts) == 1 and len(resting) == 5
+    # Mexicano: whoever asked rests; the other rest goes to the lowest ranked.
+    history = [[[1, 2, 3, 4], [5, 6, 7, 8]]]  # 9 rested in round 1
+    courts, resting = rounds.mexicano_round(players, history, list(range(1, 10)), seed=1, rest=[2])
+    assert resting == [2] and [p for c in courts for p in c] == [1, 4, 3, 5, 6, 8, 7, 9]
+
+
+def test_round_draft_with_rests_and_courts(league):
+    new_tournament(league, 2, players=range(1, 9))
+    page = league.get("/tournaments/2/matchdays/new",
+                      params={"played_on": "2026-11-01", "rest": ["1", "2"]}).text
+    assert "Who rests this round" in page and court_count(page) == 1
+    assert "Resting" in page and "🛋️ Ana" in page and "🛋️ Bea" in page
+    assert 'name="rest" value="1" checked' in page
+    page = league.get("/tournaments/2/matchdays/new",
+                      params={"played_on": "2026-11-01", "courts": "1"}).text
+    assert court_count(page) == 1 and page.count("🛋️ ") >= 4

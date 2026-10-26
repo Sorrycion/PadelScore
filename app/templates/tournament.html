@@ -4,7 +4,7 @@
 {% set round_mode = tournament.rule_code in ROUND_MODES %}
 <div class="page-head">
   <div>
-    <p class="eyebrow"><a class="plain" href="/rules">{{ RULE_ICONS.get(tournament.rule_code, "") }} {{ tournament.rule_type }}</a></p>
+    <p class="eyebrow"><a class="plain" href="/rules#{{ tournament.rule_code }}">{{ RULE_ICONS.get(tournament.rule_code, "") }} {{ tournament.rule_type }}</a></p>
     <h1>{{ tournament.name }}</h1>
     <div class="muted">📅 {{ tournament.held_on }}</div>
   </div>

@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import quote, urlencode
 
 import markdown
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -20,7 +20,10 @@ from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
                       court_rotation, is_played, next_courts)
 
 BASE = Path(__file__).parent
-RULES = BASE.parent / "docs" / "REGLAMENTO.md"
+DOCS = BASE.parent / "docs"
+# The rules page: one section per rule type with written rules (code, file).
+RULES = [("liga_amigos", DOCS / "REGLAMENTO.md"), ("americano", DOCS / "AMERICANO.md"),
+         ("mexicano", DOCS / "MEXICANO.md")]
 
 
 @asynccontextmanager
@@ -37,7 +40,7 @@ EDIT = [Depends(require_editor)]  # routes that change data need the club passwo
 MANUAL = "manual"  # rule type whose sets are all made by hand
 templates.env.globals.update(
     ROUND_MODES=ROUND_MODES, MANUAL=MANUAL,
-    RULE_ICONS={"liga_amigos": "🏅", "americano": "🔁", "mexicano": "🇲🇽", "manual": "✍️"},
+    RULE_ICONS={"liga_amigos": "🏅", "americano": "🇺🇸", "mexicano": "🇲🇽", "manual": "✍️"},
     # Changes whenever the stylesheet does, so phones don't keep an old cached copy.
     css_version=hashlib.sha256((BASE / "static" / "style.css").read_bytes()).hexdigest()[:10],
 )
@@ -272,8 +275,12 @@ def logout():
 
 @app.get("/rules", response_class=HTMLResponse)
 def rules_page(request: Request):
-    html = markdown.markdown(RULES.read_text(encoding="utf-8"), extensions=["tables"])
-    return templates.TemplateResponse(request, "rules.html", {"rules": html})
+    sections = []
+    for code, path in RULES:
+        text = path.read_text(encoding="utf-8")
+        sections.append({"code": code, "title": text.splitlines()[0].lstrip("# "),
+                         "html": markdown.markdown(text, extensions=["tables"])})
+    return templates.TemplateResponse(request, "rules.html", {"sections": sections})
 
 
 @app.get("/tournaments", response_class=HTMLResponse)
@@ -500,16 +507,18 @@ def add_court_sets(conn, matchday_id, court, players, code):
             "VALUES (?, ?, ?, ?, ?, ?)", (matchday_id, court, a1, a2, b1, b2))
 
 
-def draw_round(conn, tournament, number):
-    """The suggested courts of an Americano / Mexicano round: (courts, resting ids)."""
+def draw_round(conn, tournament, number, courts=None, rest=()):
+    """The suggested courts of an Americano / Mexicano round: (courts, resting ids).
+    courts: how many courts are available; rest: players who asked to rest."""
     players = [p["id"] for p in tournament_players(conn, tournament["id"])]
     results, standings = load_results(conn, tournament["id"])
     history = [[ids for _, ids in sorted(courts_of(md["sets"])[0].items()) if ids]
                for md in results if md["number"] < number and md["sets"]]
     seed = tournament["id"] * 1000 + number  # the same suggestion on every reload
     if tournament["rule_code"] == "americano":
-        return rounds.americano_round(players, history, seed)
-    return rounds.mexicano_round(players, history, [r["id"] for r in standings], seed)
+        return rounds.americano_round(players, history, seed, courts, rest)
+    return rounds.mexicano_round(players, history, [r["id"] for r in standings], seed,
+                                 courts, rest)
 
 
 def move_choice(previous, move):
@@ -525,8 +534,8 @@ def move_urls(**params):
 
 
 def render_courts(request, conn, tournament, courts, *, matchday=None, number=None,
-                  played_on=None, previous=None, move=None, resting=(), error=None,
-                  status_code=200):
+                  played_on=None, previous=None, move=None, resting=(), asked=(),
+                  court_count=None, error=None, status_code=200):
     """The courts screen: for a new matchday (nothing is saved until the form is sent)
     or to change the courts of an existing one."""
     return templates.TemplateResponse(request, "courts.html", {
@@ -535,6 +544,9 @@ def render_courts(request, conn, tournament, courts, *, matchday=None, number=No
         "played_on": played_on, "players": all_players(conn),
         "previous": previous, "move": move,
         "resting": [p["name"] for p in all_players(conn) if p["id"] in resting],
+        # Americano / Mexicano: the round's settings (courts available, who asked to rest).
+        "participants": tournament_players(conn, tournament["id"]),
+        "asked": set(asked), "court_count": court_count or len(courts),
         "move_urls": move_urls(**({} if matchday else {"played_on": played_on})),
         "action": f"/matchdays/{matchday['id']}/courts" if matchday
                   else f"/tournaments/{tournament['id']}/matchdays",
@@ -546,7 +558,8 @@ def render_courts(request, conn, tournament, courts, *, matchday=None, number=No
 @app.get("/tournaments/{tournament_id}/matchdays/new", response_class=HTMLResponse,
          dependencies=EDIT)
 def new_matchday_page(request: Request, tournament_id: int, played_on: str = "",
-                      move: str | None = None):
+                      move: str | None = None, courts: str | None = None,
+                      rest: list[int] = Query([])):
     """Draft of the next matchday: choose how many players change court, then review
     the courts. Nothing is saved here."""
     with db.connect() as conn:
@@ -559,13 +572,13 @@ def new_matchday_page(request: Request, tournament_id: int, played_on: str = "",
             return render_courts(request, conn, tournament, [], number=number,
                                  played_on=played_on, move=1)
         if tournament["rule_code"] in ROUND_MODES:
-            courts, resting = draw_round(conn, tournament, number)
-            return render_courts(request, conn, tournament, courts, number=number,
-                                 played_on=played_on, move=1, resting=resting)
+            drawn, resting = draw_round(conn, tournament, number, opt_int(courts), rest)
+            return render_courts(request, conn, tournament, drawn, number=number,
+                                 played_on=played_on, move=1, resting=resting, asked=rest)
         previous = previous_matchday(conn, tournament_id, number)
         move = move_choice(previous, opt_int(move))
-        courts = suggest_courts(conn, previous, move) if move else []
-        return render_courts(request, conn, tournament, courts, number=number,
+        suggested = suggest_courts(conn, previous, move) if move else []
+        return render_courts(request, conn, tournament, suggested, number=number,
                              played_on=played_on, previous=previous, move=move)
 
 
@@ -610,7 +623,8 @@ def latest_courts():
 
 
 @app.get("/matchdays/{matchday_id}/courts", response_class=HTMLResponse, dependencies=EDIT)
-def courts_page(request: Request, matchday_id: int, move: str | None = None):
+def courts_page(request: Request, matchday_id: int, move: str | None = None,
+                courts: str | None = None, rest: list[int] = Query([])):
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
         tournament = get_tournament(conn, matchday["tournament_id"])
@@ -618,16 +632,17 @@ def courts_page(request: Request, matchday_id: int, move: str | None = None):
             return redirect(f"/matches/new?matchday={matchday_id}")
         players, _ = courts_of(set_rows(conn, matchday_id=matchday_id))
         if players:
-            courts = [ids or [None] * 4 for _, ids in sorted(players.items())]
-            return render_courts(request, conn, tournament, courts, matchday=matchday)
+            assigned = [ids or [None] * 4 for _, ids in sorted(players.items())]
+            return render_courts(request, conn, tournament, assigned, matchday=matchday)
         if tournament["rule_code"] in ROUND_MODES:
-            courts, resting = draw_round(conn, tournament, matchday["number"])
-            return render_courts(request, conn, tournament, courts, matchday=matchday,
-                                 move=1, resting=resting)
+            drawn, resting = draw_round(conn, tournament, matchday["number"],
+                                        opt_int(courts), rest)
+            return render_courts(request, conn, tournament, drawn, matchday=matchday,
+                                 move=1, resting=resting, asked=rest)
         previous = previous_matchday(conn, tournament["id"], matchday["number"])
         move = move_choice(previous, opt_int(move))
-        courts = suggest_courts(conn, previous, move) if move else []
-        return render_courts(request, conn, tournament, courts, matchday=matchday,
+        suggested = suggest_courts(conn, previous, move) if move else []
+        return render_courts(request, conn, tournament, suggested, matchday=matchday,
                              previous=previous, move=move)
 
 

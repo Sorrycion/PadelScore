@@ -1,8 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{{ _("nav_rules") }} · PadelScore{% endblock %}
 {% block content %}
+<h1>📖 {{ _("nav_rules") }}</h1>
 {% if _("rules_spanish_only") %}<p class="muted">{{ _("rules_spanish_only") }}</p>{% endif %}
-<article class="rules" lang="es">
-{{ rules|safe }}
+<nav class="tabs rules-tabs" aria-label="{{ _('nav_rules') }}">
+  {% for s in sections %}<a href="#{{ s.code }}">{{ RULE_ICONS.get(s.code, "") }} {{ s.title.split(" ", 2)[-1] if s.code != "liga_amigos" else "Liga de amigos" }}</a>{% endfor %}
+</nav>
+{% for s in sections %}
+<article class="rules" id="{{ s.code }}" lang="es">
+{{ s.html|safe }}
 </article>
+{% endfor %}
 {% endblock %}
