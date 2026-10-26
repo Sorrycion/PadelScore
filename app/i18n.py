@@ -102,6 +102,7 @@ TEXT = {
     "new_password": {"es": "Nueva contraseña", "en": "New password"},
     "search_player": {"es": "🔍 Buscar jugador…", "en": "🔍 Search player…"},
     "add": {"es": "➕ Agregar", "en": "➕ Add"},
+    "create_player_option": {"es": "➕ Crear jugador «{name}»", "en": "➕ Create player “{name}”"},
     "add_to_tournament": {"es": "➕ Agregar al torneo", "en": "➕ Add to tournament"},
     "confirm_remove_player": {
         "es": "¿Quitar a este jugador del torneo? Sus resultados anteriores se conservan.",
@@ -111,10 +112,10 @@ TEXT = {
         "en": "This tournament has no player list yet: anyone can be picked."},
     "tournament_players_edit_hint": {
         "es": 'Quita o agrega jugadores cuando quieras (por ejemplo, para reemplazar a alguien); '
-              'los resultados anteriores se conservan. ¿Alguien nuevo? Agrégalo primero en '
-              '<a href="{url}">Jugadores</a>.',
+              'los resultados anteriores se conservan. Si escribes un nombre nuevo, puedes '
+              'crear al jugador desde aquí.',
         "en": 'Remove or add players any time (e.g. to replace someone); results so far are '
-              'kept. Someone new? Add them first in <a href="{url}">Players</a>.'},
+              'kept. Type a new name to create the player right here.'},
     "player_mode_note": {
         "es": "🔑 Entraste como jugador: puedes registrar y corregir los resultados.",
         "en": "🔑 Logged in as a player: you can enter and correct results."},
@@ -138,14 +139,15 @@ TEXT = {
     # Matchday
     "record_set_button": {"es": "+ Registrar set", "en": "+ Record set"},
     "places_note": {
-        "es": 'Puntos por set, sin importar la cancha: la pareja ganadora 9 + 1 por set ganado '
-              '(10 cada uno), la perdedora 6; un set empatado da 9 a los cuatro. El orden en '
-              'la cancha (puntos, diferencia de juegos, posición en el ranking) solo decide '
-              'los cambios de cancha. <a href="{url}">Reglamento</a>',
-        "en": 'Points per set, whatever the court: the winning pair 9 + 1 for the set won '
-              '(10 each), the losing pair 6; a tied set gives 9 to all four. The order on '
-              'the court (points, games difference, league position) only decides court '
-              'changes. <a href="{url}">Rules</a>'},
+        "es": 'Al terminar los sets de cada cancha, sus jugadores reciben su lugar: 1.º 9, '
+              '2.º 6, 3.º 4 y 4.º 3 puntos, más 1 por set ganado. El lugar se decide por sets '
+              'ganados, luego ± juegos, luego posición en el ranking; en la primera jornada, '
+              'por sorteo. ⏳ = cancha sin terminar (solo cuentan los sets ganados). '
+              '<a href="{url}">Reglamento</a>',
+        "en": 'When a court has played all its sets, its players get their place: 1st 9, '
+              '2nd 6, 3rd 4, 4th 3 points, plus 1 per set won. Places go by sets won, then '
+              '± games, then league position; on the first matchday, by a draw. ⏳ = court '
+              'not finished (only sets won count). <a href="{url}">Rules</a>'},
     "absent": {"es": "🚫 Ausente", "en": "🚫 Absent"},
     "mark_absent": {"es": "🚫 Marcar ausente", "en": "🚫 Mark absent"},
     "mark_present": {"es": "✅ Quitar ausencia", "en": "✅ Mark present"},
@@ -212,10 +214,12 @@ TEXT = {
         "es": "Clasificación por puntos, luego diferencia de puntos y victorias.",
         "en": "Ranked by points, then points difference and wins."},
     "manual_note": {
-        "es": "✍️ Manual: crea cada set a mano, con su cancha y sus parejas. Puntuación "
-              "individual de Liga de amigos.",
-        "en": "✍️ Manual: create each set by hand, with its court and pairs. Liga de amigos "
-              "individual scoring."},
+        "es": "✍️ Manual: crea cada set a mano, con su cancha y sus parejas. Cada jugador suma "
+              "los juegos que gana su pareja en cada set; clasificación por puntos, luego "
+              "diferencia y sets ganados.",
+        "en": "✍️ Manual: create each set by hand, with its court and pairs. Each player scores "
+              "the games their pair wins in each set; ranked by points, then difference and "
+              "sets won."},
     "manual_new_hint": {
         "es": "Guarda la jornada y luego agrega cada set con su cancha y parejas.",
         "en": "Save the matchday, then add each set with its court and pairs."},

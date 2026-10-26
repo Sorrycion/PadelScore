@@ -31,6 +31,7 @@
 
 - Además de lo anterior, se otorgará 1 punto por cada set ganado.
 - Al final de la jornada, cada uno de los cuatro jugadores de cada cancha tendrán por tanto una puntuación individual que se irá acumulando en cada jornada.
+- El lugar en la cancha se decide por sets ganados; en caso de empate, por la diferencia de juegos (ganados − perdidos), y si sigue el empate, por la posición en el ranking (ver criterios de desempate).
 - El puntaje acumulado en las 6 jornadas será la base para la entrega de premios, y en caso de que existieran empates en puntos, sólo para posiciones que ganen premio, se decidirá en un juego individual cruzado, de “muerte súbita” a 11 puntos (o más en caso de que no hubiere diferencia de 2 puntos y hasta que se llegue a dicha diferencia). No podrá haber empate alguno en puestos acreedores a premio.
 
 ### Criterios de desempate en una jornada

@@ -8,7 +8,7 @@ from app import db
 from app.i18n import LANGS, TEXT
 from app.main import app
 from app.scoring import (ScoreError, check_set, court_moves, court_rotation, court_table,
-                         next_courts, set_points, tournament_results)
+                         next_courts, tournament_results)
 
 NAMES = ["Ana", "Bea", "Carlos", "Diego", "Elena", "Fer", "Gabi", "Hugo"]
 APP_DIR = Path(__file__).parent.parent / "app"
@@ -51,7 +51,7 @@ def set_form(players, a, b, court=1, matchday_id=1):
 
 
 # The three sets of one court, each player partnering the other three once:
-# Ana +3 (2 sets), Bea +1 (2), Carlos +5 (2), Diego -9 (0).
+# Ana +3 (2 sets won), Bea +1 (2), Carlos +5 (2), Diego -9 (0).
 ROTATION = [((1, 2, 3, 4), 6, 4), ((1, 3, 2, 4), 6, 2), ((1, 4, 2, 3), 3, 6)]
 
 
@@ -79,15 +79,27 @@ def test_check_set_rejects_negative_games(a, b):
         check_set(a, b)
 
 
-def test_set_points():
-    assert set_points("A") == (9 + 1, 6)  # winners share 1st + 1 for the set; losers 2nd
-    assert set_points("B") == (6, 9 + 1)
-    assert set_points(None) == (9, 9)     # tied set: all four share 1st, no set won
+def test_places_per_court_at_the_end_of_the_matchday():
+    # Sets won 2, 2, 2, 0: the three ties go by games difference (Carlos +5, Ana +3,
+    # Bea +1). Places 9 / 6 / 4 / 3, plus 1 per set won.
+    rows = court_table([row(*s) for s in ROTATION], position={}, places=True)
+    assert [(r["name"], r["diff"], r["sets_won"], r["place"], r["points"]) for r in rows] == [
+        ("Carlos", 5, 2, 1, 9 + 2), ("Ana", 3, 2, 2, 6 + 2), ("Bea", 1, 2, 3, 4 + 2),
+        ("Diego", -9, 0, 4, 3)]
+
+
+def test_unfinished_court_only_counts_sets_won():
+    sets = [row(*s) for s in ROTATION[:2]] + [
+        {**row(*ROTATION[2]), "team_a_games": None, "team_b_games": None, "winner": None}]
+    rows = court_table(sets, position={}, places=True)
+    assert all(r["place"] is None for r in rows)
+    assert {r["name"]: r["points"] for r in rows} == {"Ana": 2, "Bea": 1, "Carlos": 1, "Diego": 0}
 
 
 def test_tied_set_gives_no_one_a_set():
-    rows = court_table([row((1, 2, 3, 4), 4, 4)], position={})
-    assert all(r["sets_won"] == 0 and r["diff"] == 0 and r["points"] == 9 for r in rows)
+    rows = court_table([row((1, 2, 3, 4), 4, 4)], position={}, places=True)
+    assert all(r["sets_won"] == 0 and r["diff"] == 0 for r in rows)
+    assert sorted(r["points"] for r in rows) == [3, 4, 6, 9]
 
 
 def test_short_and_tied_sets_can_be_saved(league):
@@ -96,61 +108,66 @@ def test_short_and_tied_sets_can_be_saved(league):
     assert r.status_code == 200 and "4-4" in r.text
 
 
-def test_points_are_added_up_per_set():
-    # Ana, Bea and Carlos each win 2 of their 3 sets: 10 + 10 + 6 = 26. Diego loses all
-    # three: 6 * 3 = 18. Equal points are listed by games difference.
+def test_ties_go_by_difference_then_league_position():
+    sets = [row((1, 2, 3, 4), 6, 4), row((3, 4, 1, 2), 6, 4)]  # everyone 1 won, diff 0
+    rows = court_table(sets, position={4: 1, 3: 2, 1: 3, 2: 4}, places=True)
+    assert [(r["name"], r["points"]) for r in rows] == [
+        ("Diego", 9 + 1), ("Carlos", 6 + 1), ("Ana", 4 + 1), ("Bea", 3 + 1)]
+
+
+def test_first_matchday_ties_are_drawn():
+    sets = [row((1, 2, 3, 4), 6, 4), row((3, 4, 1, 2), 6, 4)]  # a complete tie, no ranking
+    draws = {tuple(r["name"] for r in court_table(sets, {}, places=True, seed=f"1-{n}"))
+             for n in range(20)}
+    assert len(draws) > 1  # different courts / matchdays draw differently...
+    same = [court_table(sets, {}, places=True, seed="7-1") for _ in range(3)]
+    assert len({tuple(r["name"] for r in rows) for rows in same}) == 1  # ...but stay put
+
+
+def test_absent_player_is_last_and_scores_zero_in_the_liga():
+    rows = court_table([row(*s) for s in ROTATION], position={}, absent={3}, places=True)
+    assert [(r["name"], r["points"]) for r in rows] == [
+        ("Ana", 9 + 2), ("Bea", 6 + 2), ("Diego", 4), ("Carlos", 0)]
+
+
+def test_games_scoring_adds_each_pairs_games():
+    # Americano, Mexicano and Manual: Ana 6+6+3, Bea 6+2+6, Carlos 4+6+6, Diego 4+2+3.
     rows = court_table([row(*s) for s in ROTATION], position={})
-    assert [(r["name"], r["diff"], r["sets_won"], r["points"]) for r in rows] == [
-        ("Carlos", 5, 2, 26), ("Ana", 3, 2, 26), ("Bea", 1, 2, 26), ("Diego", -9, 0, 18)]
-
-
-def test_margin_and_court_do_not_change_points():
-    sets = [row((1, 2, 3, 4), 3, 0, court=1), row((5, 6, 7, 8), 7, 6, court=4)]
-    _, standings = tournament_results([{"number": 1, "sets": sets}])
-    points = {r["name"]: r["points"] for r in standings}
-    assert points == {"Ana": 10, "Bea": 10, "Elena": 10, "Fer": 10,
-                      "Carlos": 6, "Diego": 6, "Gabi": 6, "Hugo": 6}
-
-
-def test_ties_are_ordered_by_league_position_without_changing_points():
-    sets = [row((1, 2, 3, 4), 6, 4), row((3, 4, 1, 2), 6, 4)]  # everyone 1 won, 1 lost
-    rows = court_table(sets, position={4: 1, 3: 2})
-    assert [r["name"] for r in rows][:2] == ["Diego", "Carlos"]  # order for court changes
-    assert {r["points"] for r in rows} == {10 + 6}
+    assert [(r["name"], r["points"]) for r in rows] == [
+        ("Carlos", 16), ("Ana", 15), ("Bea", 14), ("Diego", 9)]
 
 
 def test_tournament_results_add_up_matchdays():
     md1 = {"number": 1, "sets": [row(*s) for s in ROTATION]}
     md2 = {"number": 2, "sets": [row(*s) for s in ROTATION]}
-    results, standings = tournament_results([md1, md2])
+    results, standings = tournament_results([md1, md2], places=True)
     assert [(r["position"], r["name"], r["points"]) for r in standings] == [
-        (1, "Ana", 52), (1, "Bea", 52), (1, "Carlos", 52), (4, "Diego", 36)]
-    assert standings[0]["by_matchday"] == {1: 26, 2: 26}
+        (1, "Carlos", 22), (2, "Ana", 16), (3, "Bea", 12), (4, "Diego", 6)]
+    assert standings[0]["by_matchday"] == {1: 11, 2: 11}
     assert standings[0]["played"] == 2
     assert list(results[0]["courts"]) == [1]
 
 
 def test_equal_points_share_a_standings_position():
-    # Matchday 1: Ana & Bea beat Carlos & Diego 3-0 -> Ana 10, Bea 10, Carlos 6, Diego 6.
+    # Games scoring: Ana & Bea beat Carlos & Diego 3-0 -> 3, 3, 0, 0.
     _, standings = tournament_results([{"number": 1, "sets": [row((1, 2, 3, 4), 3, 0)]}])
-    assert [(r["position"], r["points"]) for r in standings] == [(1, 10), (1, 10), (3, 6), (3, 6)]
+    assert [(r["position"], r["points"]) for r in standings] == [(1, 3), (1, 3), (3, 0), (3, 0)]
 
 
 def test_league_position_orders_ties_on_the_next_matchday():
-    # After matchday 1 Diego leads Carlos; on matchday 2 everyone has the same result
-    # and Diego, higher in the ranking, is listed first (court changes use this order).
+    # After matchday 1 Diego leads Carlos; on matchday 2 they tie on sets and difference,
+    # so Diego, higher in the ranking, takes the better place.
     md1 = {"number": 1, "sets": [row((4, 1, 3, 2), 6, 0)]}
     md2 = {"number": 2, "sets": [row((1, 2, 3, 4), 6, 4), row((3, 4, 1, 2), 6, 4)]}
-    results, _ = tournament_results([md1, md2])
+    results, _ = tournament_results([md1, md2], places=True)
     names = [r["name"] for r in results[1]["courts"][1]]
     assert names.index("Diego") < names.index("Carlos")
-    assert {r["points"] for r in results[1]["courts"][1]} == {10 + 6}
 
 
 def test_court_moves():
-    top = court_table([row(*s) for s in ROTATION], position={})
+    top = court_table([row(*s) for s in ROTATION], position={}, places=True)
     bottom = court_table([row(tuple(p + 4 for p in s[0]), s[1], s[2], court=2)
-                          for s in ROTATION], position={})
+                          for s in ROTATION], position={}, places=True)
     moves = court_moves({1: top, 2: bottom}, count=1)
     assert moves[0] == {"court": 1, "up": [], "up_to": None, "down": ["Diego"], "down_to": 2}
     assert moves[1] == {"court": 2, "up": ["Gabi"], "up_to": 1, "down": [], "down_to": None}
@@ -164,18 +181,18 @@ def test_full_matchday_flow(league):
         r = league.post("/matches", data=set_form(players, a, b))
         assert r.status_code == 200
     page = league.get("/matchdays/1").text
-    assert "Court 1" in page and "6-4" in page and "+5" in page
+    assert "Court 1" in page and 'aria-label="6-4"' in page and "+5" in page
 
     standings = league.get("/tournaments/1").text
-    assert standing_points(standings, "Carlos") == 26
-    assert standing_points(standings, "Diego") == 18
+    assert standing_points(standings, "Carlos") == 11
+    assert standing_points(standings, "Diego") == 3
 
     home = league.get("/").text
     assert "Liga Amigos" in home and home.index("Carlos") < home.index("Diego")
 
     # Edit the third set so Ana & Diego win it 6-3 instead of losing 3-6: Ana wins all 3.
     league.post("/matches/3", data=set_form((1, 4, 2, 3), 6, 3))
-    assert standing_points(league.get("/tournaments/1").text, "Ana") == 30
+    assert standing_points(league.get("/tournaments/1").text, "Ana") == 9 + 3
 
     r = league.post("/matches/3/delete")
     assert r.status_code == 200 and "2 of 3 sets recorded" in r.text
@@ -202,11 +219,12 @@ def test_rejects_bad_set(league, data, message):
 
 
 def test_player_can_play_on_two_courts_and_points_add_up(league):
-    assert league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4, court=1)).status_code == 200
-    assert league.post("/matches", data=set_form((1, 6, 7, 8), 6, 4, court=2)).status_code == 200
-    # Ana is 1st on both courts: (9 + 1) twice, in one matchday.
+    for players, a, b, court in [((1, 2, 3, 4), 6, 4, 1), ((1, 3, 2, 4), 6, 2, 1),
+                                 ((1, 6, 7, 8), 6, 4, 2), ((1, 7, 6, 8), 6, 1, 2)]:
+        assert league.post("/matches", data=set_form(players, a, b, court=court)).status_code == 200
+    # Ana is 1st on both courts with 2 sets won each: (9 + 2) twice, in one matchday.
     standings = league.get("/tournaments/1").text
-    assert standing_points(standings, "Ana") == 20
+    assert standing_points(standings, "Ana") == 22
     profile = league.get("/players/1").text
     assert "1 matchday played" in profile
 
@@ -502,7 +520,7 @@ def test_assigning_courts_creates_three_pending_sets_each(league):
 
     r = league.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"})
     assert "6-4" in r.text and pending_count() == 5
-    assert standing_points(league.get("/tournaments/1").text, "Ana") == 10
+    assert standing_points(league.get("/tournaments/1").text, "Ana") == 1  # 1 set won so far
     assert "Pending" in league.get("/matches").text  # only a label on other pages
 
 
@@ -565,9 +583,10 @@ def test_empty_courts_are_left_out(league):
 
 def test_next_matchday_suggests_courts_after_moves(league):
     league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 8)))
-    for match_id in range(1, 7):  # team A wins every set
-        league.post(f"/matches/{match_id}/score", data={"team_a_games": "6", "team_b_games": "0"})
-    # Court order after matchday 1: Ana, Bea, Carlos, Diego and Elena, Fer, Gabi, Hugo.
+    for match_id in range(1, 7):  # the ROTATION results on both courts
+        a, b = ROTATION[(match_id - 1) % 3][1:]
+        league.post(f"/matches/{match_id}/score", data={"team_a_games": a, "team_b_games": b})
+    # Court order after matchday 1: Carlos, Ana, Bea, Diego and Gabi, Elena, Fer, Hugo.
     new = "/tournaments/1/matchdays/new"
     page = league.get(new, params={"played_on": "2026-10-30"}).text
     assert "How many players move up and down" in page and court_count(page) == 0
@@ -578,10 +597,10 @@ def test_next_matchday_suggests_courts_after_moves(league):
         return [selected(c) for c in page.split("<template")[0]
                 .split('<fieldset class="court-pick">')[1:]]
 
-    # One moves: Diego down, Elena up. The best of court 1 and the last of court 2 stay.
-    assert suggested(1) == [{"1", "2", "3", "5"}, {"4", "6", "7", "8"}]
-    # Two move: Carlos and Diego down, Elena and Fer up.
-    assert suggested(2) == [{"1", "2", "5", "6"}, {"3", "4", "7", "8"}]
+    # One moves: Diego down, Gabi up. The best of court 1 and the last of court 2 stay.
+    assert suggested(1) == [{"1", "2", "3", "7"}, {"4", "5", "6", "8"}]
+    # Two move: Bea and Diego down, Gabi and Elena up.
+    assert suggested(2) == [{"1", "3", "5", "7"}, {"2", "4", "6", "8"}]
     assert matchday_count() == 1  # still only a draft
 
 
@@ -709,26 +728,27 @@ def test_absent_player_scores_zero_and_goes_last():
     carlos = next(r for r in rows if r["id"] == 3)
     assert rows[-1] is carlos and carlos["absent"]
     assert (carlos["points"], carlos["diff"], carlos["sets_won"], carlos["sets"]) == (0, 0, 0, 3)
-    # Everyone else scores as usual.
-    assert {r["id"]: r["points"] for r in rows if not r["absent"]} == {1: 26, 2: 26, 4: 18}
+    # Everyone else scores their pairs' games as usual.
+    assert {r["id"]: r["points"] for r in rows if not r["absent"]} == {1: 15, 2: 14, 4: 9}
 
 
 def test_mark_player_absent_on_a_matchday(league):
     for players, a, b in ROTATION:
         league.post("/matches", data=set_form(players, a, b))
-    assert standing_points(league.get("/tournaments/1").text, "Carlos") == 26
+    assert standing_points(league.get("/tournaments/1").text, "Carlos") == 11
 
     r = league.post("/matchdays/1/absent/3")
     assert r.status_code == 200 and "🚫 Absent<" in r.text and "Mark present" in r.text
     assert standing_points(league.get("/tournaments/1").text, "Carlos") == 0
-    assert standing_points(league.get("/tournaments/1").text, "Ana") == 26  # unchanged
+    # Carlos goes last; Ana (2 sets, +3) is now 1st on the court: 9 + 2.
+    assert standing_points(league.get("/tournaments/1").text, "Ana") == 11
     profile = league.get("/players/3").text
     assert "🚫 Absent<" in profile and "0 matchdays played" in profile
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0] == 3  # same sets
 
     league.post("/matchdays/1/absent/3")  # present again
-    assert standing_points(league.get("/tournaments/1").text, "Carlos") == 26
+    assert standing_points(league.get("/tournaments/1").text, "Carlos") == 11
     assert league.post("/matchdays/1/absent/8").status_code == 404  # Hugo isn't playing
 
 
@@ -868,7 +888,7 @@ def test_manual_tournament_sets_are_made_by_hand(league):
         "/matches/new?matchday=2"
     league.post("/matches", data=set_form((1, 5, 2, 6), 6, 3, court=3, matchday_id=2))
     standings = league.get("/tournaments/2").text
-    assert standing_points(standings, "Ana") == 10 and standing_points(standings, "Bea") == 6
+    assert standing_points(standings, "Ana") == 6 and standing_points(standings, "Bea") == 3
 
 
 def test_filter_sets_by_matchday(league):
@@ -929,7 +949,7 @@ def test_removed_player_keeps_results(league):
     league.post("/tournaments/2/matchdays", data={"played_on": "2026-11-01"})
     league.post("/matches", data=set_form((1, 2, 3, 4), 6, 3, matchday_id=2))
     league.post("/tournaments/2/players/1/remove")
-    assert standing_points(league.get("/tournaments/2").text, "Ana") == 10
+    assert standing_points(league.get("/tournaments/2").text, "Ana") == 6
 
 
 @pytest.fixture
@@ -1071,3 +1091,28 @@ def test_standings_page_by_tournament(league):
     page = league.get("/?tournament=1").text
     assert "Liga Amigos</a></h1>" in page and standing_points(page, "Ana") == 10
     assert "Otra copa</a></h1>" in league.get("/?tournament=99").text  # unknown: the latest
+
+
+def test_new_players_can_be_created_while_choosing_them(league):
+    data = {"name": "Copa", "held_on": "2026-11-01", "rule_type_id": "1",
+            "players": ["1", "2"], "new_players": ["Zoe", " ana "]}  # " ana " is Ana
+    league.post("/tournaments", data=data)
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM players").fetchone()[0] == len(NAMES) + 1
+        names = [r[0] for r in conn.execute(
+            "SELECT p.name FROM tournament_players tp JOIN players p ON p.id = tp.player_id "
+            "WHERE tp.tournament_id = 2 ORDER BY p.name")]
+    assert names == ["Ana", "Bea", "Zoe"]
+
+
+def test_tournament_page_adds_or_creates_a_player(league):
+    page = league.get("/tournaments/1").text
+    assert 'class="picker add-player"' in page and '"name": "Ana"' in page
+    league.post("/tournaments/1/players", data={"player_name": "Yuri", "create": "1"})
+    league.post("/tournaments/1/players", data={"player_name": "bea", "create": ""})
+    r = league.post("/tournaments/1/players", data={"player_name": "Nadie", "create": ""})
+    assert "There's no player with that name" in r.text
+    with db.connect() as conn:
+        names = {r[0] for r in conn.execute(
+            "SELECT p.name FROM tournament_players tp JOIN players p ON p.id = tp.player_id")}
+    assert names == {"Yuri", "Bea"}

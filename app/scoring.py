@@ -4,18 +4,20 @@ A tournament (league) has matchdays (jornadas). On a matchday the players are sp
 into courts of four; each court plays three sets, every player partnering each of the
 other three once.
 
-Points are given per set, whatever the court: the two winners share 1st place (9) and
-get 1 more for the set won (10 each); the two losers share 2nd place (6 each). In a
-tied set all four share 1st (9 each, no set won). A player's matchday points are the
-sum over their sets, and the tournament standings add up the matchdays. A set whose
-games are not entered yet (pending) gives no points. A player marked absent on a
-matchday keeps their place in the sets (a substitute plays for them) but scores 0:
-a substitute can't earn points for the player they replace.
+Liga de amigos: when a court has played all its sets, its players get a place:
+1st 9, 2nd 6, 3rd 4, 4th 3 points, plus 1 point per set won. The place goes by sets
+won, then games difference (won - lost), then league position before the matchday;
+on the first matchday (no positions yet) a draw decides. Until the court is complete
+its players only have their sets won. The tournament standings add up the matchdays.
 
-Americano and Mexicano tournaments are played in rounds of one match per court, to a
-fixed number of points; each player scores the points their pair won (see rounds.py
-for how the rounds are drawn).
+Americano, Mexicano and Manual individual: each player scores the games (points)
+their pair won in every set they played; see rounds.py for how rounds are drawn.
+
+A set whose games are not entered yet (pending) gives nothing. A player marked absent
+on a matchday keeps their place in the sets (a substitute plays for them) but scores
+0 and goes last: a substitute can't earn points for the player they replace.
 """
+import random
 from functools import partial
 
 PLACE_POINTS = (9, 6, 4, 3)
@@ -36,21 +38,8 @@ def check_set(a: int, b: int) -> str | None:
     return "A" if a > b else "B"
 
 
-def set_points(winner: str | None) -> tuple[int, int]:
-    """Points for each player of team A and of team B from one set."""
-    if winner is None:  # tied set: all four share 1st place
-        return PLACE_POINTS[0], PLACE_POINTS[0]
-    win, lose = PLACE_POINTS[0] + SET_WON_POINTS, PLACE_POINTS[1]
-    return (win, lose) if winner == "A" else (lose, win)
-
-
-def liga_points(m) -> tuple[int, int]:
-    """Liga de amigos: points from the set's place (see set_points)."""
-    return set_points(m["winner"])
-
-
 def games_points(m) -> tuple[int, int]:
-    """Americano / Mexicano: each player scores the points their pair won."""
+    """Each player scores the games their pair won."""
     return m["team_a_games"], m["team_b_games"]
 
 
@@ -65,41 +54,55 @@ def court_rotation(players):
     return [((p1, p2), (p3, p4)), ((p1, p3), (p2, p4)), ((p1, p4), (p2, p3))]
 
 
-def court_table(sets, position, absent=frozenset(), scorer=liga_points):
+def court_table(sets, position, absent=frozenset(), places=False, seed=0):
     """Add up each player's sets on one court on one matchday.
 
     sets: rows with a1_id/a1 ... b2_id/b2, team_a_games, team_b_games, winner.
     position: player id -> league position before this matchday.
     absent: ids of players absent that day; they score nothing and go last.
-    scorer: a set row -> (points for each player of team A, of team B).
-    Rows are ordered by points, then games difference, then league position (then
-    name; the rules' coin toss on matchday 1 is done on court). The order only
-    decides who changes court; it never changes anyone's points.
+    places: Liga de amigos scoring (9/6/4/3 by place + 1 per set won, once every set
+    of the court is played); otherwise each player scores their pair's games.
+    seed: for the draw that settles ties on the first matchday.
     Players of pending sets are listed too, with nothing added up yet.
     """
     stats = {}
     for m in sets:
         played = is_played(m)
         diff = m["team_a_games"] - m["team_b_games"] if played else 0
-        pts_a, pts_b = scorer(m) if played else (0, 0)
+        pts_a, pts_b = games_points(m) if played else (0, 0)
         for side, d, pts in (("A", diff, pts_a), ("B", -diff, pts_b)):
             for key in (side.lower() + "1", side.lower() + "2"):
                 r = stats.setdefault(m[key + "_id"], {
                     "id": m[key + "_id"], "name": m[key],
                     "points": 0, "diff": 0, "sets": 0, "sets_won": 0,
-                    "absent": m[key + "_id"] in absent,
+                    "absent": m[key + "_id"] in absent, "place": None,
                 })
                 if not played:
                     continue
                 r["sets"] += 1
                 if r["absent"]:
                     continue
-                r["points"] += pts
+                r["points"] += 0 if places else pts
                 r["diff"] += d
                 r["sets_won"] += m["winner"] == side
     unranked = len(position) + 1
-    return sorted(stats.values(), key=lambda r: (
-        r["absent"], -r["points"], -r["diff"], position.get(r["id"], unranked), r["name"].lower()))
+    if not places:
+        return sorted(stats.values(), key=lambda r: (
+            r["absent"], -r["points"], -r["diff"], position.get(r["id"], unranked),
+            r["name"].lower()))
+
+    draw = random.Random(seed)
+    lots = {pid: draw.random() for pid in sorted(stats)}  # used only when all else ties
+    rows = sorted(stats.values(), key=lambda r: (
+        r["absent"], -r["sets_won"], -r["diff"], position.get(r["id"], unranked), lots[r["id"]]))
+    complete = bool(sets) and all(is_played(m) for m in sets)
+    for i, r in enumerate(rows):
+        r["place"] = i + 1 if complete else None
+        if r["absent"]:
+            continue
+        place_points = PLACE_POINTS[i] if complete and i < len(PLACE_POINTS) else 0
+        r["points"] = place_points + SET_WON_POINTS * r["sets_won"]
+    return rows
 
 
 def _standings(rows, by_diff=False):
@@ -113,16 +116,17 @@ def _standings(rows, by_diff=False):
     return rows
 
 
-def tournament_results(matchdays, scorer=liga_points):
+def tournament_results(matchdays, places=False):
     """Score a whole tournament.
 
     matchdays: in playing order, each a dict with "number", "sets" (as for
-    court_table, plus "court") and optionally "absent" (player ids).
+    court_table, plus "court") and optionally "id" and "absent" (player ids).
+    places: Liga de amigos scoring (see court_table).
     Returns (matchdays with "courts": {court: player rows}, standings).
     Standings rows: id, name, position, points, diff, sets_won, played (matchdays)
     and by_matchday (number -> points that day).
     """
-    by_diff = scorer is games_points
+    by_diff = not places
     totals = {}
     results = []
     for md in matchdays:
@@ -131,7 +135,8 @@ def tournament_results(matchdays, scorer=liga_points):
         for m in md["sets"]:
             by_court.setdefault(m["court"], []).append(m)
         absent = frozenset(md.get("absent", ()))
-        courts = {c: court_table(s, position, absent, scorer)
+        md_key = md.get("id", md["number"])
+        courts = {c: court_table(s, position, absent, places, seed=f"{md_key}-{c}")
                   for c, s in sorted(by_court.items())}
 
         for rows in courts.values():
@@ -193,10 +198,10 @@ def next_courts(courts, count):
 
 # Scoring per rule type (rule_types.code).
 SCORING = {
-    "liga_amigos": tournament_results,
-    "americano": partial(tournament_results, scorer=games_points),
-    "mexicano": partial(tournament_results, scorer=games_points),
-    "manual": tournament_results,  # sets made by hand, Liga de amigos points
+    "liga_amigos": partial(tournament_results, places=True),
+    "americano": tournament_results,
+    "mexicano": tournament_results,
+    "manual": tournament_results,  # sets made by hand; each player scores their games
 }
 # Rule types played in rounds of one match per court, to a number of points.
 ROUND_MODES = {"americano", "mexicano"}

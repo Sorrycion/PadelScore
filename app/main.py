@@ -38,11 +38,13 @@ templates = Jinja2Templates(directory=BASE / "templates",
                             context_processors=[i18n_context, auth.auth_context])
 EDIT = [Depends(require_editor)]  # routes that change data need the club password
 MANUAL = "manual"  # rule type whose sets are all made by hand
+templates.env.filters["pick_player"] = lambda p: {"id": p["id"], "name": p["name"]}
 templates.env.globals.update(
     ROUND_MODES=ROUND_MODES, MANUAL=MANUAL,
     RULE_ICONS={"liga_amigos": "🏅", "americano": "🇺🇸", "mexicano": "🇲🇽", "manual": "✍️"},
     # Changes whenever the stylesheet does, so phones don't keep an old cached copy.
-    css_version=hashlib.sha256((BASE / "static" / "style.css").read_bytes()).hexdigest()[:10],
+    css_version=hashlib.sha256(b"".join(
+        f.read_bytes() for f in sorted((BASE / "static").iterdir()))).hexdigest()[:10],
 )
 
 
@@ -155,6 +157,15 @@ def tournament_players(conn, tournament_id):
         "SELECT p.* FROM tournament_players tp JOIN players p ON p.id = tp.player_id "
         "WHERE tp.tournament_id = ? ORDER BY p.name", (tournament_id,)
     ).fetchall()
+
+
+def player_id(conn, name):
+    """The id of the player with this name (any case), adding them if there is none."""
+    name = name.strip()
+    row = conn.execute("SELECT id FROM players WHERE lower(name) = lower(?)", (name,)).fetchone()
+    if row:
+        return row["id"]
+    return conn.execute("INSERT INTO players (name) VALUES (?)", (name,)).lastrowid
 
 
 def players_for(conn, tournament_id):
@@ -317,6 +328,7 @@ def tournaments_page(request: Request, error: str | None = None):
             "tournaments": all_tournaments(conn), "error": error,
             "rule_types": all_rule_types(conn),
             "players": all_players(conn),
+            "players_json": [{"id": p["id"], "name": p["name"]} for p in all_players(conn)],
             "today": date.today().isoformat(),
         })
 
@@ -324,7 +336,8 @@ def tournaments_page(request: Request, error: str | None = None):
 @app.post("/tournaments", dependencies=EDIT)
 def add_tournament(name: str = Form(...), held_on: str = Form(""),
                    rule_type_id: str = Form("1"), points_per_match: str = Form(""),
-                   players: list[int] = Form([]), player_password: str = Form("")):
+                   players: list[int] = Form([]), new_players: list[str] = Form([]),
+                   player_password: str = Form("")):
     name, held_on, rule_type_id = name.strip(), parse_date(held_on), opt_int(rule_type_id)
     if not name:
         return redirect("/tournaments?error=err_name_required")
@@ -334,7 +347,8 @@ def add_tournament(name: str = Form(...), held_on: str = Form(""),
         rule = conn.execute("SELECT * FROM rule_types WHERE id = ?", (rule_type_id,)).fetchone()
         if not rule:
             return redirect("/tournaments?error=err_rule_type")
-        players = sorted(set(players) & {p["id"] for p in all_players(conn)})
+        players = set(players) & {p["id"] for p in all_players(conn)}
+        players = sorted(players | {player_id(conn, n) for n in new_players if n.strip()})
         target = None
         if rule["code"] in ROUND_MODES:  # rounds are drawn among the chosen players
             if len(players) < 4:
@@ -370,16 +384,19 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
 
 
 @app.post("/tournaments/{tournament_id}/players", dependencies=EDIT)
-def add_tournament_player(tournament_id: int, player_name: str = Form("")):
-    """Add a player, found by name, to the tournament (e.g. to replace one who left)."""
+def add_tournament_player(tournament_id: int, player_name: str = Form(""),
+                          create: str = Form("")):
+    """Add a player, found by name, to the tournament (e.g. to replace one who left);
+    with `create`, a name that isn't a player yet becomes a new player."""
+    name = player_name.strip()
     with db.connect() as conn:
         get_or_404(conn, "tournaments", tournament_id)
         player = conn.execute("SELECT id FROM players WHERE lower(name) = lower(?)",
-                              (player_name.strip(),)).fetchone()
-        if player is None:
+                              (name,)).fetchone()
+        if player is None and not (create and name):
             return redirect(f"/tournaments/{tournament_id}?error=err_unknown_player#players")
         conn.execute("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
-                     "VALUES (?, ?)", (tournament_id, player["id"]))
+                     "VALUES (?, ?)", (tournament_id, player["id"] if player else player_id(conn, name)))
     return redirect(f"/tournaments/{tournament_id}#players")
 
 

@@ -4,7 +4,7 @@
   <tbody>
   {% for r in rows %}
     <tr>
-      <td>{{ loop.index }}</td>
+      <td>{% if tournament.rule_code == "liga_amigos" and r.place is none %}⏳{% else %}{{ r.place or loop.index }}{% endif %}</td>
       <td><a class="plain" href="/players/{{ r.id }}">{{ r.name }}</a>
         {% if r.absent %}<span class="tag absent">{{ _("absent") }}</span>{% endif %}
         {% if editor %}
