@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from . import auth, db
 from .auth import LoginRequired, require_editor
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
-from .scoring import (ScoreError, check_set, court_moves, court_rotation, is_played,
+from .scoring import (SCORING, ScoreError, check_set, court_moves, court_rotation, is_played,
                       next_courts, tournament_results)
 
 BASE = Path(__file__).parent
@@ -78,11 +78,29 @@ def all_players(conn):
     return conn.execute("SELECT * FROM players ORDER BY name").fetchall()
 
 
+def all_rule_types(conn):
+    return conn.execute("SELECT * FROM rule_types ORDER BY id").fetchall()
+
+
+def get_tournament(conn, tournament_id):
+    """A tournament with its rule type's name and code, or 404."""
+    row = conn.execute(
+        "SELECT t.*, r.name AS rule_type, r.code AS rule_code "
+        "FROM tournaments t JOIN rule_types r ON r.id = t.rule_type_id WHERE t.id = ?",
+        (tournament_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(404, "Tournament not found")
+    return row
+
+
 def all_tournaments(conn):
     return conn.execute(
         """
-        SELECT t.*, COUNT(d.id) AS matchdays
-        FROM tournaments t LEFT JOIN matchdays d ON d.tournament_id = t.id
+        SELECT t.*, r.name AS rule_type, COUNT(d.id) AS matchdays
+        FROM tournaments t
+        JOIN rule_types r ON r.id = t.rule_type_id
+        LEFT JOIN matchdays d ON d.tournament_id = t.id
         GROUP BY t.id
         ORDER BY t.held_on DESC, t.id DESC
         """
@@ -150,9 +168,15 @@ def load_results(conn, tournament_id):
     sets = {}
     for s in set_rows(conn, tournament_id=tournament_id):
         sets.setdefault(s["matchday_id"], []).append(s)
-    return tournament_results([
+    absent = {}
+    for a in conn.execute(
+            "SELECT a.* FROM absences a JOIN matchdays d ON d.id = a.matchday_id "
+            "WHERE d.tournament_id = ?", (tournament_id,)):
+        absent.setdefault(a["matchday_id"], set()).add(a["player_id"])
+    score = SCORING[get_tournament(conn, tournament_id)["rule_code"]]
+    return score([
         {"id": d["id"], "number": d["number"], "played_on": d["played_on"],
-         "sets": sets.get(d["id"], [])}
+         "sets": sets.get(d["id"], []), "absent": absent.get(d["id"], set())}
         for d in matchdays
     ])
 
@@ -223,27 +247,31 @@ def tournaments_page(request: Request, error: str | None = None):
     with db.connect() as conn:
         return templates.TemplateResponse(request, "tournaments.html", {
             "tournaments": all_tournaments(conn), "error": error,
+            "rule_types": all_rule_types(conn),
             "today": date.today().isoformat(),
         })
 
 
 @app.post("/tournaments", dependencies=EDIT)
-def add_tournament(name: str = Form(...), held_on: str = Form("")):
-    name, held_on = name.strip(), parse_date(held_on)
+def add_tournament(name: str = Form(...), held_on: str = Form(""),
+                   rule_type_id: str = Form("1")):
+    name, held_on, rule_type_id = name.strip(), parse_date(held_on), opt_int(rule_type_id)
     if not name:
         return redirect("/tournaments?error=err_name_required")
     if held_on is None:
         return redirect("/tournaments?error=err_invalid_date")
     with db.connect() as conn:
-        conn.execute("INSERT INTO tournaments (name, held_on) VALUES (?, ?)",
-                     (name, held_on))
+        if not conn.execute("SELECT 1 FROM rule_types WHERE id = ?", (rule_type_id,)).fetchone():
+            return redirect("/tournaments?error=err_rule_type")
+        conn.execute("INSERT INTO tournaments (name, held_on, rule_type_id) VALUES (?, ?, ?)",
+                     (name, held_on, rule_type_id))
     return redirect("/tournaments")
 
 
 @app.get("/tournaments/{tournament_id}", response_class=HTMLResponse)
 def tournament_page(request: Request, tournament_id: int, error: str | None = None):
     with db.connect() as conn:
-        tournament = get_or_404(conn, "tournaments", tournament_id)
+        tournament = get_tournament(conn, tournament_id)
         results, standings = load_results(conn, tournament_id)
         return templates.TemplateResponse(request, "tournament.html", {
             "tournament": tournament,
@@ -259,9 +287,10 @@ def delete_tournament(tournament_id: int):
     """Delete a tournament with all its matchdays and sets; players are kept."""
     with db.connect() as conn:
         get_or_404(conn, "tournaments", tournament_id)
-        conn.execute(
-            "DELETE FROM matches WHERE matchday_id IN "
-            "(SELECT id FROM matchdays WHERE tournament_id = ?)", (tournament_id,))
+        for table in ("matches", "absences"):
+            conn.execute(
+                f"DELETE FROM {table} WHERE matchday_id IN "
+                "(SELECT id FROM matchdays WHERE tournament_id = ?)", (tournament_id,))
         conn.execute("DELETE FROM matchdays WHERE tournament_id = ?", (tournament_id,))
         conn.execute("DELETE FROM tournaments WHERE id = ?", (tournament_id,))
     return redirect("/tournaments")
@@ -273,7 +302,7 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
     move = 2 if move == 2 else 1
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
-        tournament = get_or_404(conn, "tournaments", matchday["tournament_id"])
+        tournament = get_tournament(conn, matchday["tournament_id"])
         results, _ = load_results(conn, tournament["id"])
         result = next(r for r in results if r["id"] == matchday_id)
         return templates.TemplateResponse(request, "matchday.html", {
@@ -287,6 +316,22 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
         })
 
 
+@app.post("/matchdays/{matchday_id}/absent/{player_id}", dependencies=EDIT)
+def toggle_absent(matchday_id: int, player_id: int):
+    """Mark a player of this matchday absent (they score 0), or present again."""
+    with db.connect() as conn:
+        get_or_404(conn, "matchdays", matchday_id)
+        if not any(player_id in (s["a1_id"], s["a2_id"], s["b1_id"], s["b2_id"])
+                   for s in set_rows(conn, matchday_id=matchday_id)):
+            raise HTTPException(404, "Player not on this matchday")
+        removed = conn.execute("DELETE FROM absences WHERE matchday_id = ? AND player_id = ?",
+                               (matchday_id, player_id)).rowcount
+        if not removed:
+            conn.execute("INSERT INTO absences (matchday_id, player_id) VALUES (?, ?)",
+                         (matchday_id, player_id))
+    return redirect(f"/matchdays/{matchday_id}")
+
+
 @app.post("/matchdays/{matchday_id}/delete", dependencies=EDIT)
 def delete_matchday(matchday_id: int):
     """Delete a matchday with its sets; the later matchdays move up a number so the
@@ -294,6 +339,7 @@ def delete_matchday(matchday_id: int):
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
         conn.execute("DELETE FROM matches WHERE matchday_id = ?", (matchday_id,))
+        conn.execute("DELETE FROM absences WHERE matchday_id = ?", (matchday_id,))
         conn.execute("DELETE FROM matchdays WHERE id = ?", (matchday_id,))
         later = conn.execute(
             "SELECT id FROM matchdays WHERE tournament_id = ? AND number > ? ORDER BY number",
@@ -413,7 +459,7 @@ def new_matchday_page(request: Request, tournament_id: int, played_on: str = "",
     """Draft of the next matchday: choose how many players change court, then review
     the courts. Nothing is saved here."""
     with db.connect() as conn:
-        tournament = get_or_404(conn, "tournaments", tournament_id)
+        tournament = get_tournament(conn, tournament_id)
         played_on = parse_date(played_on or date.today().isoformat())
         if played_on is None:
             return redirect(f"/tournaments/{tournament_id}?error=err_invalid_date")
@@ -432,7 +478,7 @@ async def add_matchday(request: Request, tournament_id: int):
     form = await request.form()
     courts = read_courts(form)
     with db.connect() as conn:
-        tournament = get_or_404(conn, "tournaments", tournament_id)
+        tournament = get_tournament(conn, tournament_id)
         played_on = parse_date(form.get("played_on", ""))
         number = next_number(conn, tournament_id)
         chosen, error = check_courts(conn, courts, _)
@@ -467,7 +513,7 @@ def latest_courts():
 def courts_page(request: Request, matchday_id: int, move: str | None = None):
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
-        tournament = get_or_404(conn, "tournaments", matchday["tournament_id"])
+        tournament = get_tournament(conn, matchday["tournament_id"])
         players, _ = courts_of(set_rows(conn, matchday_id=matchday_id))
         if players:
             courts = [ids or [None] * 4 for _, ids in sorted(players.items())]
@@ -487,7 +533,7 @@ async def save_courts(request: Request, matchday_id: int):
     courts = read_courts(await request.form())
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
-        tournament = get_or_404(conn, "tournaments", matchday["tournament_id"])
+        tournament = get_tournament(conn, matchday["tournament_id"])
         chosen, error = check_courts(conn, courts, _)
         existing, played = courts_of(set_rows(conn, matchday_id=matchday_id))
         changed = sorted(c for c in existing
@@ -554,6 +600,7 @@ def delete_player(player_id: int):
         get_or_404(conn, "players", player_id)
         if set_rows(conn, player_id=player_id, limit=1):
             return redirect(f"/players/{player_id}?error=err_player_has_sets")
+        conn.execute("DELETE FROM absences WHERE player_id = ?", (player_id,))
         conn.execute("DELETE FROM players WHERE id = ?", (player_id,))
     return redirect("/players")
 

@@ -7,6 +7,9 @@
 <form method="post" action="/tournaments" class="inline">
   <input name="name" placeholder="{{ _('tournament_name') }}" required>
   <input type="date" name="held_on" value="{{ today }}" required>
+  <select name="rule_type_id" aria-label="{{ _('rule_type') }}" required>
+    {% for r in rule_types %}<option value="{{ r.id }}" {% if loop.first %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
+  </select>
   <button type="submit">{{ _("add_tournament") }}</button>
 </form>
 {% endif %}
@@ -14,7 +17,7 @@
 <ul class="players">
   {% for t in tournaments %}
   <li><a class="plain" href="/tournaments/{{ t.id }}">{{ t.name }}</a>
-      <span class="tag">{{ t.held_on }} · {{ _("n_matchdays", n=t.matchdays) }}</span></li>
+      <span class="tag">{{ t.held_on }} · {{ t.rule_type }} · {{ _("n_matchdays", n=t.matchdays) }}</span></li>
   {% endfor %}
 </ul>
 {% else %}

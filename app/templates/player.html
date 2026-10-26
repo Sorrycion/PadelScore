@@ -16,7 +16,7 @@
     {% for h in t.history %}
       <tr>
         <td><a class="plain" href="/matchdays/{{ h.id }}">{{ _("matchday_short", n=h.number) }}</a> <span class="tag">{{ h.played_on }}</span></td>
-        <td>{{ h.court }}</td>
+        <td>{{ h.court }}{% if h.absent %} <span class="tag absent">{{ _("absent") }}</span>{% endif %}</td>
         <td><span class="diff {% if h.diff > 0 %}up{% elif h.diff < 0 %}down{% endif %}">{{ "%+d"|format(h.diff) if h.diff else 0 }}</span></td>
         <td>{{ h.sets_won }} / {{ h.sets }}</td>
         <td class="pts">{{ h.points }}</td>

@@ -8,7 +8,9 @@ Points are given per set, whatever the court: the two winners share 1st place (9
 get 1 more for the set won (10 each); the two losers share 2nd place (6 each). In a
 tied set all four share 1st (9 each, no set won). A player's matchday points are the
 sum over their sets, and the tournament standings add up the matchdays. A set whose
-games are not entered yet (pending) gives no points.
+games are not entered yet (pending) gives no points. A player marked absent on a
+matchday keeps their place in the sets (a substitute plays for them) but scores 0:
+a substitute can't earn points for the player they replace.
 """
 
 PLACE_POINTS = (9, 6, 4, 3)
@@ -48,11 +50,12 @@ def court_rotation(players):
     return [((p1, p2), (p3, p4)), ((p1, p3), (p2, p4)), ((p1, p4), (p2, p3))]
 
 
-def court_table(sets, position):
+def court_table(sets, position, absent=frozenset()):
     """Add up each player's sets on one court on one matchday.
 
     sets: rows with a1_id/a1 ... b2_id/b2, team_a_games, team_b_games, winner.
     position: player id -> league position before this matchday.
+    absent: ids of players absent that day; they score nothing and go last.
     Rows are ordered by points, then games difference, then league position (then
     name; the rules' coin toss on matchday 1 is done on court). The order only
     decides who changes court; it never changes anyone's points.
@@ -68,16 +71,19 @@ def court_table(sets, position):
                 r = stats.setdefault(m[key + "_id"], {
                     "id": m[key + "_id"], "name": m[key],
                     "points": 0, "diff": 0, "sets": 0, "sets_won": 0,
+                    "absent": m[key + "_id"] in absent,
                 })
                 if not played:
                     continue
+                r["sets"] += 1
+                if r["absent"]:
+                    continue
                 r["points"] += pts
                 r["diff"] += d
-                r["sets"] += 1
                 r["sets_won"] += m["winner"] == side
     unranked = len(position) + 1
     return sorted(stats.values(), key=lambda r: (
-        -r["points"], -r["diff"], position.get(r["id"], unranked), r["name"].lower()))
+        r["absent"], -r["points"], -r["diff"], position.get(r["id"], unranked), r["name"].lower()))
 
 
 def _standings(rows):
@@ -92,8 +98,8 @@ def _standings(rows):
 def tournament_results(matchdays):
     """Score a whole tournament.
 
-    matchdays: in playing order, each a dict with "number" and "sets" (as for
-    court_table, plus "court").
+    matchdays: in playing order, each a dict with "number", "sets" (as for
+    court_table, plus "court") and optionally "absent" (player ids).
     Returns (matchdays with "courts": {court: player rows}, standings).
     Standings rows: id, name, position, points, sets_won, played (matchdays) and
     by_matchday (number -> points that day).
@@ -105,7 +111,8 @@ def tournament_results(matchdays):
         by_court = {}
         for m in md["sets"]:
             by_court.setdefault(m["court"], []).append(m)
-        courts = {c: court_table(s, position) for c, s in sorted(by_court.items())}
+        absent = frozenset(md.get("absent", ()))
+        courts = {c: court_table(s, position, absent) for c, s in sorted(by_court.items())}
 
         for rows in courts.values():
             for r in rows:  # a player on two courts adds up both
@@ -115,7 +122,7 @@ def tournament_results(matchdays):
                                                 "sets_won": 0, "played": 0, "by_matchday": {}})
                 if md["number"] not in t["by_matchday"]:
                     t["by_matchday"][md["number"]] = 0
-                    t["played"] += 1
+                    t["played"] += not r["absent"]
                 t["by_matchday"][md["number"]] += r["points"]
                 t["points"] += r["points"]
                 t["sets_won"] += r["sets_won"]
@@ -160,3 +167,7 @@ def next_courts(courts, count):
         if down:
             new[numbers[i + 1]] += down
     return new
+
+
+# Scoring per rule type (rule_types.code).
+SCORING = {"liga_amigos": tournament_results}

@@ -76,6 +76,7 @@ TEXT = {
 
     # Tournaments
     "tournament_name": {"es": "Nombre del torneo", "en": "Tournament name"},
+    "rule_type": {"es": "Tipo de reglas", "en": "Rules type"},
     "add_tournament": {"es": "Agregar torneo", "en": "Add tournament"},
     "no_tournaments": {"es": "Aún no hay torneos.", "en": "No tournaments yet."},
     "no_matchdays": {"es": "Aún no hay jornadas.", "en": "No matchdays yet."},
@@ -104,6 +105,14 @@ TEXT = {
               '(10 each), the losing pair 6; a tied set gives 9 to all four. The order on '
               'the court (points, games difference, league position) only decides court '
               'changes. <a href="{url}">Rules</a>'},
+    "absent": {"es": "Ausente", "en": "Absent"},
+    "mark_absent": {"es": "Marcar ausente", "en": "Mark absent"},
+    "mark_present": {"es": "Quitar ausencia", "en": "Mark present"},
+    "absent_note": {
+        "es": "Un jugador ausente conserva sus sets (juega un suplente), pero suma 0 puntos "
+              "en la jornada, gane o pierda.",
+        "en": "An absent player keeps their sets (a substitute plays), but scores 0 points "
+              "on the matchday, win or lose."},
     "add_set_on_court": {"es": "+ Set en cancha {n}", "en": "+ Set on court {n}"},
     "sets_recorded": {"es": "{n} de 3 sets registrados.", "en": "{n} of 3 sets recorded."},
     "court_changes": {"es": "Cambios de cancha", "en": "Court changes"},
@@ -233,6 +242,7 @@ TEXT = {
     "err_player_has_sets": {
         "es": "No se puede eliminar: este jugador tiene sets en alguna jornada.",
         "en": "Can't delete: this player has sets on a matchday."},
+    "err_rule_type": {"es": "Elige un tipo de reglas.", "en": "Pick a rules type."},
     "err_set": {"es": "Los juegos no pueden ser negativos.",
                 "en": "Games can't be negative."},
 }

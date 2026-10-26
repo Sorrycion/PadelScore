@@ -213,8 +213,8 @@ def test_player_can_play_on_two_courts_and_points_add_up(league):
 
 @pytest.mark.parametrize("held_on", ["", "not a date", "2026-02-30", "23/10/2026"])
 def test_tournament_date_must_be_valid(client, held_on):
-    r = client.post("/tournaments", data={"name": "Liga", "held_on": held_on})
-    assert "Enter a valid date" in r.text and "Liga" not in r.text
+    r = client.post("/tournaments", data={"name": "Torneo X", "held_on": held_on})
+    assert "Enter a valid date" in r.text and "Torneo X" not in r.text
 
 
 @pytest.mark.parametrize("played_on", ["", "next friday", "2026-02-30"])
@@ -661,3 +661,82 @@ def test_delete_matchday_needs_the_password(locked):
     r = locked.post("/matchdays/1/delete", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/login")
     assert matchday_count() == 1
+
+
+# --- Rule types ----------------------------------------------------------------------
+
+def test_tournaments_have_a_rule_type(league):
+    page = league.get("/tournaments").text
+    assert '<option value="1" selected>Liga de amigos score</option>' in page
+    assert "Liga de amigos score" in league.get("/tournaments/1").text
+    r = league.post("/tournaments", data={"name": "Otra", "held_on": "2026-11-01",
+                                          "rule_type_id": "99"})
+    assert "Pick a rules type" in r.text and "Otra" not in r.text
+    league.post("/tournaments", data={"name": "Otra", "held_on": "2026-11-01", "rule_type_id": "1"})
+    with db.connect() as conn:
+        assert [r[0] for r in conn.execute("SELECT rule_type_id FROM tournaments")] == [1, 1]
+
+
+def test_old_tournaments_get_the_liga_de_amigos_rule_type(tmp_path, monkeypatch):
+    import sqlite3
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript("""
+        CREATE TABLE tournaments (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+            held_on DATE NOT NULL CHECK (held_on IS date(held_on)));
+        INSERT INTO tournaments (name, held_on) VALUES ('Vieja', '2026-10-01');
+    """)
+    conn.close()
+    monkeypatch.setattr(db, "DB_PATH", str(path))
+    db.init_db()
+    db.init_db()
+    with db.connect() as conn:
+        row = conn.execute("SELECT t.name, r.name FROM tournaments t "
+                           "JOIN rule_types r ON r.id = t.rule_type_id").fetchone()
+        assert tuple(row) == ("Vieja", "Liga de amigos score")
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+# --- Absences --------------------------------------------------------------------------
+
+def test_absent_player_scores_zero_and_goes_last():
+    sets = [row(p, a, b) for p, a, b in ROTATION]
+    rows = court_table(sets, position={}, absent={3})
+    carlos = next(r for r in rows if r["id"] == 3)
+    assert rows[-1] is carlos and carlos["absent"]
+    assert (carlos["points"], carlos["diff"], carlos["sets_won"], carlos["sets"]) == (0, 0, 0, 3)
+    # Everyone else scores as usual.
+    assert {r["id"]: r["points"] for r in rows if not r["absent"]} == {1: 26, 2: 26, 4: 18}
+
+
+def test_mark_player_absent_on_a_matchday(league):
+    for players, a, b in ROTATION:
+        league.post("/matches", data=set_form(players, a, b))
+    assert standing_points(league.get("/tournaments/1").text, "Carlos") == 26
+
+    r = league.post("/matchdays/1/absent/3")
+    assert r.status_code == 200 and ">Absent<" in r.text and "Mark present" in r.text
+    assert standing_points(league.get("/tournaments/1").text, "Carlos") == 0
+    assert standing_points(league.get("/tournaments/1").text, "Ana") == 26  # unchanged
+    profile = league.get("/players/3").text
+    assert ">Absent<" in profile and "0 matchdays played" in profile
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0] == 3  # same sets
+
+    league.post("/matchdays/1/absent/3")  # present again
+    assert standing_points(league.get("/tournaments/1").text, "Carlos") == 26
+    assert league.post("/matchdays/1/absent/8").status_code == 404  # Hugo isn't playing
+
+
+def test_deleting_a_matchday_removes_its_absences(league):
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4))
+    league.post("/matchdays/1/absent/1")
+    league.post("/matchdays/1/delete")
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM absences").fetchone()[0] == 0
+
+
+def test_marking_absent_needs_the_password(locked):
+    locked.cookies.delete("editor")
+    r = locked.post("/matchdays/1/absent/1", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")

@@ -2,7 +2,7 @@
 {% block title %}{{ tournament.name }} · PadelScore{% endblock %}
 {% block content %}
 <h1>{{ tournament.name }}</h1>
-<p class="muted">{{ tournament.held_on }}</p>
+<p class="muted">{{ tournament.held_on }} · {{ _("rule_type") }}: <a href="/rules">{{ tournament.rule_type }}</a></p>
 
 <h2>{{ _("standings") }}</h2>
 {% include "_standings.html" %}

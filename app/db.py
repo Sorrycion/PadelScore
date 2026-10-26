@@ -11,11 +11,20 @@ CREATE TABLE IF NOT EXISTS players (
     name TEXT NOT NULL UNIQUE
 );
 
+-- How a tournament is scored. `code` picks the scoring in the app (scoring.SCORING).
+CREATE TABLE IF NOT EXISTS rule_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE
+);
+INSERT OR IGNORE INTO rule_types (id, code, name) VALUES (1, 'liga_amigos', 'Liga de amigos score');
+
 CREATE TABLE IF NOT EXISTS tournaments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     -- SQLite has no real date type: store ISO 'YYYY-MM-DD' and reject anything else.
-    held_on DATE NOT NULL CHECK (held_on IS date(held_on))
+    held_on DATE NOT NULL CHECK (held_on IS date(held_on)),
+    rule_type_id INTEGER NOT NULL DEFAULT 1 REFERENCES rule_types(id)
 );
 
 -- A matchday (jornada) of a tournament: one day of play.
@@ -25,6 +34,13 @@ CREATE TABLE IF NOT EXISTS matchdays (
     number INTEGER NOT NULL,
     played_on DATE NOT NULL CHECK (played_on IS date(played_on)),
     UNIQUE (tournament_id, number)
+);
+
+-- A player who misses a matchday: a substitute plays their sets, and they score 0.
+CREATE TABLE IF NOT EXISTS absences (
+    matchday_id INTEGER NOT NULL REFERENCES matchdays(id),
+    player_id INTEGER NOT NULL REFERENCES players(id),
+    PRIMARY KEY (matchday_id, player_id)
 );
 
 -- One set, played on a court during a matchday. Its games stay NULL until it is played.
@@ -62,6 +78,22 @@ def init_db():
     with connect() as conn:
         conn.executescript(SCHEMA)
         allow_pending_sets(conn)
+        add_rule_types(conn)
+
+
+def add_rule_types(conn):
+    """Databases made before rule types: every tournament gets rule type 1 (Liga de
+    amigos score), the rules it was played with."""
+    columns = {r["name"] for r in conn.execute("PRAGMA table_info(tournaments)")}
+    if "rule_type_id" in columns:
+        return
+    # SQLite only adds a column with REFERENCES and a non-NULL default while foreign
+    # keys are off.
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("ALTER TABLE tournaments ADD COLUMN "
+                 "rule_type_id INTEGER NOT NULL DEFAULT 1 REFERENCES rule_types(id)")
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = ON")
 
 
 def allow_pending_sets(conn):

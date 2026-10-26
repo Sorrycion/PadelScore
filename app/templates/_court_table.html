@@ -5,7 +5,13 @@
   {% for r in rows %}
     <tr>
       <td>{{ loop.index }}</td>
-      <td><a class="plain" href="/players/{{ r.id }}">{{ r.name }}</a></td>
+      <td><a class="plain" href="/players/{{ r.id }}">{{ r.name }}</a>
+        {% if r.absent %}<span class="tag absent">{{ _("absent") }}</span>{% endif %}
+        {% if editor %}
+        <form method="post" action="/matchdays/{{ matchday.id }}/absent/{{ r.id }}" class="absent-form">
+          <button type="submit" class="link plain-link">{{ _("mark_present") if r.absent else _("mark_absent") }}</button>
+        </form>
+        {% endif %}</td>
       <td><span class="diff {% if r.diff > 0 %}up{% elif r.diff < 0 %}down{% endif %}">{{ "%+d"|format(r.diff) if r.diff else 0 }}</span></td>
       <td>{{ r.sets_won }} / {{ r.sets }}</td>
       <td class="pts">{{ r.points }}</td>

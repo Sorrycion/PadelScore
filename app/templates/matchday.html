@@ -12,6 +12,7 @@
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if matchday.courts %}
 <p class="muted">{{ _("places_note", url="/rules") }}</p>
+<p class="muted">{{ _("absent_note") }}</p>
 {% for court, rows in matchday.courts.items() %}
 <section class="court-block">
   <div class="title-row">
