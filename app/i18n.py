@@ -84,6 +84,12 @@ TEXT = {
     "confirm_delete_tournament": {
         "es": "¿Eliminar este torneo con todas sus jornadas y sets? No se puede deshacer.",
         "en": "Delete this tournament with all its matchdays and sets? This cannot be undone."},
+    "delete_matchday": {"es": "Eliminar jornada", "en": "Delete matchday"},
+    "confirm_delete_matchday": {
+        "es": "¿Eliminar esta jornada con todos sus sets? Las jornadas siguientes se renumeran. "
+              "No se puede deshacer.",
+        "en": "Delete this matchday with all its sets? The following matchdays are renumbered. "
+              "This cannot be undone."},
     "six_matchdays": {"es": "El reglamento contempla 6 jornadas por liga.",
                       "en": "The rules plan 6 matchdays per league."},
 

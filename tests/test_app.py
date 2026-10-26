@@ -636,3 +636,28 @@ def test_next_courts_keeps_court_1_winners_and_last_court_losers():
     new = next_courts(courts, 2)
     assert {10, 11} <= set(new[1]) and {32, 33} <= set(new[3])  # they stay
     assert sorted(new[2]) == sorted([12, 13, 30, 31])
+
+
+def test_delete_matchday_removes_its_sets_and_renumbers(league):
+    add_matchday(1, "2026-10-30")  # matchday 2 (id 2)
+    add_matchday(1, "2026-11-06")  # matchday 3 (id 3)
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4, matchday_id=1))
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4, matchday_id=2))
+    assert "Delete matchday" in league.get("/matchdays/2").text
+
+    r = league.post("/matchdays/2/delete")
+    assert r.status_code == 200 and str(r.url).endswith("/tournaments/1")
+    assert league.get("/matchdays/2").status_code == 404
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0] == 1
+        numbers = conn.execute("SELECT id, number FROM matchdays ORDER BY number").fetchall()
+    assert [tuple(n) for n in numbers] == [(1, 1), (3, 2)]
+    assert standing_points(league.get("/tournaments/1").text, "Ana") == 10
+    assert league.post("/matchdays/99/delete").status_code == 404
+
+
+def test_delete_matchday_needs_the_password(locked):
+    assert "Delete matchday" not in locked.get("/matchdays/1").text
+    r = locked.post("/matchdays/1/delete", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")
+    assert matchday_count() == 1

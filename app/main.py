@@ -287,6 +287,23 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
         })
 
 
+@app.post("/matchdays/{matchday_id}/delete", dependencies=EDIT)
+def delete_matchday(matchday_id: int):
+    """Delete a matchday with its sets; the later matchdays move up a number so the
+    numbering has no gaps."""
+    with db.connect() as conn:
+        matchday = get_or_404(conn, "matchdays", matchday_id)
+        conn.execute("DELETE FROM matches WHERE matchday_id = ?", (matchday_id,))
+        conn.execute("DELETE FROM matchdays WHERE id = ?", (matchday_id,))
+        later = conn.execute(
+            "SELECT id FROM matchdays WHERE tournament_id = ? AND number > ? ORDER BY number",
+            (matchday["tournament_id"], matchday["number"]),
+        ).fetchall()
+        for row in later:  # in order, so each number is free when it is taken
+            conn.execute("UPDATE matchdays SET number = number - 1 WHERE id = ?", (row["id"],))
+    return redirect(f"/tournaments/{matchday['tournament_id']}")
+
+
 # --- Courts of a matchday ---------------------------------------------------------
 
 def courts_of(sets):

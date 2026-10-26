@@ -44,4 +44,10 @@
 {% else %}
 <p class="empty">{{ _("no_courts_yet", url="/matchdays/%d/courts"|format(matchday.id)) }}</p>
 {% endif %}
+{% if editor %}
+<form method="post" action="/matchdays/{{ matchday.id }}/delete" class="danger-zone"
+      onsubmit="return confirm('{{ _('confirm_delete_matchday') }}')">
+  <button type="submit" class="danger">{{ _("delete_matchday") }}</button>
+</form>
+{% endif %}
 {% endblock %}
