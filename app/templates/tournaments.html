@@ -28,7 +28,7 @@
       {% endfor %}
     </fieldset>
     <label>{{ _("player_password") }}
-      <input type="text" name="player_password" autocomplete="off" placeholder="{{ _('optional') }}">
+      <input type="text" name="player_password" id="player-password" autocomplete="off" required>
     </label>
     <p class="muted">{{ _("player_password_hint") }}</p>
     <button type="submit">{{ _("add_tournament") }}</button>
@@ -43,6 +43,13 @@
     }
     select.addEventListener("change", update);
     update();
+    // The player password follows the name (lowercase, words joined by "_") until edited.
+    var form = document.getElementById("tournament-form"), password = document.getElementById("player-password");
+    var edited = false;
+    password.addEventListener("input", function () { edited = password.value !== ""; });
+    form.elements.name.addEventListener("input", function () {
+      if (!edited) password.value = form.elements.name.value.trim().toLowerCase().split(/\s+/).filter(Boolean).join("_");
+    });
   })();
 </script>
 {% endif %}

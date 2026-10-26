@@ -49,6 +49,12 @@ def is_editor(request: Request) -> bool:
     return hmac.compare_digest(request.cookies.get(COOKIE, ""), editor_token(password))
 
 
+def default_player_password(tournament_name: str) -> str:
+    """A tournament's default player password: its name in lowercase, words joined by
+    underscores ("Liga de la Amistad" -> "liga_de_la_amistad")."""
+    return "_".join(tournament_name.lower().split())
+
+
 def player_password_matches(given: str, tournament) -> bool:
     password = tournament["player_password"]
     return bool(password) and hmac.compare_digest(given.encode(), password.encode())

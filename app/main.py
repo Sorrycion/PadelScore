@@ -23,7 +23,7 @@ BASE = Path(__file__).parent
 DOCS = BASE.parent / "docs"
 # The rules page: one section per rule type with written rules (code, file).
 RULES = [("liga_amigos", DOCS / "REGLAMENTO.md"), ("americano", DOCS / "AMERICANO.md"),
-         ("mexicano", DOCS / "MEXICANO.md")]
+         ("mexicano", DOCS / "MEXICANO.md"), ("manual", DOCS / "MANUAL.md")]
 
 
 @asynccontextmanager
@@ -342,12 +342,12 @@ def add_tournament(name: str = Form(...), held_on: str = Form(""),
             target = opt_int(points_per_match)
             if target is not None and target < 1:
                 target = None
-        password = player_password.strip()
+        password = player_password.strip() or auth.default_player_password(name)
         tournament_id = conn.execute(
             "INSERT INTO tournaments (name, held_on, rule_type_id, points_per_match, "
             "player_password) VALUES (?, ?, ?, ?, ?)",
             (name, held_on, rule_type_id, target,
-             password or None)).lastrowid
+             password)).lastrowid
         conn.executemany("INSERT INTO tournament_players (tournament_id, player_id) "
                          "VALUES (?, ?)", [(tournament_id, p) for p in players])
     return redirect(f"/tournaments/{tournament_id}")
@@ -392,13 +392,13 @@ def remove_tournament_player(tournament_id: int, player_id: int):
 
 @app.post("/tournaments/{tournament_id}/player-password", dependencies=EDIT)
 def set_player_password(tournament_id: int, password: str = Form("")):
-    """Set or change the players' password; an empty one turns player login off. Either
-    way players who were logged in must log in again."""
-    password = password.strip()
+    """Change the players' password; an empty one goes back to the default (from the
+    tournament's name). Players who were logged in must log in again."""
     with db.connect() as conn:
-        get_or_404(conn, "tournaments", tournament_id)
+        tournament = get_or_404(conn, "tournaments", tournament_id)
+        password = password.strip() or auth.default_player_password(tournament["name"])
         conn.execute("UPDATE tournaments SET player_password = ? WHERE id = ?",
-                     (password or None, tournament_id))
+                     (password, tournament_id))
     return redirect(f"/tournaments/{tournament_id}#player-password")
 
 

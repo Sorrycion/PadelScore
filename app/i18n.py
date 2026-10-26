@@ -95,12 +95,11 @@ TEXT = {
     "current_password": {"es": "🔑 Contraseña actual", "en": "🔑 Current password"},
     "player_password_on": {
         "es": "✅ Solo la ven los administradores. Escribe una nueva para cambiarla, o guarda "
-              "vacío para quitarla.",
-        "en": "✅ Only admins see it. Type a new one to change it, or save it empty to turn it off."},
-    "player_password_off": {"es": "➖ Sin contraseña: solo el club puede registrar resultados.",
-                            "en": "➖ None: only the club can enter results."},
+              "vacío para volver a la predeterminada (el nombre del torneo en minúsculas, con _ "
+              "entre palabras).",
+        "en": "✅ Only admins see it. Type a new one to change it, or save it empty to go back "
+              "to the default (the tournament's name in lowercase, with _ between words)."},
     "new_password": {"es": "Nueva contraseña", "en": "New password"},
-    "optional": {"es": "Opcional", "en": "Optional"},
     "add_to_tournament": {"es": "➕ Agregar al torneo", "en": "➕ Add to tournament"},
     "confirm_remove_player": {
         "es": "¿Quitar a este jugador del torneo? Sus resultados anteriores se conservan.",

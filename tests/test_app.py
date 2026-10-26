@@ -244,6 +244,9 @@ def test_rules_page(client):
     r = client.get("/rules")
     assert r.status_code == 200
     assert "Reglamento Liga Amigos" in r.text and "<table>" in r.text
+    for section in ("liga_amigos", "americano", "mexicano", "manual"):
+        assert f'id="{section}"' in r.text
+    assert "Reglamento Manual individual" in r.text
 
 
 def test_missing_pages_return_404(league):
@@ -1014,7 +1017,38 @@ def test_set_and_remove_the_player_password(league):
     assert "<code>jugamos</code>" in r.text  # admins can look it up
     assert "<code>jugamos</code>" in league.get("/tournaments").text
     r = league.post("/tournaments/1/player-password", data={"password": ""})
-    assert "➖ None" in r.text and "<code>" not in r.text
+    assert "<code>liga_amigos</code>" in r.text  # back to the default
+
+
+def test_player_password_defaults_to_the_tournament_name(league):
+    from app.auth import default_player_password
+    assert default_player_password("  Liga de la  Amistad ") == "liga_de_la_amistad"
+    # The league fixture's tournament got it when created.
+    assert "<code>liga_amigos</code>" in league.get("/tournaments/1").text
+    new_tournament(league, 1, name="Copa Otoño 2026")
+    with db.connect() as conn:
+        assert conn.execute("SELECT player_password FROM tournaments WHERE id = 2").fetchone()[0] \
+            == "copa_otoño_2026"
+    # A typed one wins.
+    league.post("/tournaments", data={"name": "X", "held_on": "2026-11-01", "player_password": "clave"})
+    with db.connect() as conn:
+        assert conn.execute("SELECT player_password FROM tournaments WHERE id = 3").fetchone()[0] == "clave"
+
+
+def test_older_tournaments_get_the_default_player_password(tmp_path, monkeypatch):
+    import sqlite3
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript("""
+        CREATE TABLE tournaments (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+            held_on DATE NOT NULL CHECK (held_on IS date(held_on)));
+        INSERT INTO tournaments (name, held_on) VALUES ('Liga de la amistad', '2026-10-01');
+    """)
+    conn.close()
+    monkeypatch.setattr(db, "DB_PATH", str(path))
+    db.init_db()
+    with db.connect() as conn:
+        assert conn.execute("SELECT player_password FROM tournaments").fetchone()[0] == "liga_de_la_amistad"
 
 
 def test_only_admins_see_the_player_password(with_players):

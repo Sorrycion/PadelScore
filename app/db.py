@@ -95,6 +95,12 @@ def init_db():
         conn.executescript(SCHEMA)
         allow_pending_sets(conn)
         add_rule_types(conn)
+        # Every tournament has a player password; older ones get the default.
+        from .auth import default_player_password
+        for t in conn.execute("SELECT id, name FROM tournaments WHERE player_password IS NULL "
+                              "OR player_password = ''").fetchall():
+            conn.execute("UPDATE tournaments SET player_password = ? WHERE id = ?",
+                         (default_player_password(t["name"]), t["id"]))
 
 
 def add_rule_types(conn):
