@@ -17,7 +17,7 @@
       <a href="/matches">{{ _("nav_sets") }}</a>
       <a href="/players">{{ _("nav_players") }}</a>
       <a href="/rules">{{ _("nav_rules") }}</a>
-      {% if editor %}<a class="button" href="/matches/new">{{ _("nav_new_set") }}</a>{% endif %}
+      {% if editor %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
       {% if login_enabled %}
         {% if editor %}
           <form method="post" action="/logout" class="nav-form"><button type="submit" class="link plain-link">{{ _("logout") }}</button></form>

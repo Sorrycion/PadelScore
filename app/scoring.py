@@ -7,7 +7,8 @@ other three once.
 Points are given per set, whatever the court: the two winners share 1st place (9) and
 get 1 more for the set won (10 each); the two losers share 2nd place (6 each). In a
 tied set all four share 1st (9 each, no set won). A player's matchday points are the
-sum over their sets, and the tournament standings add up the matchdays.
+sum over their sets, and the tournament standings add up the matchdays. A set whose
+games are not entered yet (pending) gives no points.
 """
 
 PLACE_POINTS = (9, 6, 4, 3)
@@ -36,6 +37,17 @@ def set_points(winner: str | None) -> tuple[int, int]:
     return (win, lose) if winner == "A" else (lose, win)
 
 
+def is_played(m) -> bool:
+    return m["team_a_games"] is not None
+
+
+def court_rotation(players):
+    """The three sets of a court of four, as ((a1, a2), (b1, b2)): every player
+    partners each of the other three once."""
+    p1, p2, p3, p4 = players
+    return [((p1, p2), (p3, p4)), ((p1, p3), (p2, p4)), ((p1, p4), (p2, p3))]
+
+
 def court_table(sets, position):
     """Add up each player's sets on one court on one matchday.
 
@@ -44,10 +56,12 @@ def court_table(sets, position):
     Rows are ordered by points, then games difference, then league position (then
     name; the rules' coin toss on matchday 1 is done on court). The order only
     decides who changes court; it never changes anyone's points.
+    Players of pending sets are listed too, with nothing added up yet.
     """
     stats = {}
     for m in sets:
-        diff = m["team_a_games"] - m["team_b_games"]
+        played = is_played(m)
+        diff = m["team_a_games"] - m["team_b_games"] if played else 0
         pts_a, pts_b = set_points(m["winner"])
         for side, d, pts in (("A", diff, pts_a), ("B", -diff, pts_b)):
             for key in (side.lower() + "1", side.lower() + "2"):
@@ -55,6 +69,8 @@ def court_table(sets, position):
                     "id": m[key + "_id"], "name": m[key],
                     "points": 0, "diff": 0, "sets": 0, "sets_won": 0,
                 })
+                if not played:
+                    continue
                 r["points"] += pts
                 r["diff"] += d
                 r["sets"] += 1
@@ -93,6 +109,8 @@ def tournament_results(matchdays):
 
         for rows in courts.values():
             for r in rows:  # a player on two courts adds up both
+                if not r["sets"]:  # only pending sets so far
+                    continue
                 t = totals.setdefault(r["id"], {"id": r["id"], "name": r["name"], "points": 0,
                                                 "sets_won": 0, "played": 0, "by_matchday": {}})
                 if md["number"] not in t["by_matchday"]:
@@ -125,3 +143,20 @@ def court_moves(courts, count):
             "down": down, "down_to": numbers[i + 1] if i < len(numbers) - 1 else None,
         })
     return moves
+
+
+def next_courts(courts, count):
+    """Players per court for the next matchday, after the moves of court_moves().
+    Returns {court: [player ids]}: those who stay, then those who arrive."""
+    numbers = sorted(courts)
+    new = {c: [] for c in numbers}
+    for i, court in enumerate(numbers):
+        ids = [r["id"] for r in courts[court]]
+        up = ids[:count] if i > 0 else []
+        down = [p for p in ids if p not in up][-count:] if i < len(numbers) - 1 else []
+        new[court] = [p for p in ids if p not in up and p not in down] + new[court]
+        if up:
+            new[numbers[i - 1]] += up
+        if down:
+            new[numbers[i + 1]] += down
+    return new

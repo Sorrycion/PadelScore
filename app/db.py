@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS matchdays (
     UNIQUE (tournament_id, number)
 );
 
--- One set, played on a court during a matchday.
+-- One set, played on a court during a matchday. Its games stay NULL until it is played.
 CREATE TABLE IF NOT EXISTS matches (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     matchday_id INTEGER NOT NULL REFERENCES matchdays(id),
@@ -36,9 +36,10 @@ CREATE TABLE IF NOT EXISTS matches (
     a2 INTEGER NOT NULL REFERENCES players(id),
     b1 INTEGER NOT NULL REFERENCES players(id),
     b2 INTEGER NOT NULL REFERENCES players(id),
-    team_a_games INTEGER NOT NULL,
-    team_b_games INTEGER NOT NULL,
-    winner TEXT CHECK (winner IN ('A', 'B'))   -- NULL for a tied set
+    team_a_games INTEGER,
+    team_b_games INTEGER,
+    winner TEXT CHECK (winner IN ('A', 'B')),   -- NULL for a tied or pending set
+    CHECK ((team_a_games IS NULL) = (team_b_games IS NULL))
 );
 """
 
@@ -60,3 +61,21 @@ def init_db():
     os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
     with connect() as conn:
         conn.executescript(SCHEMA)
+        allow_pending_sets(conn)
+
+
+def allow_pending_sets(conn):
+    """Databases made before sets could be pending have NOT NULL games: rebuild the
+    matches table (same columns, same rows) so a set can wait for its result."""
+    notnull = {r["name"]: r["notnull"] for r in conn.execute("PRAGMA table_info(matches)")}
+    if not notnull["team_a_games"]:
+        return
+    create = SCHEMA[SCHEMA.index("CREATE TABLE IF NOT EXISTS matches"):]
+    conn.executescript(f"""
+        BEGIN;
+        ALTER TABLE matches RENAME TO matches_old;
+        {create}
+        INSERT INTO matches SELECT * FROM matches_old;
+        DROP TABLE matches_old;
+        COMMIT;
+    """)

@@ -9,11 +9,12 @@ Built with Python, [FastAPI](https://fastapi.tiangolo.com/), Jinja2 templates an
 Scoring follows the league rules in [`docs/REGLAMENTO.md`](docs/REGLAMENTO.md), also shown on the **Rules** page.
 
 - **Tournaments (leagues)** are played over **matchdays** (*jornadas*), normally 6, one per week.
-- **Sets:** on a matchday, players are split into courts of 4. Each court plays 3 sets, with every player partnering each of the other three once. Any score can be entered (a set may be cut short); a tied set gives no one the set-won point. Sets can be edited, deleted and filtered by tournament or player.
+- **Courts:** creating a matchday opens the **Assign courts** screen: 4 players per court (add or remove courts as needed). Saving creates each court's 3 sets, with every player partnering each of the other three once. From matchday 2 on, the screen suggests the courts after the previous matchday's moves (one up, one down per court).
+- **Sets:** created sets are *pending* until their games are entered, right on the matchday page. Any score can be entered (a set may be cut short); a tied set gives no one the set-won point. Sets can also be added one by one, edited, deleted and filtered by tournament or player. A court that already has results keeps its players.
 - **Matchday points:** every set is scored on its own, whatever the court. The two winners share 1st place (**9**) plus **1 for the set won** = 10 each; the two losers share 2nd place (**6** each). A tied set gives 9 to all four. A player's matchday points are the sum over their sets. On each court, players are listed by points, then games difference (games won − games lost), then league position before the matchday; that order only decides court changes.
 - **Tournament standings** add up the matchday points, with one column per matchday.
 - **Court changes:** each matchday page suggests who moves up or down a court (1 or 2 players, per the draw). Court 1 is the top court.
-- **Players:** each has a profile with results per matchday, partners and sets.
+- **Players:** each has a profile with results per matchday, partners and sets. Players can be renamed, and deleted while they have no sets.
 - **Home page:** standings of the latest tournament.
 - **Language:** Spanish (default) or English, switched with ES / EN in the header; the choice is remembered in a cookie. Texts live in `app/i18n.py`.
 - Works on phones and supports dark mode.

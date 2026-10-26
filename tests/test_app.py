@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 from app import db
 from app.i18n import LANGS, TEXT
 from app.main import app
-from app.scoring import (ScoreError, check_set, court_moves, court_table, set_points,
-                         tournament_results)
+from app.scoring import (ScoreError, check_set, court_moves, court_rotation, court_table,
+                         next_courts, set_points, tournament_results)
 
 NAMES = ["Ana", "Bea", "Carlos", "Diego", "Elena", "Fer", "Gabi", "Hugo"]
 APP_DIR = Path(__file__).parent.parent / "app"
@@ -306,7 +306,7 @@ def test_viewing_needs_no_password(locked):
     for url in ["/", "/tournaments", "/tournaments/1", "/matchdays/1", "/players", "/matches", "/rules"]:
         assert locked.get(url).status_code == 200, url
     page = locked.get("/tournaments").text
-    assert "Add tournament" not in page and "+ Set" not in page and ">Log in<" in page
+    assert "Add tournament" not in page and "+ Courts" not in page and ">Log in<" in page
 
 
 @pytest.mark.parametrize("method,url,data", [
@@ -315,6 +315,10 @@ def test_viewing_needs_no_password(locked):
     ("post", "/tournaments/1/matchdays", {"played_on": "2026-11-01"}),
     ("post", "/matches", set_form((1, 2, 3, 4), 6, 4)),
     ("get", "/matches/new", None),
+    ("get", "/matchdays/1/courts", None),
+    ("post", "/matchdays/1/courts", {"court-1": ["1", "2", "3", "4"]}),
+    ("post", "/players/1", {"name": "Zed"}),
+    ("post", "/players/1/delete", {"confirm": "1"}),
 ])
 def test_changes_need_the_password(locked, method, url, data):
     r = getattr(locked, method)(url, data=data, follow_redirects=False) if data else \
@@ -400,3 +404,176 @@ def test_delete_tournament_needs_the_password(locked):
     r = locked.post("/tournaments/1/delete", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/login")
     assert locked.get("/tournaments/1").status_code == 200
+
+
+# --- Courts and pending sets -------------------------------------------------------
+
+def courts_form(*courts):
+    return {f"court-{n}": [str(p) for p in ids] for n, ids in enumerate(courts, 1)}
+
+
+def pending_count():
+    with db.connect() as conn:
+        return conn.execute("SELECT COUNT(*) FROM matches WHERE team_a_games IS NULL").fetchone()[0]
+
+
+def court_count(page):
+    """Courts on the courts screen (the hidden template for a new court is left out)."""
+    return page.split('<template')[0].count('<fieldset class="court-pick">')
+
+
+def selected(html):
+    return set(re.findall(r'<option value="(\d+)" selected>', html))
+
+
+def test_court_rotation_gives_everyone_each_partner_once():
+    sets = court_rotation((1, 2, 3, 4))
+    pairs = [frozenset(team) for teams in sets for team in teams]
+    assert len(sets) == 3 and len(set(pairs)) == 6  # all 6 possible pairs, once each
+
+
+def test_next_courts_moves_one_up_and_one_down():
+    courts = {1: [{"id": i} for i in (1, 2, 3, 4)], 2: [{"id": i} for i in (5, 6, 7, 8)]}
+    new = next_courts(courts, 1)
+    assert sorted(new[1]) == [1, 2, 3, 5] and sorted(new[2]) == [4, 6, 7, 8]
+
+
+def test_new_matchday_opens_the_courts_screen(league):
+    r = league.post("/tournaments/1/matchdays", data={"played_on": "2026-10-30"})
+    assert str(r.url).endswith("/matchdays/2/courts") and "Assign courts" in r.text
+    assert court_count(r.text) == 2  # 8 players: 2 empty courts
+    assert league.get("/courts", follow_redirects=False).headers["location"] == "/matchdays/2/courts"
+
+
+def test_assigning_courts_creates_three_pending_sets_each(league):
+    r = league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 8)))
+    assert r.status_code == 200 and str(r.url).endswith("/matchdays/1")
+    assert pending_count() == 6 and r.text.count('class="score-form"') == 6
+    with db.connect() as conn:
+        rows = conn.execute("SELECT a1, a2, b1, b2 FROM matches WHERE court = 1 ORDER BY id").fetchall()
+    assert [((r[0], r[1]), (r[2], r[3])) for r in rows] == court_rotation((1, 2, 3, 4))
+    # Pending sets give no points, so nobody is in the standings yet.
+    assert "No results in this tournament yet" in league.get("/tournaments/1").text
+
+    r = league.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"})
+    assert "6-4" in r.text and pending_count() == 5
+    assert standing_points(league.get("/tournaments/1").text, "Ana") == 10
+    assert "Pending" in league.get("/matches").text  # only a label on other pages
+
+
+def test_score_needs_both_teams(league):
+    league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4)))
+    r = league.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": ""})
+    assert "Enter both teams" in r.text and pending_count() == 3
+    r = league.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "-1"})
+    assert "can't be negative" in r.text and pending_count() == 3
+
+
+def test_saving_courts_again_keeps_unchanged_courts(league):
+    league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 8)))
+    league.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"})
+    # The same four players on each court (in another order): nothing changes.
+    r = league.post("/matchdays/1/courts", data=courts_form((4, 3, 2, 1), (8, 7, 6, 5)))
+    assert r.status_code == 200 and pending_count() == 5
+    with db.connect() as conn:
+        assert conn.execute("SELECT team_a_games FROM matches WHERE id = 1").fetchone()[0] == 6
+    # Court 2 has no results, so it can go.
+    r = league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4)))
+    assert r.status_code == 200 and pending_count() == 2
+    # Court 1 has a result: its players can't change.
+    r = league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 5)))
+    assert r.status_code == 400 and "Court 1 already has results" in r.text
+    # The screen shows what is saved.
+    page = league.get("/matchdays/1/courts").text
+    assert court_count(page) == 1 and "creates its sets again" in page
+    assert selected(page.split('<template')[0]) == {"1", "2", "3", "4"}
+
+
+def test_changed_court_gets_new_sets(league):
+    league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 8)))
+    league.post("/players", data={"name": "Ivan"})
+    league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 9)))
+    with db.connect() as conn:
+        players = {p for r in conn.execute("SELECT a1, a2, b1, b2 FROM matches WHERE court = 2")
+                   for p in r}
+    assert players == {5, 6, 7, 9} and pending_count() == 6
+
+
+@pytest.mark.parametrize("courts,message", [
+    (((1, 2, 3, 4), (4, 5, 6, 7)), "Diego is on more than one court"),
+    (((1, 2, 3, ""),), "Court 1: pick 4 different players"),
+    (((1, 2, 3, 3),), "Court 1: pick 4 different players"),
+    (((1, 2, 3, 99),), "Court 1: pick 4 different players"),
+    ((("", "", "", ""),), "Add at least one court"),
+])
+def test_rejects_bad_courts(league, courts, message):
+    r = league.post("/matchdays/1/courts", data=courts_form(*courts))
+    assert r.status_code == 400 and message in r.text and pending_count() == 0
+
+
+def test_empty_courts_are_left_out(league):
+    r = league.post("/matchdays/1/courts", data=courts_form(("", "", "", ""), (5, 6, 7, 8)))
+    assert r.status_code == 200
+    with db.connect() as conn:
+        assert {r[0] for r in conn.execute("SELECT court FROM matches")} == {1}
+
+
+def test_next_matchday_suggests_courts_after_moves(league):
+    league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 8)))
+    for match_id in range(1, 7):  # team A wins every set
+        league.post(f"/matches/{match_id}/score", data={"team_a_games": "6", "team_b_games": "0"})
+    page = league.post("/tournaments/1/matchdays", data={"played_on": "2026-10-30"}).text
+    assert "Suggested from matchday 1" in page
+    court_1, court_2 = page.split('<fieldset class="court-pick">')[1:3]
+    # Court 1: Ana won all three sets, Diego none, so Diego goes down and Elena comes up.
+    assert selected(court_1) == {"1", "2", "3", "5"} and selected(court_2) == {"4", "6", "7", "8"}
+
+
+def test_set_form_can_save_a_pending_set(league):
+    r = league.post("/matches", data=set_form((1, 2, 3, 4), "", ""))
+    assert r.status_code == 200 and pending_count() == 1
+    r = league.post("/matches", data=set_form((1, 2, 3, 4), "6", ""))
+    assert r.status_code == 400 and "Enter both teams" in r.text
+
+
+def test_rename_player(league):
+    r = league.post("/players/1", data={"name": "  Anita "})
+    assert r.status_code == 200 and "<h1>Anita</h1>" in r.text
+    assert "That player already exists" in league.post("/players/1", data={"name": "bea"}).text
+    assert "Name is required" in league.post("/players/1", data={"name": " "}).text
+
+
+def test_delete_player_only_without_sets(league):
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4))
+    assert "Can't delete" in league.post("/players/1/delete").text
+    r = league.post("/players/8/delete")
+    assert str(r.url).endswith("/players") and "Hugo" not in r.text
+    assert league.get("/players/8").status_code == 404
+
+
+def test_old_database_is_upgraded_for_pending_sets(tmp_path, monkeypatch):
+    import sqlite3
+    path = tmp_path / "old.db"
+    old = (db.SCHEMA.replace("team_a_games INTEGER,", "team_a_games INTEGER NOT NULL,")
+                    .replace("team_b_games INTEGER,", "team_b_games INTEGER NOT NULL,"))
+    assert old.count("NOT NULL,") > db.SCHEMA.count("NOT NULL,")
+    conn = sqlite3.connect(path)
+    conn.executescript(old + """
+        INSERT INTO players (name) VALUES ('A'), ('B'), ('C'), ('D');
+        INSERT INTO tournaments (name, held_on) VALUES ('T', '2026-10-01');
+        INSERT INTO matchdays (tournament_id, number, played_on) VALUES (1, 1, '2026-10-01');
+        INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, team_a_games, team_b_games, winner)
+            VALUES (1, 1, 1, 2, 3, 4, 6, 3, 'A');
+    """)
+    conn.close()
+    monkeypatch.setattr(db, "DB_PATH", str(path))
+    db.init_db()
+    db.init_db()  # a second start leaves it alone
+    with db.connect() as conn:
+        assert tuple(conn.execute("SELECT team_a_games, team_b_games, winner FROM matches")
+                     .fetchone()) == (6, 3, "A")
+        conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
+                     "VALUES (1, 1, 1, 3, 2, 4)")
+        with pytest.raises(sqlite3.IntegrityError):  # both games or neither
+            conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, team_a_games) "
+                         "VALUES (1, 1, 1, 4, 2, 3, 6)")

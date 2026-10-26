@@ -34,10 +34,11 @@
   <fieldset class="team-row"><legend>{{ _(team) }}</legend>
     {{ pick(p1, _("player_1")) }}{{ pick(p2, _("player_2")) }}
     <label class="games">{{ _("games_legend") }}
-      <input type="number" name="{{ games }}" min="0" inputmode="numeric" value="{{ form[games] if form[games] is not none else '' }}" required>
+      <input type="number" name="{{ games }}" min="0" inputmode="numeric" value="{{ form[games] if form[games] is not none else '' }}">
     </label>
   </fieldset>
   {% endfor %}
+  <p class="muted">{{ _("games_later") }}</p>
   <button type="submit">{{ _("save_changes") if match_id else _("save_set") }}</button>
 </form>
 {% endif %}

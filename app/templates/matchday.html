@@ -4,11 +4,12 @@
 <div class="title-row">
   <h1>{{ _("matchday_n", n=matchday.number) }}</h1>
   {% if editor %}
-  <a class="button" href="/matches/new?matchday={{ matchday.id }}">{{ _("record_set_button") }}</a>
+  <a class="button" href="/matchdays/{{ matchday.id }}/courts">{{ _("assign_courts") }}</a>
   {% endif %}
 </div>
 <p class="muted"><a href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · {{ matchday.played_on }}</p>
 
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if matchday.courts %}
 <p class="muted">{{ _("places_note", url="/rules") }}</p>
 {% for court, rows in matchday.courts.items() %}
@@ -22,7 +23,8 @@
   {% include "_court_table.html" %}
   {% set sets_here = sets|selectattr("court", "equalto", court)|list %}
   <ul class="matches">{% for m in sets_here %}{% include "_match_row.html" %}{% endfor %}</ul>
-  {% if sets_here|length < 3 %}<p class="muted">{{ _("sets_recorded", n=sets_here|length) }}</p>{% endif %}
+  {% set played_here = sets_here|rejectattr("team_a_games", "none")|list %}
+  {% if played_here|length < 3 %}<p class="muted">{{ _("sets_recorded", n=played_here|length) }}</p>{% endif %}
 </section>
 {% endfor %}
 
@@ -40,6 +42,6 @@
   {% endfor %}
 </ul>
 {% else %}
-<p class="empty">{{ _("no_sets_record", url="/matches/new?matchday=%d"|format(matchday.id)) }}</p>
+<p class="empty">{{ _("no_courts_yet", url="/matchdays/%d/courts"|format(matchday.id)) }}</p>
 {% endif %}
 {% endblock %}

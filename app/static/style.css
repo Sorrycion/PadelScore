@@ -71,6 +71,16 @@ fieldset { border: 1px solid var(--border); border-radius: 8px; display: grid; g
 fieldset.team-row { grid-template-columns: 1fr 1fr 6rem; align-items: end; }
 fieldset.team-row .games input { width: 100%; font-size: 1.2rem; font-weight: 700; text-align: center;
                                  font-variant-numeric: tabular-nums; }
+/* Entering a set's games on the matchday page. */
+form.score-form { display: flex; gap: 6px; align-items: center; margin: 0; }
+form.score-form input { width: 3.6rem; text-align: center; font-weight: 700;
+                        font-variant-numeric: tabular-nums; }
+form.score-form button { padding: 7px 10px; }
+li.match .score.pending { color: var(--muted); font-weight: 400; font-size: .85rem; }
+/* Court assignment: four players per court. */
+#courts { display: grid; gap: 12px; }
+fieldset.court-pick .remove-court { grid-column: 1 / -1; justify-self: end; font-size: .85rem; }
+button.secondary { background: none; color: var(--accent); border: 1px dashed var(--accent); }
 @media (max-width: 560px) {
   /* Players stacked on the left, the team's games beside them on the right. */
   fieldset.team-row { grid-template-columns: 1fr 5rem; }
@@ -78,5 +88,6 @@ fieldset.team-row .games input { width: 100%; font-size: 1.2rem; font-weight: 70
   li.match { grid-template-columns: 1fr; text-align: center; }
   li.match .team.b { text-align: center; }
   li.match .actions { justify-content: center; }
+  form.score-form { justify-content: center; }
   fieldset { grid-template-columns: 1fr; }
 }

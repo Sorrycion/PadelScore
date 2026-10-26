@@ -1,7 +1,18 @@
-<li class="match">
+<li class="match" id="set-{{ m.id }}">
   <span class="date"><a class="plain" href="/matchdays/{{ m.matchday_id }}">{{ _("matchday_short", n=m.matchday) }} · {{ _("court_n", n=m.court) }}</a><br><a class="tag" href="/tournaments/{{ m.tournament_id }}">{{ m.tournament }}</a></span>
   <span class="team {% if m.winner == 'A' %}winner{% endif %}"><a href="/players/{{ m.a1_id }}">{{ m.a1 }}</a> &amp; <a href="/players/{{ m.a2_id }}">{{ m.a2 }}</a></span>
+  {% if score_inline and editor and m.team_a_games is none %}
+  <form method="post" action="/matches/{{ m.id }}/score" class="score-form">
+    <input type="number" name="team_a_games" min="0" inputmode="numeric" required aria-label="{{ _('team_a') }} · {{ _('games_legend') }}">
+    <span>-</span>
+    <input type="number" name="team_b_games" min="0" inputmode="numeric" required aria-label="{{ _('team_b') }} · {{ _('games_legend') }}">
+    <button type="submit">{{ _("save") }}</button>
+  </form>
+  {% elif m.team_a_games is none %}
+  <span class="score pending">{{ _("pending") }}</span>
+  {% else %}
   <span class="score">{{ m.team_a_games }}-{{ m.team_b_games }}</span>
+  {% endif %}
   <span class="team b {% if m.winner == 'B' %}winner{% endif %}"><a href="/players/{{ m.b1_id }}">{{ m.b1 }}</a> &amp; <a href="/players/{{ m.b2_id }}">{{ m.b2 }}</a></span>
   {% if editor %}
   <span class="actions">

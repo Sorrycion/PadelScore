@@ -2,6 +2,7 @@
 {% block title %}{{ player.name }} · PadelScore{% endblock %}
 {% block content %}
 <h1>{{ player.name }}</h1>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 
 {% for t in tournaments %}
 <section class="court-block">
@@ -41,5 +42,16 @@
 {% if matches %}
 <h2>{{ _("sets") }}</h2>
 <ul class="matches">{% for m in matches %}{% include "_match_row.html" %}{% endfor %}</ul>
+{% endif %}
+
+{% if editor %}
+<form method="post" action="/players/{{ player.id }}" class="inline danger-zone">
+  <input name="name" value="{{ player.name }}" aria-label="{{ _('player_name') }}" required>
+  <button type="submit">{{ _("rename") }}</button>
+</form>
+<form method="post" action="/players/{{ player.id }}/delete"
+      onsubmit="return confirm('{{ _('confirm_delete_player') }}')">
+  <button type="submit" class="danger">{{ _("delete_player") }}</button>
+</form>
 {% endif %}
 {% endblock %}

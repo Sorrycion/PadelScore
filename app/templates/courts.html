@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ _("assign_courts") }} · {{ _("matchday_n", n=matchday.number) }} · PadelScore{% endblock %}
+{# One court: four player selects, all named court-<n>. "__N__" is filled in by the script below. #}
+{% macro court_fieldset(n, ids) %}
+<fieldset class="court-pick">
+  <legend>{{ _("court_n", n=n) }}</legend>
+  {% for pid in ids %}
+  <select name="court-{{ n }}" aria-label="{{ _('player') }} {{ loop.index }}">
+    <option value="">{{ _("choose") }}</option>
+    {% for p in players %}<option value="{{ p.id }}" {% if pid == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+  </select>
+  {% endfor %}
+  <button type="button" class="link remove-court">{{ _("remove_court") }}</button>
+</fieldset>
+{% endmacro %}
+{% block content %}
+<h1>{{ _("assign_courts") }}</h1>
+<p class="muted"><a href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · <a href="/matchdays/{{ matchday.id }}">{{ _("matchday_n", n=matchday.number) }}</a> · {{ matchday.played_on }}</p>
+{% if players|length < 4 %}
+<p class="empty">{{ _("need_4_players", url="/players") }}</p>
+{% else %}
+<p>{{ _("assign_courts_hint") }}</p>
+{% if previous %}<p class="muted">{{ _("suggested_from", n=previous.number) }}</p>{% endif %}
+{% if has_sets %}<p class="muted">{{ _("courts_change_warning") }}</p>{% endif %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post" action="/matchdays/{{ matchday.id }}/courts" class="stack" id="courts-form"
+      data-legend="{{ _('court_n', n='__N__') }}">
+  <div id="courts">
+    {% for ids in courts %}{{ court_fieldset(loop.index, ids) }}{% endfor %}
+  </div>
+  <button type="button" class="secondary" id="add-court">{{ _("add_court") }}</button>
+  <button type="submit">{{ _("save_courts") }}</button>
+</form>
+<template id="new-court">{{ court_fieldset("__N__", [none, none, none, none]) }}</template>
+<script>
+  (function () {
+    var form = document.getElementById("courts-form"), list = document.getElementById("courts");
+    function renumber() {
+      list.querySelectorAll("fieldset").forEach(function (fs, i) {
+        var label = form.dataset.legend.replace("__N__", i + 1);
+        fs.querySelector("legend").textContent = label;
+        fs.querySelectorAll("select").forEach(function (s) { s.name = "court-" + (i + 1); });
+      });
+    }
+    document.getElementById("add-court").addEventListener("click", function () {
+      list.insertAdjacentHTML("beforeend", document.getElementById("new-court").innerHTML);
+      renumber();
+    });
+    list.addEventListener("click", function (e) {
+      if (e.target.classList.contains("remove-court")) {
+        e.target.closest("fieldset").remove();
+        renumber();
+      }
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

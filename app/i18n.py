@@ -17,7 +17,7 @@ TEXT = {
     "nav_sets": {"es": "Sets", "en": "Sets"},
     "nav_players": {"es": "Jugadores", "en": "Players"},
     "nav_rules": {"es": "Reglamento", "en": "Rules"},
-    "nav_new_set": {"es": "+ Set", "en": "+ Set"},
+    "nav_courts": {"es": "+ Canchas", "en": "+ Courts"},
 
     # Shared words
     "standings": {"es": "Clasificación", "en": "Standings"},
@@ -41,6 +41,8 @@ TEXT = {
     "delete": {"es": "Eliminar", "en": "Delete"},
     "confirm_delete_set": {"es": "¿Eliminar este set?", "en": "Delete this set?"},
     "choose": {"es": "Elegir…", "en": "Choose…"},
+    "save": {"es": "Guardar", "en": "Save"},
+    "pending": {"es": "Pendiente", "en": "Pending"},
     "latest": {"es": "última", "en": "latest"},
     "n_sets": {"es": ("{n} set", "{n} sets"), "en": ("{n} set", "{n} sets")},
     "n_courts": {"es": ("{n} cancha", "{n} canchas"), "en": ("{n} court", "{n} courts")},
@@ -104,6 +106,33 @@ TEXT = {
     "move_down": {"es": "↓ a cancha {n}:", "en": "↓ to court {n}:"},
     "no_changes": {"es": "sin cambios", "en": "no changes"},
 
+    "no_courts_yet": {
+        "es": 'Aún no hay canchas. <a href="{url}">Asigna los jugadores a las canchas</a>.',
+        "en": 'No courts yet. <a href="{url}">Assign the players to courts</a>.'},
+
+    # Courts of a matchday
+    "assign_courts": {"es": "Asignar canchas", "en": "Assign courts"},
+    "assign_courts_hint": {
+        "es": "Pon 4 jugadores en cada cancha. Al guardar se crean los 3 sets de cada cancha, "
+              "con un compañero distinto en cada set. Los resultados se registran después en "
+              "la página de la jornada.",
+        "en": "Put 4 players on each court. Saving creates each court's 3 sets, with a "
+              "different partner in each set. Results are entered afterwards on the "
+              "matchday page."},
+    "suggested_from": {
+        "es": "Sugerencia según la jornada {n}: en cada cancha sube el mejor y baja el último. "
+              "Cámbiala si hace falta.",
+        "en": "Suggested from matchday {n}: on each court the best player moves up and the "
+              "last moves down. Change it as needed."},
+    "courts_change_warning": {
+        "es": "Si cambias los jugadores de una cancha, sus sets se crean de nuevo. Una cancha "
+              "que ya tiene resultados no se puede cambiar.",
+        "en": "Changing a court's players creates its sets again. A court that already has "
+              "results can't be changed."},
+    "add_court": {"es": "+ Agregar cancha", "en": "+ Add court"},
+    "remove_court": {"es": "Quitar", "en": "Remove"},
+    "save_courts": {"es": "Guardar y crear sets", "en": "Save and create sets"},
+
     # Sets list
     "all_tournaments": {"es": "Todos los torneos", "en": "All tournaments"},
     "all_players": {"es": "Todos los jugadores", "en": "All players"},
@@ -133,11 +162,16 @@ TEXT = {
     "games_legend": {"es": "Juegos", "en": "Games"},
     "save_set": {"es": "Guardar set", "en": "Save set"},
     "save_changes": {"es": "Guardar cambios", "en": "Save changes"},
+    "games_later": {"es": "Deja los juegos vacíos si el set aún no se ha jugado.",
+                    "en": "Leave the games empty if the set hasn't been played yet."},
 
     # Players
     "player_name": {"es": "Nombre del jugador", "en": "Player name"},
     "add_player": {"es": "Agregar jugador", "en": "Add player"},
     "no_players": {"es": "Aún no hay jugadores.", "en": "No players yet."},
+    "rename": {"es": "Cambiar nombre", "en": "Rename"},
+    "delete_player": {"es": "Eliminar jugador", "en": "Delete player"},
+    "confirm_delete_player": {"es": "¿Eliminar este jugador?", "en": "Delete this player?"},
     "no_matchdays_played": {"es": "Aún no ha jugado ninguna jornada.",
                             "en": "No matchdays played yet."},
 
@@ -163,6 +197,22 @@ TEXT = {
                          "en": "Pick four different players."},
     "err_pick_matchday": {"es": "Elige una jornada.", "en": "Pick a matchday."},
     "err_court": {"es": "La cancha debe ser 1 o mayor.", "en": "Court must be 1 or higher."},
+    "err_both_games": {"es": "Ingresa los juegos de las dos parejas, o deja ambos vacíos.",
+                       "en": "Enter both teams' games, or leave both empty."},
+    "err_need_court": {"es": "Agrega al menos una cancha con 4 jugadores.",
+                       "en": "Add at least one court with 4 players."},
+    "err_court_four": {"es": "Cancha {n}: elige 4 jugadores diferentes.",
+                       "en": "Court {n}: pick 4 different players."},
+    "err_player_two_courts": {"es": "{name} está en más de una cancha.",
+                              "en": "{name} is on more than one court."},
+    "err_court_has_scores": {
+        "es": "La cancha {n} ya tiene resultados. Para cambiar sus jugadores, primero elimina "
+              "esos sets.",
+        "en": "Court {n} already has results. To change its players, delete those sets "
+              "first."},
+    "err_player_has_sets": {
+        "es": "No se puede eliminar: este jugador tiene sets en alguna jornada.",
+        "en": "Can't delete: this player has sets on a matchday."},
     "err_set": {"es": "Los juegos no pueden ser negativos.",
                 "en": "Games can't be negative."},
 }

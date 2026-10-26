@@ -15,7 +15,8 @@ from fastapi.templating import Jinja2Templates
 from . import auth, db
 from .auth import LoginRequired, require_editor
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
-from .scoring import ScoreError, check_set, court_moves, tournament_results
+from .scoring import (ScoreError, check_set, court_moves, court_rotation, is_played,
+                      next_courts, tournament_results)
 
 BASE = Path(__file__).parent
 RULES = BASE.parent / "docs" / "REGLAMENTO.md"
@@ -52,6 +53,11 @@ def opt_int(value: str | None) -> int | None:
         return int(value) if value else None
     except ValueError:
         return None
+
+
+def opt_games(value: str) -> int | None:
+    """Games from a form: '' means the set is not played yet."""
+    return int(value) if value.strip() else None
 
 
 def parse_date(value: str) -> str | None:
@@ -276,11 +282,12 @@ def add_matchday(tournament_id: int, played_on: str = Form("")):
             "INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
             (tournament_id, number, played_on),
         )
-    return redirect(f"/matchdays/{cur.lastrowid}")
+    return redirect(f"/matchdays/{cur.lastrowid}/courts")
 
 
 @app.get("/matchdays/{matchday_id}", response_class=HTMLResponse)
-def matchday_page(request: Request, matchday_id: int, move: int = 1):
+def matchday_page(request: Request, matchday_id: int, move: int = 1,
+                  error: str | None = None):
     move = 2 if move == 2 else 1
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
@@ -293,7 +300,128 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1):
             "sets": set_rows(conn, matchday_id=matchday_id),
             "moves": court_moves(result["courts"], move),
             "move": move,
+            "error": error,
+            "score_inline": True,  # pending sets get their games entered right here
         })
+
+
+# --- Courts of a matchday ---------------------------------------------------------
+
+def courts_of(sets):
+    """{court: [4 player ids]} from a matchday's sets, in the order of its first set;
+    a court whose sets don't share the same four players maps to None. Also returns
+    the courts that have a played set."""
+    players, played = {}, set()
+    for s in sets:
+        ids = [s[k + "_id"] for k in ("a1", "a2", "b1", "b2")]
+        if s["court"] not in players:
+            players[s["court"]] = ids
+        elif players[s["court"]] is not None and set(ids) != set(players[s["court"]]):
+            players[s["court"]] = None
+        if is_played(s):
+            played.add(s["court"])
+    return players, played
+
+
+def suggest_courts(conn, matchday):
+    """Courts for a matchday with no sets yet: the previous matchday's courts after
+    moving one player up and one down, or empty courts for everyone."""
+    previous = conn.execute(
+        "SELECT * FROM matchdays WHERE tournament_id = ? AND number < ? "
+        "ORDER BY number DESC LIMIT 1",
+        (matchday["tournament_id"], matchday["number"]),
+    ).fetchone()
+    if previous:
+        results, _ = load_results(conn, matchday["tournament_id"])
+        courts = next(r for r in results if r["id"] == previous["id"])["courts"]
+        if courts:
+            return [ids for _, ids in sorted(next_courts(courts, 1).items())], previous
+    count = len(all_players(conn)) // 4
+    return [[None] * 4 for _ in range(max(count, 1))], None
+
+
+def render_courts(request, conn, matchday, courts, previous=None, error=None,
+                  status_code=200):
+    tournament = get_or_404(conn, "tournaments", matchday["tournament_id"])
+    return templates.TemplateResponse(request, "courts.html", {
+        "tournament": tournament, "matchday": matchday, "courts": courts,
+        "players": all_players(conn), "previous": previous, "error": error,
+        "has_sets": bool(set_rows(conn, matchday_id=matchday["id"], limit=1)),
+    }, status_code=status_code)
+
+
+@app.get("/courts", dependencies=EDIT)
+def latest_courts():
+    """The '+ Courts' button: assign courts on the latest matchday."""
+    with db.connect() as conn:
+        latest = conn.execute(
+            "SELECT id FROM matchdays ORDER BY played_on DESC, number DESC, id DESC LIMIT 1"
+        ).fetchone()
+    return redirect(f"/matchdays/{latest['id']}/courts" if latest else "/tournaments")
+
+
+@app.get("/matchdays/{matchday_id}/courts", response_class=HTMLResponse, dependencies=EDIT)
+def courts_page(request: Request, matchday_id: int):
+    with db.connect() as conn:
+        matchday = get_or_404(conn, "matchdays", matchday_id)
+        players, _ = courts_of(set_rows(conn, matchday_id=matchday_id))
+        if players:
+            courts = [ids or [None] * 4 for _, ids in sorted(players.items())]
+            previous = None
+        else:
+            courts, previous = suggest_courts(conn, matchday)
+        return render_courts(request, conn, matchday, courts, previous)
+
+
+@app.post("/matchdays/{matchday_id}/courts", dependencies=EDIT)
+async def save_courts(request: Request, matchday_id: int):
+    """Save who plays on each court. A court with new players gets its three sets
+    (every player partnering each of the others once); a court with the same four
+    players keeps its sets."""
+    _ = translator(get_lang(request))
+    form = await request.form()
+    numbered = sorted((int(k[6:]), form.getlist(k)) for k in form
+                      if k.startswith("court-") and k[6:].isdigit())
+    courts = [[opt_int(v) for v in values] for _, values in numbered]
+    with db.connect() as conn:
+        matchday = get_or_404(conn, "matchdays", matchday_id)
+        names = {p["id"]: p["name"] for p in all_players(conn)}
+        chosen = [ids for ids in courts if any(ids)]  # empty courts are left out
+
+        def error(text):
+            return render_courts(request, conn, matchday, courts, error=text,
+                                 status_code=400)
+
+        if not chosen:
+            return error(_("err_need_court"))
+        seen = set()
+        for n, ids in enumerate(chosen, 1):
+            if len(ids) != 4 or None in ids or len(set(ids)) != 4 \
+                    or not all(p in names for p in ids):
+                return error(_("err_court_four", n=n))
+            for p in ids:
+                if p in seen:
+                    return error(_("err_player_two_courts", name=names[p]))
+                seen.add(p)
+
+        existing, played = courts_of(set_rows(conn, matchday_id=matchday_id))
+        changed = sorted(c for c in existing
+                         if c > len(chosen) or existing[c] is None
+                         or set(existing[c]) != set(chosen[c - 1]))
+        for c in changed:
+            if c in played:
+                return error(_("err_court_has_scores", n=c))
+        for c in changed:
+            conn.execute("DELETE FROM matches WHERE matchday_id = ? AND court = ?",
+                         (matchday_id, c))
+        for n, ids in enumerate(chosen, 1):
+            if n in existing and n not in changed:
+                continue
+            for (a1, a2), (b1, b2) in court_rotation(ids):
+                conn.execute(
+                    "INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
+                    "VALUES (?, ?, ?, ?, ?, ?)", (matchday_id, n, a1, a2, b1, b2))
+    return redirect(f"/matchdays/{matchday_id}")
 
 
 @app.get("/players", response_class=HTMLResponse)
@@ -319,8 +447,36 @@ def add_player(name: str = Form(...)):
     return redirect("/players")
 
 
+@app.post("/players/{player_id}", dependencies=EDIT)
+def rename_player(player_id: int, name: str = Form(...)):
+    name = name.strip()
+    with db.connect() as conn:
+        get_or_404(conn, "players", player_id)
+        if not name:
+            return redirect(f"/players/{player_id}?error=err_name_required")
+        exists = conn.execute(
+            "SELECT 1 FROM players WHERE lower(name) = lower(?) AND id != ?", (name, player_id)
+        ).fetchone()
+        if exists:
+            return redirect(f"/players/{player_id}?error=err_player_exists")
+        conn.execute("UPDATE players SET name = ? WHERE id = ?", (name, player_id))
+    return redirect(f"/players/{player_id}")
+
+
+@app.post("/players/{player_id}/delete", dependencies=EDIT)
+def delete_player(player_id: int):
+    """Delete a player who has no sets. Sets are never removed with a player: that
+    would change the other three players' points."""
+    with db.connect() as conn:
+        get_or_404(conn, "players", player_id)
+        if set_rows(conn, player_id=player_id, limit=1):
+            return redirect(f"/players/{player_id}?error=err_player_has_sets")
+        conn.execute("DELETE FROM players WHERE id = ?", (player_id,))
+    return redirect("/players")
+
+
 @app.get("/players/{player_id}", response_class=HTMLResponse)
-def player_page(request: Request, player_id: int):
+def player_page(request: Request, player_id: int, error: str | None = None):
     with db.connect() as conn:
         player = get_or_404(conn, "players", player_id)
         sets = set_rows(conn, player_id=player_id)
@@ -337,14 +493,14 @@ def player_page(request: Request, player_id: int):
                          "played_on": md["played_on"]}
                 for court, rows in md["courts"].items():
                     for r in rows:
-                        if r["id"] == player_id:
+                        if r["id"] == player_id and r["sets"]:
                             history.append({**entry, "court": court, **r})
             tournaments.append({"id": t["id"], "name": t["name"],
                                 "position": me and me["position"], "total": me,
                                 "history": history})
 
     partners = Counter()
-    for s in sets:
+    for s in filter(is_played, sets):
         for team in (("a1", "a2"), ("b1", "b2")):
             ids = [s[k + "_id"] for k in team]
             if player_id in ids:
@@ -357,6 +513,7 @@ def player_page(request: Request, player_id: int):
         "partners": [{"id": pid, "name": name, "count": n}
                      for (pid, name), n in partners.most_common()],
         "matches": sets,
+        "error": error,
     })
 
 
@@ -382,10 +539,14 @@ MATCH_COLUMNS = ("matchday_id", "court", "a1", "a2", "b1", "b2",
 def match_form_data(matchday_id: int = Form(...), court: int = Form(...),
                     a1: int = Form(...), a2: int = Form(...),
                     b1: int = Form(...), b2: int = Form(...),
-                    team_a_games: int = Form(...), team_b_games: int = Form(...)):
+                    team_a_games: str = Form(""), team_b_games: str = Form("")):
+    try:
+        games = opt_games(team_a_games), opt_games(team_b_games)
+    except ValueError:
+        raise HTTPException(422, "Games must be whole numbers")
     return {"matchday_id": matchday_id, "court": court,
             "a1": a1, "a2": a2, "b1": b1, "b2": b2,
-            "team_a_games": team_a_games, "team_b_games": team_b_games}
+            "team_a_games": games[0], "team_b_games": games[1]}
 
 
 def render_match_form(request, conn, form, match_id=None, error=None,
@@ -409,6 +570,10 @@ def validate_match(conn, form, _):
         return _("err_pick_matchday"), None
     if form["court"] < 1:
         return _("err_court"), None
+    if form["team_a_games"] is None and form["team_b_games"] is None:
+        return None, None  # pending: the result is entered later
+    if form["team_a_games"] is None or form["team_b_games"] is None:
+        return _("err_both_games"), None
     try:
         return None, check_set(form["team_a_games"], form["team_b_games"])
     except ScoreError:
@@ -476,3 +641,21 @@ def delete_match(match_id: int):
         match = get_or_404(conn, "matches", match_id)
         conn.execute("DELETE FROM matches WHERE id = ?", (match_id,))
     return redirect(f"/matchdays/{match['matchday_id']}")
+
+
+@app.post("/matches/{match_id}/score", dependencies=EDIT)
+def save_score(match_id: int, team_a_games: str = Form(""), team_b_games: str = Form("")):
+    """Enter (or clear) the games of a set from the matchday page."""
+    with db.connect() as conn:
+        match = get_or_404(conn, "matches", match_id)
+        back = f"/matchdays/{match['matchday_id']}"
+        try:
+            a, b = opt_games(team_a_games), opt_games(team_b_games)
+            if (a is None) != (b is None):
+                return redirect(f"{back}?error=err_both_games")
+            winner = check_set(a, b) if a is not None else None
+        except (ValueError, ScoreError):
+            return redirect(f"{back}?error=err_set")
+        conn.execute("UPDATE matches SET team_a_games = ?, team_b_games = ?, winner = ? "
+                     "WHERE id = ?", (a, b, winner, match_id))
+    return redirect(f"{back}#set-{match_id}")
