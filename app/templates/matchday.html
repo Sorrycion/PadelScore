@@ -1,14 +1,18 @@
 {% extends "base.html" %}
-{% block title %}{{ _("matchday_n", n=matchday.number) }} · {{ tournament.name }} · PadelScore{% endblock %}
+{% set round_mode = tournament.rule_code in ROUND_MODES %}
+{% set liga = tournament.rule_code == "liga_amigos" %}
+{% set label = _("round_n" if round_mode else "matchday_n", n=matchday.number) %}
+{% block title %}{{ label }} · {{ tournament.name }} · PadelScore{% endblock %}
 {% block content %}
 {% set player_count = matchday.courts.values()|map("length")|sum %}
 <div class="page-head">
   <div>
-    <p class="eyebrow"><a class="plain" href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · {{ tournament.rule_type }}</p>
-    <h1>{{ _("matchday_n", n=matchday.number) }}</h1>
-    <div class="muted">{{ matchday.played_on }}</div>
+    <p class="eyebrow"><a class="plain" href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · {{ RULE_ICONS.get(tournament.rule_code, "") }} {{ tournament.rule_type }}</p>
+    <h1>{{ label }}</h1>
+    <div class="muted">📅 {{ matchday.played_on }}</div>
   </div>
   <div class="stats">
+    {% if round_mode and tournament.points_per_match %}<div><strong>{{ tournament.points_per_match }}</strong> 🎯</div>{% endif %}
     <div><strong>{{ matchday.courts|length }}</strong> 🎾</div>
     <div><strong>{{ player_count }}</strong> 👥</div>
   </div>
@@ -16,7 +20,13 @@
 {% set current = matchday.id %}
 {% include "_matchday_tabs.html" %}
 {% if editor %}
-<p><a class="button" href="/matchdays/{{ matchday.id }}/courts">{{ _("assign_courts") }}</a></p>
+<p class="inline">
+  {% if tournament.rule_code == MANUAL %}
+  <a class="button" href="/matches/new?matchday={{ matchday.id }}">{{ _("new_set") }}</a>
+  {% else %}
+  <a class="button" href="/matchdays/{{ matchday.id }}/courts">{{ _("assign_courts") }}</a>
+  {% endif %}
+</p>
 {% endif %}
 
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
@@ -32,11 +42,17 @@
   {% set sets_here = sets|selectattr("court", "equalto", court)|list %}
   <ul class="matches">{% for m in sets_here %}{% include "_match_row.html" %}{% endfor %}</ul>
   {% set played_here = sets_here|rejectattr("team_a_games", "none")|list %}
-  {% if played_here|length < 3 %}<p class="muted">{{ _("sets_recorded", n=played_here|length) }}</p>{% endif %}
+  {% if liga and played_here|length < 3 %}<p class="muted">📝 {{ _("sets_recorded", n=played_here|length) }}</p>{% endif %}
   <div class="scroll">{% include "_court_table.html" %}</div>
 </section>
 {% endfor %}
 
+{% if resting %}
+<h2>{{ _("resting") }}</h2>
+<ul class="chips">{% for name in resting %}<li>🛋️ {{ name }}</li>{% endfor %}</ul>
+{% endif %}
+
+{% if liga %}
 <h2>{{ _("court_changes") }}</h2>
 <p class="muted">{{ _("per_draw_move") }}
   {% if move == 1 %}<strong>{{ _("n_players", n=1) }}</strong> · <a href="?move=2">{{ _("n_players", n=2) }}</a>{% else %}<a href="?move=1">{{ _("n_players", n=1) }}</a> · <strong>{{ _("n_players", n=2) }}</strong>{% endif %}
@@ -50,19 +66,30 @@
   </li>
   {% endfor %}
 </ul>
+{% endif %}
 {% if editor and next_number %}
 <form method="get" action="/tournaments/{{ tournament.id }}/matchdays/new" class="inline next-matchday">
-  <input type="hidden" name="move" value="{{ move }}">
-  <input type="date" name="played_on" value="{{ next_date }}" aria-label="{{ _('date') }}" required>
-  <button type="submit">{{ _("new_matchday_button", n=next_number) }}</button>
+  {% if liga %}<input type="hidden" name="move" value="{{ move }}">{% endif %}
+  <input type="date" name="played_on" value="{{ next_date if liga else matchday.played_on }}" aria-label="{{ _('date') }}" required>
+  <button type="submit">{{ _("new_round_button" if round_mode else "new_matchday_button", n=next_number) }}</button>
 </form>
-<p class="muted">{{ _("new_matchday_hint", n=move) }}</p>
+{% if liga %}<p class="muted">{{ _("new_matchday_hint", n=move) }}</p>{% endif %}
 {% endif %}
 
-<p class="muted">{{ _("places_note", url="/rules") }}</p>
-<p class="muted">{{ _("absent_note") }}</p>
+{% if round_mode %}
+<p class="muted">{{ _(tournament.rule_code ~ "_note") }} {{ _("points_ranking_note") }}</p>
+{% elif tournament.rule_code == MANUAL %}
+<p class="muted">{{ _("manual_note") }}</p>
+{% else %}
+<p class="muted">ℹ️ {{ _("places_note", url="/rules") }}</p>
+{% endif %}
+<p class="muted">🚫 {{ _("absent_note") }}</p>
+{% else %}
+{% if tournament.rule_code == MANUAL %}
+<p class="empty">{{ _("no_sets_record", url="/matches/new?matchday=%d"|format(matchday.id)) }}</p>
 {% else %}
 <p class="empty">{{ _("no_courts_yet", url="/matchdays/%d/courts"|format(matchday.id)) }}</p>
+{% endif %}
 {% endif %}
 {% if editor %}
 <form method="post" action="/matchdays/{{ matchday.id }}/delete" class="danger-zone"

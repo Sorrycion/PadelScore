@@ -9,7 +9,11 @@ Built with Python, [FastAPI](https://fastapi.tiangolo.com/), Jinja2 templates an
 Scoring follows the league rules in [`docs/REGLAMENTO.md`](docs/REGLAMENTO.md), also shown on the **Rules** page.
 
 - **Tournaments (leagues)** are played over **matchdays** (*jornadas*), normally 6, one per week.
-- **Rules types:** each tournament has a rules type (table `rule_types`); for now there is one, **Liga de amigos score**, used by all tournaments.
+- **Rules types** (table `rule_types`), chosen when creating a tournament:
+  - **Liga de amigos score**: matchdays with courts of 4, three sets per court (rotating partners), points per set (10 / 6 / 9 tie), court changes.
+  - **Americano**: choose the players and the points per match (16/21/24/32). Each round has one match per court; partners rotate so everyone plays with everyone (rests rotate when the count isn't a multiple of 4). Each player scores the points their pair won; ranking by points, then difference, then wins.
+  - **Mexicano**: like Americano, but round 1 is a draw and later rounds follow the ranking (1st+3rd vs 2nd+4th on court 1, and so on).
+  - **Manual individual**: a matchday is just a date; each set is created by hand (court and pairs), scored like the Liga.
 - **Absences:** on a matchday page a player can be marked absent. Their sets stay the same (a substitute plays), but they score 0 that matchday, win or lose, and it doesn't count as played.
 - **Courts:** *Add matchday* opens a draft: from matchday 2 on it first asks whether 1 or 2 players move up and down per court (court 1's best and the last court's worst stay), then suggests the courts from the previous matchday. Move players, add or remove courts, and press **Save matchday**: only then are the matchday and each court's 3 sets saved (every player partnering each of the other three once). Cancelling saves nothing.
 - **Sets:** created sets are *pending* until their games are entered, right on the matchday page. Any score can be entered (a set may be cut short); a tied set gives no one the set-won point. Sets can also be added one by one, edited, deleted and filtered by tournament or player. A court that already has results keeps its players.

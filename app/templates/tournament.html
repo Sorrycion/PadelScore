@@ -1,15 +1,17 @@
 {% extends "base.html" %}
 {% block title %}{{ tournament.name }} · PadelScore{% endblock %}
 {% block content %}
+{% set round_mode = tournament.rule_code in ROUND_MODES %}
 <div class="page-head">
   <div>
-    <p class="eyebrow"><a class="plain" href="/rules">{{ tournament.rule_type }}</a></p>
+    <p class="eyebrow"><a class="plain" href="/rules">{{ RULE_ICONS.get(tournament.rule_code, "") }} {{ tournament.rule_type }}</a></p>
     <h1>{{ tournament.name }}</h1>
-    <div class="muted">{{ tournament.held_on }}</div>
+    <div class="muted">📅 {{ tournament.held_on }}</div>
   </div>
   <div class="stats">
-    <div><strong>{{ results|length }}</strong> 📅</div>
-    <div><strong>{{ standings|length }}</strong> 👥</div>
+    {% if round_mode and tournament.points_per_match %}<div><strong>{{ tournament.points_per_match }}</strong> 🎯</div>{% endif %}
+    <div><strong>{{ results|length }}</strong> {{ "🔁" if round_mode else "📅" }}</div>
+    <div><strong>{{ participants|length if participants else standings|length }}</strong> 👥</div>
   </div>
 </div>
 {% include "_matchday_tabs.html" %}
@@ -18,13 +20,23 @@
 {% if editor %}
 <form method="get" action="/tournaments/{{ tournament.id }}/matchdays/new" class="inline">
   <input type="date" name="played_on" value="{{ today }}" aria-label="{{ _('date') }}" required>
-  <button type="submit">{{ _("add_matchday_n", n=results|length + 1) }}</button>
+  <button type="submit">{{ _("add_round_n" if round_mode else "add_matchday_n", n=results|length + 1) }}</button>
 </form>
 {% endif %}
-{% if results|length >= 6 %}<p class="muted">{{ _("six_matchdays") }}</p>{% endif %}
+{% if tournament.rule_code == "liga_amigos" and results|length >= 6 %}<p class="muted">{{ _("six_matchdays") }}</p>{% endif %}
+{% if tournament.rule_code == "americano" %}<p class="muted">{{ _("americano_note") }} {{ _("points_ranking_note") }}</p>
+{% elif tournament.rule_code == "mexicano" %}<p class="muted">{{ _("mexicano_note") }} {{ _("points_ranking_note") }}</p>
+{% elif tournament.rule_code == MANUAL %}<p class="muted">{{ _("manual_note") }}</p>{% endif %}
 
 <h2>{{ _("standings") }}</h2>
 {% include "_standings.html" %}
+
+{% if participants %}
+<h2>{{ _("tournament_players") }}</h2>
+<ul class="chips">
+  {% for p in participants %}<li><a class="plain" href="/players/{{ p.id }}">👤 {{ p.name }}</a></li>{% endfor %}
+</ul>
+{% endif %}
 
 {% if editor %}
 <form method="post" action="/tournaments/{{ tournament.id }}/delete" class="danger-zone"

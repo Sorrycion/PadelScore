@@ -6,27 +6,53 @@
 {% if editor %}
 <details class="card" id="new-tournament" {% if error or not tournaments %}open{% endif %}>
   <summary>{{ _("create_tournament") }}</summary>
-  <form method="post" action="/tournaments" class="stack">
+  <form method="post" action="/tournaments" class="stack" id="tournament-form">
     <label>{{ _("tournament_name") }} <input name="name" required></label>
     <label>{{ _("date") }} <input type="date" name="held_on" value="{{ today }}" required></label>
     <label>{{ _("rule_type") }}
-      <select name="rule_type_id" required>
-        {% for r in rule_types %}<option value="{{ r.id }}" {% if loop.first %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
+      <select name="rule_type_id" id="rule-type" required>
+        {% for r in rule_types %}<option value="{{ r.id }}" data-code="{{ r.code }}" {% if loop.first %}selected{% endif %}>{{ RULE_ICONS.get(r.code, "") }} {{ r.name }}</option>{% endfor %}
       </select>
     </label>
+    {# Only for Americano / Mexicano: the match target and who plays. #}
+    <div class="round-only stack" hidden>
+      <label>{{ _("points_per_match") }}
+        <select name="points_per_match">
+          {% for n in (16, 21, 24, 32) %}<option value="{{ n }}" {% if n == 24 %}selected{% endif %}>{{ n }}</option>{% endfor %}
+        </select>
+      </label>
+      <fieldset class="player-picks">
+        <legend>{{ _("tournament_players") }}</legend>
+        <p class="muted">{{ _("tournament_players_hint") }}</p>
+        {% for p in players %}
+        <label class="check"><input type="checkbox" name="players" value="{{ p.id }}"> {{ p.name }}</label>
+        {% endfor %}
+      </fieldset>
+    </div>
     <button type="submit">{{ _("add_tournament") }}</button>
   </form>
 </details>
 <a class="button fab" href="#new-tournament"
-   onclick="var d = document.getElementById('new-tournament'); d.open = true; d.querySelector('input').focus();">+ {{ _("create_tournament") }}</a>
+   onclick="var d = document.getElementById('new-tournament'); d.open = true; d.querySelector('input').focus();">{{ _("create_tournament") }}</a>
+<script>
+  (function () {
+    var select = document.getElementById("rule-type"), extra = document.querySelector(".round-only");
+    var rounds = {{ ROUND_MODES|list|tojson }};
+    function update() {
+      extra.hidden = rounds.indexOf(select.selectedOptions[0].dataset.code) < 0;
+    }
+    select.addEventListener("change", update);
+    update();
+  })();
+</script>
 {% endif %}
 {% if tournaments %}
 <ul class="cards">
   {% for t in tournaments %}
   <li><a class="t-card" href="/tournaments/{{ t.id }}">
-    <div class="top"><span>{{ t.rule_type }}</span><span>{{ t.held_on }}</span></div>
+    <div class="top"><span>{{ RULE_ICONS.get(t.rule_code, "") }} {{ t.rule_type }}</span><span>📅 {{ t.held_on }}</span></div>
     <div class="name">{{ t.name }}</div>
-    <div class="meta">{{ _("n_players_bold", n=t.players) }} · {{ _("n_matchdays_bold", n=t.matchdays) }}</div>
+    <div class="meta">👥 {{ _("n_players_bold", n=t.players) }} · {{ "🔁" if t.rule_code in ROUND_MODES else "📅" }} {{ _("n_rounds_bold" if t.rule_code in ROUND_MODES else "n_matchdays_bold", n=t.matchdays) }}</div>
   </a></li>
   {% endfor %}
 </ul>

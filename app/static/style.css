@@ -174,6 +174,16 @@ form.move-question .inline { display: flex; gap: 10px; }
 .form-actions { display: flex; gap: 16px; align-items: center; }
 label.date-field { max-width: 14rem; }
 
+/* --- Chips (players, resting), tournament player picks, emoji helpers --- */
+ul.chips { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+ul.chips li { background: var(--card); border-radius: 999px; padding: 6px 14px; box-shadow: var(--shadow); }
+fieldset.player-picks { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+fieldset.player-picks .muted { grid-column: 1 / -1; }
+label.check { display: flex !important; align-items: center; gap: 8px; }
+.tabs .done { font-size: .8rem; }
+.error::before { content: "⚠️ "; }
+form.filters select { flex: 1 1 180px; }
+
 /* --- Rules --- */
 .rules { background: var(--card); padding: 4px 20px 12px; border-radius: var(--radius); box-shadow: var(--shadow);
          line-height: 1.55; }

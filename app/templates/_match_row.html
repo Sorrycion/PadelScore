@@ -32,5 +32,5 @@
     {% endif %}
   </div>
   {% endif %}
-  <a class="chip {% if pending %}pending{% endif %}" href="/matchdays/{{ m.matchday_id }}">{% if not score_inline %}{{ _("matchday_short", n=m.matchday) }} · {% endif %}{{ _("court_n", n=m.court) }}</a>
+  <a class="chip {% if pending %}pending{% endif %}" href="/matchdays/{{ m.matchday_id }}">{% if pending %}⏳ {% endif %}{% if not score_inline %}{{ _("round_short" if m.rule_code in ROUND_MODES else "matchday_short", n=m.matchday) }} · {% endif %}{{ _("court_n", n=m.court) }}</a>
 </li>

@@ -1,6 +1,6 @@
 {# One court's placings on a matchday. Needs: court, rows. #}
 <table class="court">
-  <thead><tr><th>#</th><th>{{ _("player") }}</th><th title="{{ _('games_diff_title') }}">{{ _("games_diff") }}</th><th>{{ _("sets_won") }}</th><th>{{ _("pts") }}</th></tr></thead>
+  <thead><tr><th>#</th><th>👤 {{ _("player") }}</th>{% if tournament.rule_code in ROUND_MODES %}<th>{{ _("points_diff") }}</th><th>{{ _("wins") }}</th>{% else %}<th title="{{ _('games_diff_title') }}">{{ _("games_diff") }}</th><th>{{ _("sets_won") }}</th>{% endif %}<th>🎯 {{ _("pts") }}</th></tr></thead>
   <tbody>
   {% for r in rows %}
     <tr>

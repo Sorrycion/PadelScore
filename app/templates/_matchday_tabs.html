@@ -1,10 +1,13 @@
-{# Numbered tabs for a tournament's matchdays. Needs: tournament, results; optional current (matchday id). #}
+{# Numbered tabs for a tournament's matchdays (rounds in Americano / Mexicano), marked
+   ✅ when all their sets have a result. Needs: tournament, results; optional current. #}
+{% set round_mode = tournament.rule_code in ROUND_MODES %}
 {% if results or editor %}
-<nav class="tabs" aria-label="{{ _('matchdays') }}">
+<nav class="tabs" aria-label="{{ _('rounds' if round_mode else 'matchdays') }}">
   {% for md in results %}
-  <a href="/matchdays/{{ md.id }}" {% if md.id == current %}class="active" aria-current="page"{% endif %} title="{{ _('matchday_n', n=md.number) }} · {{ md.played_on }}">{{ md.number }}</a>
+  {% set done = md.sets and not (md.sets|selectattr("team_a_games", "none")|list) %}
+  <a href="/matchdays/{{ md.id }}" {% if md.id == current %}class="active" aria-current="page"{% endif %} title="{{ _('round_n' if round_mode else 'matchday_n', n=md.number) }} · {{ md.played_on }}{% if done %} · {{ _('completed') }}{% endif %}">{{ md.number }}{% if done %} <span class="done">✅</span>{% elif md.sets %} <span class="done">⏳</span>{% endif %}</a>
   {% endfor %}
-  {% if editor %}<a class="add" href="/tournaments/{{ tournament.id }}/matchdays/new" title="{{ _('add_matchday_n', n=results|length + 1) }}">+</a>{% endif %}
+  {% if editor %}<a class="add" href="/tournaments/{{ tournament.id }}/matchdays/new" title="{{ _('add_round_n' if round_mode else 'add_matchday_n', n=results|length + 1) }}">➕</a>{% endif %}
 </nav>
-<p class="tabs-label">{{ _("matchdays") }}</p>
+<p class="tabs-label">{{ _("rounds" if round_mode else "matchdays") }}</p>
 {% endif %}

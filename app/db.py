@@ -17,14 +17,27 @@ CREATE TABLE IF NOT EXISTS rule_types (
     code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL UNIQUE
 );
-INSERT OR IGNORE INTO rule_types (id, code, name) VALUES (1, 'liga_amigos', 'Liga de amigos score');
+INSERT OR IGNORE INTO rule_types (id, code, name) VALUES
+    (1, 'liga_amigos', 'Liga de amigos score'),
+    (2, 'americano', 'Americano'),
+    (3, 'mexicano', 'Mexicano'),
+    (4, 'manual', 'Manual individual');
 
 CREATE TABLE IF NOT EXISTS tournaments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     -- SQLite has no real date type: store ISO 'YYYY-MM-DD' and reject anything else.
     held_on DATE NOT NULL CHECK (held_on IS date(held_on)),
-    rule_type_id INTEGER NOT NULL DEFAULT 1 REFERENCES rule_types(id)
+    rule_type_id INTEGER NOT NULL DEFAULT 1 REFERENCES rule_types(id),
+    -- Americano / Mexicano: the points a match is played to (16, 21, 24, 32...).
+    points_per_match INTEGER CHECK (points_per_match IS NULL OR points_per_match > 0)
+);
+
+-- Who plays an Americano or Mexicano tournament (the rounds are drawn among them).
+CREATE TABLE IF NOT EXISTS tournament_players (
+    tournament_id INTEGER NOT NULL REFERENCES tournaments(id),
+    player_id INTEGER NOT NULL REFERENCES players(id),
+    PRIMARY KEY (tournament_id, player_id)
 );
 
 -- A matchday (jornada) of a tournament: one day of play.
@@ -83,17 +96,19 @@ def init_db():
 
 def add_rule_types(conn):
     """Databases made before rule types: every tournament gets rule type 1 (Liga de
-    amigos score), the rules it was played with."""
+    amigos score), the rules it was played with. Also adds points_per_match."""
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(tournaments)")}
-    if "rule_type_id" in columns:
-        return
-    # SQLite only adds a column with REFERENCES and a non-NULL default while foreign
-    # keys are off.
-    conn.execute("PRAGMA foreign_keys = OFF")
-    conn.execute("ALTER TABLE tournaments ADD COLUMN "
-                 "rule_type_id INTEGER NOT NULL DEFAULT 1 REFERENCES rule_types(id)")
-    conn.commit()
-    conn.execute("PRAGMA foreign_keys = ON")
+    if "rule_type_id" not in columns:
+        # SQLite only adds a column with REFERENCES and a non-NULL default while
+        # foreign keys are off.
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("ALTER TABLE tournaments ADD COLUMN "
+                     "rule_type_id INTEGER NOT NULL DEFAULT 1 REFERENCES rule_types(id)")
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = ON")
+    if "points_per_match" not in columns:
+        conn.execute("ALTER TABLE tournaments ADD COLUMN points_per_match INTEGER "
+                     "CHECK (points_per_match IS NULL OR points_per_match > 0)")
 
 
 def allow_pending_sets(conn):

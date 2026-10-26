@@ -1,4 +1,5 @@
 """PadelScore web app."""
+import hashlib
 import time
 from collections import Counter
 from contextlib import asynccontextmanager
@@ -12,11 +13,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import auth, db
+from . import auth, db, rounds
 from .auth import LoginRequired, require_editor
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
-from .scoring import (SCORING, ScoreError, check_set, court_moves, court_rotation, is_played,
-                      next_courts, tournament_results)
+from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
+                      court_rotation, is_played, next_courts)
 
 BASE = Path(__file__).parent
 RULES = BASE.parent / "docs" / "REGLAMENTO.md"
@@ -33,6 +34,13 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates",
                             context_processors=[i18n_context, auth.auth_context])
 EDIT = [Depends(require_editor)]  # routes that change data need the club password
+MANUAL = "manual"  # rule type whose sets are all made by hand
+templates.env.globals.update(
+    ROUND_MODES=ROUND_MODES, MANUAL=MANUAL,
+    RULE_ICONS={"liga_amigos": "🏅", "americano": "🔁", "mexicano": "🇲🇽", "manual": "✍️"},
+    # Changes whenever the stylesheet does, so phones don't keep an old cached copy.
+    css_version=hashlib.sha256((BASE / "static" / "style.css").read_bytes()).hexdigest()[:10],
+)
 
 
 @app.exception_handler(LoginRequired)
@@ -105,9 +113,12 @@ def all_tournaments(conn):
         GROUP BY d.tournament_id
         """
     ).fetchall())
-    return [{**t, "players": players.get(t["id"], 0)} for t in conn.execute(
+    chosen = dict(conn.execute(
+        "SELECT tournament_id, COUNT(*) FROM tournament_players GROUP BY tournament_id"
+    ).fetchall())
+    return [{**t, "players": chosen.get(t["id"]) or players.get(t["id"], 0)} for t in conn.execute(
         """
-        SELECT t.*, r.name AS rule_type, COUNT(d.id) AS matchdays
+        SELECT t.*, r.name AS rule_type, r.code AS rule_code, COUNT(d.id) AS matchdays
         FROM tournaments t
         JOIN rule_types r ON r.id = t.rule_type_id
         LEFT JOIN matchdays d ON d.tournament_id = t.id
@@ -117,13 +128,24 @@ def all_tournaments(conn):
     )]
 
 
-def all_matchdays(conn):
+def all_matchdays(conn, tournament_id=None):
     return conn.execute(
         """
-        SELECT d.*, t.name AS tournament
-        FROM matchdays d JOIN tournaments t ON t.id = d.tournament_id
+        SELECT d.*, t.name AS tournament, r.code AS rule_code
+        FROM matchdays d
+        JOIN tournaments t ON t.id = d.tournament_id
+        JOIN rule_types r ON r.id = t.rule_type_id
+        WHERE ? IS NULL OR d.tournament_id = ?
         ORDER BY d.played_on DESC, t.name, d.number DESC
-        """
+        """, (tournament_id, tournament_id)
+    ).fetchall()
+
+
+def tournament_players(conn, tournament_id):
+    """The players of an Americano / Mexicano tournament, by name."""
+    return conn.execute(
+        "SELECT p.* FROM tournament_players tp JOIN players p ON p.id = tp.player_id "
+        "WHERE tp.tournament_id = ? ORDER BY p.name", (tournament_id,)
     ).fetchall()
 
 
@@ -138,13 +160,14 @@ def set_rows(conn, tournament_id=None, matchday_id=None, player_id=None, limit=N
     """Sets (rows of `matches`) with player, matchday and tournament names."""
     sql = """
         SELECT m.id, m.matchday_id, d.number AS matchday, d.played_on,
-               d.tournament_id, t.name AS tournament, m.court,
+               d.tournament_id, t.name AS tournament, r.code AS rule_code, m.court,
                m.team_a_games, m.team_b_games, m.winner,
                m.a1 AS a1_id, pa1.name AS a1, m.a2 AS a2_id, pa2.name AS a2,
                m.b1 AS b1_id, pb1.name AS b1, m.b2 AS b2_id, pb2.name AS b2
         FROM matches m
         JOIN matchdays d ON d.id = m.matchday_id
         JOIN tournaments t ON t.id = d.tournament_id
+        JOIN rule_types r ON r.id = t.rule_type_id
         JOIN players pa1 ON pa1.id = m.a1
         JOIN players pa2 ON pa2.id = m.a2
         JOIN players pb1 ON pb1.id = m.b1
@@ -197,8 +220,9 @@ def load_results(conn, tournament_id):
 def home(request: Request):
     with db.connect() as conn:
         latest = conn.execute(
-            "SELECT * FROM tournaments ORDER BY held_on DESC, id DESC LIMIT 1"
+            "SELECT id FROM tournaments ORDER BY held_on DESC, id DESC LIMIT 1"
         ).fetchone()
+        latest = latest and get_tournament(conn, latest["id"])
         results, standings = load_results(conn, latest["id"]) if latest else ([], [])
         return templates.TemplateResponse(request, "index.html", {
             "tournament": latest,
@@ -258,24 +282,39 @@ def tournaments_page(request: Request, error: str | None = None):
         return templates.TemplateResponse(request, "tournaments.html", {
             "tournaments": all_tournaments(conn), "error": error,
             "rule_types": all_rule_types(conn),
+            "players": all_players(conn),
             "today": date.today().isoformat(),
         })
 
 
 @app.post("/tournaments", dependencies=EDIT)
 def add_tournament(name: str = Form(...), held_on: str = Form(""),
-                   rule_type_id: str = Form("1")):
+                   rule_type_id: str = Form("1"), points_per_match: str = Form(""),
+                   players: list[int] = Form([])):
     name, held_on, rule_type_id = name.strip(), parse_date(held_on), opt_int(rule_type_id)
     if not name:
         return redirect("/tournaments?error=err_name_required")
     if held_on is None:
         return redirect("/tournaments?error=err_invalid_date")
     with db.connect() as conn:
-        if not conn.execute("SELECT 1 FROM rule_types WHERE id = ?", (rule_type_id,)).fetchone():
+        rule = conn.execute("SELECT * FROM rule_types WHERE id = ?", (rule_type_id,)).fetchone()
+        if not rule:
             return redirect("/tournaments?error=err_rule_type")
-        conn.execute("INSERT INTO tournaments (name, held_on, rule_type_id) VALUES (?, ?, ?)",
-                     (name, held_on, rule_type_id))
-    return redirect("/tournaments")
+        players = sorted(set(players) & {p["id"] for p in all_players(conn)})
+        target = None
+        if rule["code"] in ROUND_MODES:  # rounds are drawn among the chosen players
+            if len(players) < 4:
+                return redirect("/tournaments?error=err_round_players")
+            target = opt_int(points_per_match)
+            if target is not None and target < 1:
+                target = None
+        tournament_id = conn.execute(
+            "INSERT INTO tournaments (name, held_on, rule_type_id, points_per_match) "
+            "VALUES (?, ?, ?, ?)", (name, held_on, rule_type_id, target)).lastrowid
+        if rule["code"] in ROUND_MODES:
+            conn.executemany("INSERT INTO tournament_players (tournament_id, player_id) "
+                             "VALUES (?, ?)", [(tournament_id, p) for p in players])
+    return redirect(f"/tournaments/{tournament_id}")
 
 
 @app.get("/tournaments/{tournament_id}", response_class=HTMLResponse)
@@ -287,6 +326,7 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
             "tournament": tournament,
             "results": results,
             "standings": standings,
+            "participants": tournament_players(conn, tournament_id),
             "today": date.today().isoformat(),
             "error": error,
         })
@@ -302,6 +342,7 @@ def delete_tournament(tournament_id: int):
                 f"DELETE FROM {table} WHERE matchday_id IN "
                 "(SELECT id FROM matchdays WHERE tournament_id = ?)", (tournament_id,))
         conn.execute("DELETE FROM matchdays WHERE tournament_id = ?", (tournament_id,))
+        conn.execute("DELETE FROM tournament_players WHERE tournament_id = ?", (tournament_id,))
         conn.execute("DELETE FROM tournaments WHERE id = ?", (tournament_id,))
     return redirect("/tournaments")
 
@@ -315,11 +356,16 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
         tournament = get_tournament(conn, matchday["tournament_id"])
         results, _ = load_results(conn, tournament["id"])
         result = next(r for r in results if r["id"] == matchday_id)
+        sets = set_rows(conn, matchday_id=matchday_id)
+        playing = {s[k + "_id"] for s in sets for k in ("a1", "a2", "b1", "b2")}
+        resting = [p["name"] for p in tournament_players(conn, tournament["id"])
+                   if p["id"] not in playing] if sets else []
         return templates.TemplateResponse(request, "matchday.html", {
             "tournament": tournament,
             "matchday": result,
             "results": results,
-            "sets": set_rows(conn, matchday_id=matchday_id),
+            "sets": sets,
+            "resting": resting,
             "moves": court_moves(result["courts"], move),
             "move": move,
             "error": error,
@@ -429,12 +475,41 @@ def check_courts(conn, courts, _):
     return chosen, None
 
 
-def add_court_sets(conn, matchday_id, court, players):
-    """The court's three sets, every player partnering each of the others once."""
-    for (a1, a2), (b1, b2) in court_rotation(players):
+def court_sets(players, code):
+    """A court's sets: in the Liga three, every player partnering each of the others
+    once; in an Americano / Mexicano round one match, the first two against the last two."""
+    if code in ROUND_MODES:
+        return [(tuple(players[:2]), tuple(players[2:]))]
+    return court_rotation(players)
+
+
+def same_court(old, new, code):
+    """Whether a court keeps its sets: the same four players (the same pairs in an
+    Americano / Mexicano round)."""
+    if old is None:
+        return False
+    if code in ROUND_MODES:
+        return {frozenset(old[:2]), frozenset(old[2:])} == {frozenset(new[:2]), frozenset(new[2:])}
+    return set(old) == set(new)
+
+
+def add_court_sets(conn, matchday_id, court, players, code):
+    for (a1, a2), (b1, b2) in court_sets(players, code):
         conn.execute(
             "INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
             "VALUES (?, ?, ?, ?, ?, ?)", (matchday_id, court, a1, a2, b1, b2))
+
+
+def draw_round(conn, tournament, number):
+    """The suggested courts of an Americano / Mexicano round: (courts, resting ids)."""
+    players = [p["id"] for p in tournament_players(conn, tournament["id"])]
+    results, standings = load_results(conn, tournament["id"])
+    history = [[ids for _, ids in sorted(courts_of(md["sets"])[0].items()) if ids]
+               for md in results if md["number"] < number and md["sets"]]
+    seed = tournament["id"] * 1000 + number  # the same suggestion on every reload
+    if tournament["rule_code"] == "americano":
+        return rounds.americano_round(players, history, seed)
+    return rounds.mexicano_round(players, history, [r["id"] for r in standings], seed)
 
 
 def move_choice(previous, move):
@@ -450,7 +525,8 @@ def move_urls(**params):
 
 
 def render_courts(request, conn, tournament, courts, *, matchday=None, number=None,
-                  played_on=None, previous=None, move=None, error=None, status_code=200):
+                  played_on=None, previous=None, move=None, resting=(), error=None,
+                  status_code=200):
     """The courts screen: for a new matchday (nothing is saved until the form is sent)
     or to change the courts of an existing one."""
     return templates.TemplateResponse(request, "courts.html", {
@@ -458,6 +534,7 @@ def render_courts(request, conn, tournament, courts, *, matchday=None, number=No
         "number": matchday["number"] if matchday else number,
         "played_on": played_on, "players": all_players(conn),
         "previous": previous, "move": move,
+        "resting": [p["name"] for p in all_players(conn) if p["id"] in resting],
         "move_urls": move_urls(**({} if matchday else {"played_on": played_on})),
         "action": f"/matchdays/{matchday['id']}/courts" if matchday
                   else f"/tournaments/{tournament['id']}/matchdays",
@@ -478,6 +555,13 @@ def new_matchday_page(request: Request, tournament_id: int, played_on: str = "",
         if played_on is None:
             return redirect(f"/tournaments/{tournament_id}?error=err_invalid_date")
         number = next_number(conn, tournament_id)
+        if tournament["rule_code"] == MANUAL:  # only the date: sets are added by hand
+            return render_courts(request, conn, tournament, [], number=number,
+                                 played_on=played_on, move=1)
+        if tournament["rule_code"] in ROUND_MODES:
+            courts, resting = draw_round(conn, tournament, number)
+            return render_courts(request, conn, tournament, courts, number=number,
+                                 played_on=played_on, move=1, resting=resting)
         previous = previous_matchday(conn, tournament_id, number)
         move = move_choice(previous, opt_int(move))
         courts = suggest_courts(conn, previous, move) if move else []
@@ -495,21 +579,23 @@ async def add_matchday(request: Request, tournament_id: int):
         tournament = get_tournament(conn, tournament_id)
         played_on = parse_date(form.get("played_on", ""))
         number = next_number(conn, tournament_id)
-        chosen, error = check_courts(conn, courts, _)
+        manual = tournament["rule_code"] == MANUAL
+        chosen, error = ([], None) if manual else check_courts(conn, courts, _)
         if played_on is None:
             error = _("err_invalid_date")
         if error:
             return render_courts(
                 request, conn, tournament, courts, number=number,
                 played_on=form.get("played_on", ""), move=opt_int(form.get("move")),
-                previous=previous_matchday(conn, tournament_id, number),
+                previous=None if tournament["rule_code"] in ROUND_MODES
+                else previous_matchday(conn, tournament_id, number),
                 error=error, status_code=400)
         matchday_id = conn.execute(
             "INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
             (tournament_id, number, played_on),
         ).lastrowid
         for n, ids in enumerate(chosen, 1):
-            add_court_sets(conn, matchday_id, n, ids)
+            add_court_sets(conn, matchday_id, n, ids, tournament["rule_code"])
     return redirect(f"/matchdays/{matchday_id}")
 
 
@@ -528,10 +614,16 @@ def courts_page(request: Request, matchday_id: int, move: str | None = None):
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
         tournament = get_tournament(conn, matchday["tournament_id"])
+        if tournament["rule_code"] == MANUAL:  # no courts to assign: add sets by hand
+            return redirect(f"/matches/new?matchday={matchday_id}")
         players, _ = courts_of(set_rows(conn, matchday_id=matchday_id))
         if players:
             courts = [ids or [None] * 4 for _, ids in sorted(players.items())]
             return render_courts(request, conn, tournament, courts, matchday=matchday)
+        if tournament["rule_code"] in ROUND_MODES:
+            courts, resting = draw_round(conn, tournament, matchday["number"])
+            return render_courts(request, conn, tournament, courts, matchday=matchday,
+                                 move=1, resting=resting)
         previous = previous_matchday(conn, tournament["id"], matchday["number"])
         move = move_choice(previous, opt_int(move))
         courts = suggest_courts(conn, previous, move) if move else []
@@ -550,9 +642,10 @@ async def save_courts(request: Request, matchday_id: int):
         tournament = get_tournament(conn, matchday["tournament_id"])
         chosen, error = check_courts(conn, courts, _)
         existing, played = courts_of(set_rows(conn, matchday_id=matchday_id))
+        code = tournament["rule_code"]
         changed = sorted(c for c in existing
-                         if not chosen or c > len(chosen) or existing[c] is None
-                         or set(existing[c]) != set(chosen[c - 1]))
+                         if not chosen or c > len(chosen)
+                         or not same_court(existing[c], chosen[c - 1], code))
         if not error:
             error = next((_("err_court_has_scores", n=c) for c in changed if c in played), None)
         if error:
@@ -563,7 +656,7 @@ async def save_courts(request: Request, matchday_id: int):
                          (matchday_id, c))
         for n, ids in enumerate(chosen, 1):
             if n not in existing or n in changed:
-                add_court_sets(conn, matchday_id, n, ids)
+                add_court_sets(conn, matchday_id, n, ids, code)
     return redirect(f"/matchdays/{matchday_id}")
 
 
@@ -615,6 +708,7 @@ def delete_player(player_id: int):
         if set_rows(conn, player_id=player_id, limit=1):
             return redirect(f"/players/{player_id}?error=err_player_has_sets")
         conn.execute("DELETE FROM absences WHERE player_id = ?", (player_id,))
+        conn.execute("DELETE FROM tournament_players WHERE player_id = ?", (player_id,))
         conn.execute("DELETE FROM players WHERE id = ?", (player_id,))
     return redirect("/players")
 
@@ -663,14 +757,21 @@ def player_page(request: Request, player_id: int, error: str | None = None):
 
 @app.get("/matches", response_class=HTMLResponse)
 def matches_page(request: Request, tournament: str | None = None,
-                 player: str | None = None):
-    tournament_id, player_id = opt_int(tournament), opt_int(player)
+                 matchday: str | None = None, player: str | None = None):
+    tournament_id, matchday_id = opt_int(tournament), opt_int(matchday)
+    player_id = opt_int(player)
     with db.connect() as conn:
+        matchdays = all_matchdays(conn, tournament_id)
+        if matchday_id not in {d["id"] for d in matchdays}:  # e.g. after changing tournament
+            matchday_id = None
         return templates.TemplateResponse(request, "matches.html", {
-            "matches": set_rows(conn, tournament_id=tournament_id, player_id=player_id),
+            "matches": set_rows(conn, tournament_id=tournament_id, matchday_id=matchday_id,
+                                player_id=player_id),
             "tournaments": all_tournaments(conn),
+            "matchdays": matchdays,
             "players": all_players(conn),
-            "filter": {"tournament": tournament_id, "player": player_id},
+            "filter": {"tournament": tournament_id, "matchday": matchday_id,
+                       "player": player_id},
         })
 
 

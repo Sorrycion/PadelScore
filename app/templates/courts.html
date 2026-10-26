@@ -1,5 +1,7 @@
 {% extends "base.html" %}
-{% set heading = _("assign_courts") if matchday else _("new_matchday_n", n=number) %}
+{% set round_mode = tournament.rule_code in ROUND_MODES %}
+{% set manual = tournament.rule_code == MANUAL %}
+{% set heading = _("assign_courts") if matchday else _("new_round_n" if round_mode else "new_matchday_n", n=number) %}
 {% block title %}{{ heading }} · {{ tournament.name }} · PadelScore{% endblock %}
 {# One court: four player selects, all named court-<n>. "__N__" is filled in by the script below. #}
 {% macro court_fieldset(n, ids) %}
@@ -16,9 +18,21 @@
 {% endmacro %}
 {% block content %}
 <h1>{{ heading }}</h1>
-<p class="muted"><a href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a>
-  {% if matchday %} · <a href="/matchdays/{{ matchday.id }}">{{ _("matchday_n", n=matchday.number) }}</a> · {{ matchday.played_on }}{% endif %}</p>
-{% if players|length < 4 %}
+<p class="muted"><a href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · {{ RULE_ICONS.get(tournament.rule_code, "") }} {{ tournament.rule_type }}
+  {% if matchday %} · <a href="/matchdays/{{ matchday.id }}">{{ _("round_n" if round_mode else "matchday_n", n=matchday.number) }}</a> · 📅 {{ matchday.played_on }}{% endif %}</p>
+{% if manual %}
+{# Manual tournaments: just the date; each set is added by hand afterwards. #}
+<p>{{ _("manual_new_hint") }}</p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post" action="{{ action }}" class="stack">
+  <label class="date-field">{{ _("date") }} <input type="date" name="played_on" value="{{ played_on }}" required></label>
+  <div class="inline form-actions">
+    <button type="submit">{{ _("save_matchday") }}</button>
+    <a href="/tournaments/{{ tournament.id }}">{{ _("cancel") }}</a>
+  </div>
+</form>
+
+{% elif players|length < 4 %}
 <p class="empty">{{ _("need_4_players", url="/players") }}</p>
 
 {% elif not move and not has_sets and not error %}
@@ -35,7 +49,8 @@
 <p><a href="/tournaments/{{ tournament.id }}">{{ _("cancel") }}</a></p>
 
 {% else %}
-<p>{{ _("assign_courts_hint") }}</p>
+<p>{{ _("round_hint") if round_mode else _("assign_courts_hint") }}</p>
+{% if resting %}<p class="muted">{{ _("resting") }}: {% for name in resting %}🛋️ {{ name }}{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
 {% if previous and move and not has_sets %}
 <p class="muted">{{ _("suggested_from", n=previous.number) }}
   {{ _("moves_per_court") }}
@@ -56,7 +71,7 @@
   </div>
   <button type="button" class="secondary" id="add-court">{{ _("add_court") }}</button>
   <div class="inline form-actions">
-    <button type="submit">{{ _("save_matchday") if not matchday else _("save_courts") }}</button>
+    <button type="submit">{{ _("save_courts") if matchday else _("save_round") if round_mode else _("save_matchday") }}</button>
     <a href="{{ '/matchdays/%d'|format(matchday.id) if matchday else '/tournaments/%d'|format(tournament.id) }}">{{ _("cancel") }}</a>
   </div>
 </form>

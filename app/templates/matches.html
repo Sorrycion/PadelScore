@@ -2,11 +2,17 @@
 {% block title %}{{ _("sets") }} · PadelScore{% endblock %}
 {% block content %}
 <h1>{{ _("sets") }}</h1>
-<form method="get" action="/matches" class="inline">
-  <select name="tournament">
+<form method="get" action="/matches" class="inline filters">
+  <select name="tournament" onchange="this.form.submit()">
     <option value="">{{ _("all_tournaments") }}</option>
     {% for t in tournaments %}
       <option value="{{ t.id }}" {% if filter.tournament == t.id %}selected{% endif %}>{{ t.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="matchday">
+    <option value="">{{ _("all_matchdays") }}</option>
+    {% for d in matchdays %}
+      <option value="{{ d.id }}" {% if filter.matchday == d.id %}selected{% endif %}>{% if not filter.tournament %}{{ d.tournament }} · {% endif %}{{ _("round_n" if d.rule_code in ROUND_MODES else "matchday_n", n=d.number) }} · {{ d.played_on }}</option>
     {% endfor %}
   </select>
   <select name="player">
@@ -16,11 +22,11 @@
     {% endfor %}
   </select>
   <button type="submit">{{ _("filter") }}</button>
-  {% if filter.tournament or filter.player %}<a href="/matches">{{ _("clear") }}</a>{% endif %}
+  {% if filter.tournament or filter.matchday or filter.player %}<a href="/matches">{{ _("clear") }}</a>{% endif %}
 </form>
 {% if matches %}
 <ul class="matches">{% for m in matches %}{% include "_match_row.html" %}{% endfor %}</ul>
-{% elif filter.tournament or filter.player %}
+{% elif filter.tournament or filter.matchday or filter.player %}
 <p class="empty">{{ _("no_sets_filter") }}</p>
 {% else %}
 <p class="empty">{{ _("no_sets_yet", url="/matches/new") }}</p>

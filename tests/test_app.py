@@ -321,7 +321,7 @@ def test_viewing_needs_no_password(locked):
     for url in ["/", "/tournaments", "/tournaments/1", "/matchdays/1", "/players", "/matches", "/rules"]:
         assert locked.get(url).status_code == 200, url
     page = locked.get("/tournaments").text
-    assert "Add tournament" not in page and "+ Courts" not in page and ">Log in<" in page
+    assert "Add tournament" not in page and 'href="/courts"' not in page and "Log in</a>" in page
 
 
 @pytest.mark.parametrize("method,url,data", [
@@ -363,7 +363,7 @@ def test_login_then_edit_then_logout(locked):
     assert r.status_code == 200 and str(r.url).endswith("/players") and "Add player" in r.text
     assert "Zed" in locked.post("/players", data={"name": "Zed"}).text
     assert locked.post("/matches", data=set_form((1, 2, 3, 4), 6, 4)).status_code == 200
-    assert ">Log out<" in locked.get("/").text
+    assert "Log out</button>" in locked.get("/").text
 
     locked.post("/logout")
     r = locked.post("/players", data={"name": "Yan"}, follow_redirects=False)
@@ -393,7 +393,8 @@ def test_stylesheet_link_works_behind_https(client):
     # Azure's front end talks plain HTTP to the app; an absolute http:// link would be
     # blocked by browsers on the https:// site.
     page = client.get("/", headers={"x-forwarded-proto": "https"}).text
-    assert '<link rel="stylesheet" href="/static/style.css">' in page
+    link = re.search(r'<link rel="stylesheet" href="(/static/style\.css\?v=\w+)">', page)
+    assert link and client.get(link.group(1)).status_code == 200
     assert client.get("/static/style.css").status_code == 200
 
 
@@ -667,7 +668,7 @@ def test_delete_matchday_needs_the_password(locked):
 
 def test_tournaments_have_a_rule_type(league):
     page = league.get("/tournaments").text
-    assert '<option value="1" selected>Liga de amigos score</option>' in page
+    assert re.search(r'<option value="1" data-code="liga_amigos" selected>[^<]*Liga de amigos score</option>', page)
     assert "Liga de amigos score" in league.get("/tournaments/1").text
     r = league.post("/tournaments", data={"name": "Otra", "held_on": "2026-11-01",
                                           "rule_type_id": "99"})
@@ -715,11 +716,11 @@ def test_mark_player_absent_on_a_matchday(league):
     assert standing_points(league.get("/tournaments/1").text, "Carlos") == 26
 
     r = league.post("/matchdays/1/absent/3")
-    assert r.status_code == 200 and ">Absent<" in r.text and "Mark present" in r.text
+    assert r.status_code == 200 and "🚫 Absent<" in r.text and "Mark present" in r.text
     assert standing_points(league.get("/tournaments/1").text, "Carlos") == 0
     assert standing_points(league.get("/tournaments/1").text, "Ana") == 26  # unchanged
     profile = league.get("/players/3").text
-    assert ">Absent<" in profile and "0 matchdays played" in profile
+    assert "🚫 Absent<" in profile and "0 matchdays played" in profile
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0] == 3  # same sets
 
@@ -747,11 +748,132 @@ def test_latest_matchday_offers_the_next_one(league):
     for match_id in range(1, 7):
         league.post(f"/matches/{match_id}/score", data={"team_a_games": "6", "team_b_games": "0"})
     page = league.get("/matchdays/1?move=2").text
-    assert "+ New matchday 2" in page and 'value="2026-10-30"' in page
+    assert "New matchday 2" in page and 'value="2026-10-30"' in page
     assert '<input type="hidden" name="move" value="2">' in page
     # The button opens the draft with those moves; nothing is saved yet.
     r = league.get("/tournaments/1/matchdays/new", params={"move": "2", "played_on": "2026-10-30"})
     assert "Suggested from matchday 1" in r.text and matchday_count() == 1
     # An older matchday doesn't offer it.
     add_matchday(1, "2026-10-30")
-    assert "+ New matchday" not in league.get("/matchdays/1").text
+    assert "New matchday" not in league.get("/matchdays/1").text
+
+
+# --- Americano, Mexicano and manual tournaments -------------------------------------
+
+from collections import Counter
+
+from app import rounds
+
+
+def play_rounds(make_round, players, count):
+    history = []
+    for n in range(count):
+        courts, resting = make_round(players, history, n)
+        playing = [p for c in courts for p in c]
+        assert sorted(playing + resting) == sorted(players)  # everyone plays or rests once
+        history.append(courts)
+    return history
+
+
+def test_americano_rotates_partners():
+    history = play_rounds(rounds.americano_round, list(range(1, 9)), 7)
+    partners = Counter(frozenset(pair) for courts in history for c in courts
+                       for pair in (c[:2], c[2:]))
+    assert all(len(courts) == 2 for courts in history)
+    assert max(partners.values()) <= 2 and len(partners) >= 24  # of the 28 possible pairs
+    first_three = Counter(frozenset(pair) for courts in history[:3] for c in courts
+                          for pair in (c[:2], c[2:]))
+    assert max(first_three.values()) == 1  # no repeated partner early on
+
+
+def test_rests_rotate_before_anyone_rests_twice():
+    players = list(range(1, 10))  # 9 players, 2 courts: one rests each round
+    history = play_rounds(rounds.americano_round, players, 9)
+    assert set(rounds.rests(players, history).values()) == {1}
+
+
+def test_mexicano_pairs_by_ranking():
+    players = list(range(1, 10))
+    ranking = [3, 1, 4, 5, 9, 2, 6, 8, 7]  # best first
+    # Round 1: 9 rested. Now the lowest ranked of the others rests; then 1st+3rd vs
+    # 2nd+4th on court 1, 5th+7th vs 6th+8th on court 2.
+    courts, resting = rounds.mexicano_round(players, [[[1, 2, 3, 4], [5, 6, 7, 8]]], ranking, seed=1)
+    assert resting == [7]
+    assert courts == [[3, 4, 1, 5], [9, 6, 2, 8]]
+    # Round 1 is a draw: every player plays or rests.
+    courts, resting = rounds.mexicano_round(players, [], [], seed=1)
+    assert len(courts) == 2 and len(resting) == 1
+
+
+def new_tournament(client, rule_type_id, players=(), points=24, name="Copa"):
+    data = {"name": name, "held_on": "2026-11-01", "rule_type_id": str(rule_type_id),
+            "points_per_match": str(points), "players": [str(p) for p in players]}
+    return client.post("/tournaments", data=data)
+
+
+def test_americano_needs_four_players(league):
+    r = new_tournament(league, 2, players=(1, 2, 3))
+    assert "Pick at least 4 players" in r.text
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM tournaments").fetchone()[0] == 1
+
+
+def test_americano_round_flow(league):
+    league.post("/players", data={"name": "Zed"})
+    r = new_tournament(league, 2, players=range(1, 10))  # 9 players: one rests
+    assert str(r.url).endswith("/tournaments/2") and "Americano" in r.text and "24</strong> 🎯" in r.text
+    page = league.get("/tournaments/2/matchdays/new", params={"played_on": "2026-11-01"}).text
+    assert "New round 1" in page and "How many players" not in page and "Resting" in page
+    court_1, court_2 = page.split("<template")[0].split('<fieldset class="court-pick">')[1:3]
+    picks = [re.findall(r'<option value="(\d+)" selected>', c) for c in (court_1, court_2)]
+    assert all(len(p) == 4 for p in picks)
+
+    data = {"played_on": "2026-11-01", **courts_form(*picks)}
+    r = league.post("/tournaments/2/matchdays", data=data)
+    assert str(r.url).endswith("/matchdays/2") and "Round 1" in r.text and "🛋️" in r.text
+    with db.connect() as conn:
+        sets = conn.execute("SELECT id, a1, a2, b1, b2 FROM matches ORDER BY id").fetchall()
+    assert len(sets) == 2  # one match per court, first two against last two
+    assert [list(s)[1:] for s in sets] == [[int(p) for p in pick] for pick in picks]
+
+    league.post(f"/matches/{sets[0]['id']}/score", data={"team_a_games": "14", "team_b_games": "10"})
+    standings = league.get("/tournaments/2").text
+    a1 = NAMES[sets[0]["a1"] - 1] if sets[0]["a1"] <= 8 else "Zed"
+    b1 = NAMES[sets[0]["b1"] - 1] if sets[0]["b1"] <= 8 else "Zed"
+    assert standing_points(standings, a1) == 14 and standing_points(standings, b1) == 10
+
+
+def test_mexicano_second_round_follows_the_ranking(league):
+    new_tournament(league, 3, players=range(1, 9))
+    data = {"played_on": "2026-11-01", **courts_form((1, 2, 3, 4), (5, 6, 7, 8))}
+    league.post("/tournaments/2/matchdays", data=data)
+    league.post("/matches/1/score", data={"team_a_games": "15", "team_b_games": "9"})   # Ana, Bea 15
+    league.post("/matches/2/score", data={"team_a_games": "12", "team_b_games": "12"})  # all 12
+    page = league.get("/tournaments/2/matchdays/new", params={"played_on": "2026-11-01"}).text
+    court_1 = page.split("<template")[0].split('<fieldset class="court-pick">')[1]
+    # Ranking: Ana, Bea (15), then Elena, Fer, Gabi, Hugo (12): court 1 is Ana+Elena vs Bea+Fer.
+    assert re.findall(r'<option value="(\d+)" selected>', court_1) == ["1", "5", "2", "6"]
+
+
+def test_manual_tournament_sets_are_made_by_hand(league):
+    new_tournament(league, 4)
+    page = league.get("/tournaments/2/matchdays/new", params={"played_on": "2026-11-01"}).text
+    assert "court-pick" not in page and "add each set" in page
+    r = league.post("/tournaments/2/matchdays", data={"played_on": "2026-11-01"})
+    assert str(r.url).endswith("/matchdays/2") and "Record the first one" in r.text
+    assert league.get("/matchdays/2/courts", follow_redirects=False).headers["location"] == \
+        "/matches/new?matchday=2"
+    league.post("/matches", data=set_form((1, 5, 2, 6), 6, 3, court=3, matchday_id=2))
+    standings = league.get("/tournaments/2").text
+    assert standing_points(standings, "Ana") == 10 and standing_points(standings, "Bea") == 6
+
+
+def test_filter_sets_by_matchday(league):
+    add_matchday(1, "2026-10-30")
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4, matchday_id=1))
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 2, matchday_id=2))
+    page = league.get("/matches?matchday=2").text
+    assert page.count('class="match"') == 1 and 'aria-label="6-2"' in page
+    assert '<option value="2" selected>' in page
+    # A matchday of another tournament is ignored.
+    assert league.get("/matches?tournament=1&matchday=99").text.count('class="match"') == 2

@@ -7,7 +7,7 @@
   <title>{% block title %}PadelScore{% endblock %}</title>
   {# A relative link: behind Azure's HTTPS front end url_for() would build an http:// URL,
      which browsers block on an https:// page. #}
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ css_version }}">
 </head>
 <body>
   {% set path = request.url.path %}
