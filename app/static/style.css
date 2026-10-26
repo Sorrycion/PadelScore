@@ -207,6 +207,8 @@ form.filters select { flex: 1 1 180px; }
 .rules li { margin-bottom: 6px; }
 .rules { scroll-margin-top: 16px; }
 .rules-tabs { margin-bottom: 16px; }
+.tournament-tabs { margin-top: 14px; }
+.tournament-tabs a { font-size: .95rem; white-space: nowrap; }
 .rules-tabs a { font-size: .95rem; }
 .rules table { width: auto; border: 1px solid var(--border); box-shadow: none; }
 

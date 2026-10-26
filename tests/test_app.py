@@ -1024,3 +1024,14 @@ def test_only_admins_see_the_player_password(with_players):
     assert "jugamos" not in with_players.get("/tournaments/1").text
     with_players.post("/login", data={"password": "secreto", "next": "/"})  # the club
     assert "<code>jugamos</code>" in with_players.get("/tournaments/1").text
+
+
+def test_standings_page_by_tournament(league):
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4))       # Liga Amigos
+    new_tournament(league, 4, players=(5, 6, 7, 8), name="Otra copa")  # newer, no sets
+    home = league.get("/").text
+    assert "Standings: <a" in home and "Otra copa</a></h1>" in home   # latest by default
+    assert 'href="/?tournament=1"' in home and 'href="/?tournament=2"' in home
+    page = league.get("/?tournament=1").text
+    assert "Liga Amigos</a></h1>" in page and standing_points(page, "Ana") == 10
+    assert "Otra copa</a></h1>" in league.get("/?tournament=99").text  # unknown: the latest

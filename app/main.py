@@ -230,14 +230,18 @@ def load_results(conn, tournament_id):
 # --- Pages -------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request):
+def home(request: Request, tournament: str | None = None):
+    """Standings of one tournament (the latest unless chosen), with a tournament picker."""
     with db.connect() as conn:
-        latest = conn.execute(
-            "SELECT id FROM tournaments ORDER BY held_on DESC, id DESC LIMIT 1"
-        ).fetchone()
-        latest = latest and get_tournament(conn, latest["id"])
+        tournaments = all_tournaments(conn)
+        ids = [t["id"] for t in tournaments]
+        chosen = opt_int(tournament)
+        if chosen not in ids:
+            chosen = ids[0] if ids else None
+        latest = chosen and get_tournament(conn, chosen)
         results, standings = load_results(conn, latest["id"]) if latest else ([], [])
         return templates.TemplateResponse(request, "index.html", {
+            "tournaments": tournaments,
             "tournament": latest,
             "results": results,
             "standings": standings,

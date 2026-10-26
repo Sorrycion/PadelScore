@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 {% if tournament %}
+{% if tournaments|length > 1 %}
+<nav class="tabs tournament-tabs" aria-label="{{ _('tournaments') }}">
+  {% for t in tournaments %}
+  <a href="/?tournament={{ t.id }}" {% if t.id == tournament.id %}class="active" aria-current="page"{% endif %}>{{ RULE_ICONS.get(t.rule_code, "") }} {{ t.name }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
 <h1>{{ _("standings") }}: <a class="plain" href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a></h1>
 <p class="muted">{{ RULE_ICONS.get(tournament.rule_code, "") }} {{ tournament.rule_type }} · 📅 {{ tournament.held_on }}{% if latest_matchday %} · {{ _("latest") }}: <a href="/matchdays/{{ latest_matchday.id }}">{{ _("round_n" if tournament.rule_code in ROUND_MODES else "matchday_n", n=latest_matchday.number) }}</a> ({{ latest_matchday.played_on }}){% endif %}</p>
 {% include "_standings.html" %}
