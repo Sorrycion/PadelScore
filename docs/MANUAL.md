@@ -1,6 +1,6 @@
 # ✍️ Reglamento Manual individual
 
-**Objetivo:** un torneo individual flexible, en el que los organizadores (o los jugadores con la contraseña del torneo) arman cada set a mano, y cada jugador suma los juegos que gana.
+**Objetivo:** un torneo individual flexible, en el que los organizadores (o los jugadores con la contraseña del torneo) arman cada set a mano, y cada jugador suma la diferencia de juegos de cada set que juega.
 
 ## Formato
 
@@ -11,7 +11,8 @@
 
 ## Puntuación
 
-- Cada jugador suma **los juegos que ganó su pareja** en cada set que jugó. En un 6-3, los dos jugadores ganadores suman 6 y los dos perdedores suman 3.
+- Cada jugador suma **la diferencia de juegos** (ganados − perdidos) de cada set que jugó. En un 6-3, los dos jugadores ganadores suman +3 y los dos perdedores −3.
+- Por eso los puntos pueden ser **negativos**: si pierdes más juegos de los que ganas, tu total queda por debajo de 0.
 - No hay puntos por lugar en la cancha (9, 6, 4, 3): solo cuenta el marcador de los sets jugados.
 - Los puntos se acumulan de jornada en jornada.
 - Un jugador marcado como **ausente** en una jornada suma 0 puntos en ella, aunque un suplente juegue en su lugar.
@@ -21,8 +22,7 @@
 | Orden | Criterio |
 |---|---|
 | 1 | Puntos totales |
-| 2 | Diferencia de juegos (ganados − perdidos) |
-| 3 | Sets ganados |
+| 2 | Sets ganados |
 
 - Los jugadores con los mismos puntos comparten posición.
 - Solo cuentan los sets de este torneo: cada torneo tiene su propia clasificación.

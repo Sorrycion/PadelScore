@@ -215,11 +215,11 @@ TEXT = {
         "en": "Ranked by points, then points difference and wins."},
     "manual_note": {
         "es": "✍️ Manual: crea cada set a mano, con su cancha y sus parejas. Cada jugador suma "
-              "los juegos que gana su pareja en cada set; clasificación por puntos, luego "
-              "diferencia y sets ganados.",
+              "la diferencia de juegos de cada set (6-3: +3 los ganadores, −3 los perdedores), "
+              "así que los puntos pueden ser negativos.",
         "en": "✍️ Manual: create each set by hand, with its court and pairs. Each player scores "
-              "the games their pair wins in each set; ranked by points, then difference and "
-              "sets won."},
+              "the games difference of each set (6-3: +3 for the winners, −3 for the losers), "
+              "so points can be negative."},
     "manual_new_hint": {
         "es": "Guarda la jornada y luego agrega cada set con su cancha y parejas.",
         "en": "Save the matchday, then add each set with its court and pairs."},

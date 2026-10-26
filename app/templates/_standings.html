@@ -5,7 +5,6 @@
   <thead><tr>
     <th>#</th><th>👤 {{ _("player") }}</th><th>🎯 {{ _("pts") }}</th>
     {% for md in results %}<th title="{{ _('matchday_n', n=md.number) }}"><a class="plain" href="/matchdays/{{ md.id }}">{{ _("round_short" if tournament.rule_code in ROUND_MODES else "matchday_short", n=md.number) }}</a></th>{% endfor %}
-    <th title="{{ _('sets_won') }}">✅</th>
   </tr></thead>
   <tbody>
   {% for r in standings %}
@@ -16,7 +15,6 @@
       {% for md in results %}
         <td class="muted-cell">{% if md.number in r.by_matchday %}{{ r.by_matchday[md.number] }}{% else %}–{% endif %}</td>
       {% endfor %}
-      <td>{{ r.sets_won }}</td>
     </tr>
   {% endfor %}
   </tbody>

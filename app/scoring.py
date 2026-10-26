@@ -10,8 +10,11 @@ won, then games difference (won - lost), then league position before the matchda
 on the first matchday (no positions yet) a draw decides. Until the court is complete
 its players only have their sets won. The tournament standings add up the matchdays.
 
-Americano, Mexicano and Manual individual: each player scores the games (points)
-their pair won in every set they played; see rounds.py for how rounds are drawn.
+Americano and Mexicano: each player scores the games (points) their pair won in
+every set they played; see rounds.py for how rounds are drawn.
+
+Manual individual: each player scores the games difference of every set they played
+(won - lost), so a 6-3 gives +3 and -3; totals can be negative.
 
 A set whose games are not entered yet (pending) gives nothing. A player marked absent
 on a matchday keeps their place in the sets (a substitute plays for them) but scores
@@ -43,6 +46,12 @@ def games_points(m) -> tuple[int, int]:
     return m["team_a_games"], m["team_b_games"]
 
 
+def diff_points(m) -> tuple[int, int]:
+    """Each player scores their pair's games difference (negative when they lose)."""
+    d = m["team_a_games"] - m["team_b_games"]
+    return d, -d
+
+
 def is_played(m) -> bool:
     return m["team_a_games"] is not None
 
@@ -54,7 +63,8 @@ def court_rotation(players):
     return [((p1, p2), (p3, p4)), ((p1, p3), (p2, p4)), ((p1, p4), (p2, p3))]
 
 
-def court_table(sets, position, absent=frozenset(), places=False, seed=0):
+def court_table(sets, position, absent=frozenset(), places=False, seed=0,
+                score=games_points):
     """Add up each player's sets on one court on one matchday.
 
     sets: rows with a1_id/a1 ... b2_id/b2, team_a_games, team_b_games, winner.
@@ -63,13 +73,14 @@ def court_table(sets, position, absent=frozenset(), places=False, seed=0):
     places: Liga de amigos scoring (9/6/4/3 by place + 1 per set won, once every set
     of the court is played); otherwise each player scores their pair's games.
     seed: for the draw that settles ties on the first matchday.
+    score: a set's points for each player of team A and of team B (without places).
     Players of pending sets are listed too, with nothing added up yet.
     """
     stats = {}
     for m in sets:
         played = is_played(m)
         diff = m["team_a_games"] - m["team_b_games"] if played else 0
-        pts_a, pts_b = games_points(m) if played else (0, 0)
+        pts_a, pts_b = score(m) if played else (0, 0)
         for side, d, pts in (("A", diff, pts_a), ("B", -diff, pts_b)):
             for key in (side.lower() + "1", side.lower() + "2"):
                 r = stats.setdefault(m[key + "_id"], {
@@ -116,12 +127,12 @@ def _standings(rows, by_diff=False):
     return rows
 
 
-def tournament_results(matchdays, places=False):
+def tournament_results(matchdays, places=False, score=games_points):
     """Score a whole tournament.
 
     matchdays: in playing order, each a dict with "number", "sets" (as for
     court_table, plus "court") and optionally "id" and "absent" (player ids).
-    places: Liga de amigos scoring (see court_table).
+    places: Liga de amigos scoring; score: points per set otherwise (see court_table).
     Returns (matchdays with "courts": {court: player rows}, standings).
     Standings rows: id, name, position, points, diff, sets_won, played (matchdays)
     and by_matchday (number -> points that day).
@@ -136,7 +147,7 @@ def tournament_results(matchdays, places=False):
             by_court.setdefault(m["court"], []).append(m)
         absent = frozenset(md.get("absent", ()))
         md_key = md.get("id", md["number"])
-        courts = {c: court_table(s, position, absent, places, seed=f"{md_key}-{c}")
+        courts = {c: court_table(s, position, absent, places, seed=f"{md_key}-{c}", score=score)
                   for c, s in sorted(by_court.items())}
 
         for rows in courts.values():
@@ -201,7 +212,7 @@ SCORING = {
     "liga_amigos": partial(tournament_results, places=True),
     "americano": tournament_results,
     "mexicano": tournament_results,
-    "manual": tournament_results,  # sets made by hand; each player scores their games
+    "manual": partial(tournament_results, score=diff_points),  # sets made by hand
 }
 # Rule types played in rounds of one match per court, to a number of points.
 ROUND_MODES = {"americano", "mexicano"}

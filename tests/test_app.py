@@ -63,7 +63,7 @@ def row(players, a, b, court=1):
 
 
 def standing_points(html, name):
-    return int(re.search(rf">{name}</a></td>\s*<td class=\"pts\">(\d+)<", html).group(1))
+    return int(re.search(rf">{name}</a></td>\s*<td class=\"pts\">(-?\d+)<", html).group(1))
 
 
 @pytest.mark.parametrize("a,b,winner", [(6, 4, "A"), (7, 6, "A"), (4, 6, "B"),
@@ -888,7 +888,10 @@ def test_manual_tournament_sets_are_made_by_hand(league):
         "/matches/new?matchday=2"
     league.post("/matches", data=set_form((1, 5, 2, 6), 6, 3, court=3, matchday_id=2))
     standings = league.get("/tournaments/2").text
-    assert standing_points(standings, "Ana") == 6 and standing_points(standings, "Bea") == 3
+    assert standing_points(standings, "Ana") == 3 and standing_points(standings, "Bea") == -3
+    league.post("/matches", data=set_form((1, 5, 2, 6), 2, 6, court=3, matchday_id=2))
+    standings = league.get("/tournaments/2").text
+    assert standing_points(standings, "Ana") == -1 and standing_points(standings, "Bea") == 1
 
 
 def test_filter_sets_by_matchday(league):
@@ -949,7 +952,7 @@ def test_removed_player_keeps_results(league):
     league.post("/tournaments/2/matchdays", data={"played_on": "2026-11-01"})
     league.post("/matches", data=set_form((1, 2, 3, 4), 6, 3, matchday_id=2))
     league.post("/tournaments/2/players/1/remove")
-    assert standing_points(league.get("/tournaments/2").text, "Ana") == 6
+    assert standing_points(league.get("/tournaments/2").text, "Ana") == 3
 
 
 @pytest.fixture
