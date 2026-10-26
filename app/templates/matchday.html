@@ -19,15 +19,12 @@
 </div>
 {% set current = matchday.id %}
 {% include "_matchday_tabs.html" %}
-{% if editor %}
-<p class="inline">
-  {% if tournament.rule_code == MANUAL %}
-  <a class="button" href="/matches/new?matchday={{ matchday.id }}">{{ _("new_set") }}</a>
-  {% else %}
-  <a class="button" href="/matchdays/{{ matchday.id }}/courts">{{ _("assign_courts") }}</a>
-  {% endif %}
-</p>
+{% if tournament.rule_code == MANUAL and scorer %}
+<p class="inline"><a class="button" href="/matches/new?matchday={{ matchday.id }}">{{ _("new_set") }}</a></p>
+{% elif editor %}
+<p class="inline"><a class="button" href="/matchdays/{{ matchday.id }}/courts">{{ _("assign_courts") }}</a></p>
 {% endif %}
+{% if scorer and not editor %}<p class="muted">{{ _("player_mode_note") }}</p>{% endif %}
 
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if matchday.courts %}

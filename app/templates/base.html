@@ -16,10 +16,9 @@
     <div class="top-actions">
       {% if editor %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
       {% if login_enabled %}
-        {% if editor %}
+        {% if not editor %}<a href="/login?next={{ path|urlencode }}">{{ _("login") }}</a>{% endif %}
+        {% if logged_in %}
           <form method="post" action="/logout" class="nav-form"><button type="submit" class="link plain-link">{{ _("logout") }}</button></form>
-        {% else %}
-          <a href="/login?next={{ path|urlencode }}">{{ _("login") }}</a>
         {% endif %}
       {% endif %}
       {% set here = path ~ ('?' ~ request.url.query if request.url.query else '') %}

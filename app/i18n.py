@@ -86,6 +86,37 @@ TEXT = {
                          "en": ("<strong>{n}</strong> matchday", "<strong>{n}</strong> matchdays")},
     "n_rounds_bold": {"es": ("<strong>{n}</strong> ronda", "<strong>{n}</strong> rondas"),
                       "en": ("<strong>{n}</strong> round", "<strong>{n}</strong> rounds")},
+    "player_password": {"es": "🔑 Contraseña de jugadores", "en": "🔑 Player password"},
+    "player_password_hint": {
+        "es": "Con esta contraseña los jugadores entran y registran los resultados de los sets "
+              "de este torneo (y en Manual individual crean sets). Nada más.",
+        "en": "With this password players log in and enter the set results of this tournament "
+              "(and create sets in Manual individual). Nothing else."},
+    "current_password": {"es": "🔑 Contraseña actual", "en": "🔑 Current password"},
+    "player_password_on": {
+        "es": "✅ Solo la ven los administradores. Escribe una nueva para cambiarla, o guarda "
+              "vacío para quitarla.",
+        "en": "✅ Only admins see it. Type a new one to change it, or save it empty to turn it off."},
+    "player_password_off": {"es": "➖ Sin contraseña: solo el club puede registrar resultados.",
+                            "en": "➖ None: only the club can enter results."},
+    "new_password": {"es": "Nueva contraseña", "en": "New password"},
+    "optional": {"es": "Opcional", "en": "Optional"},
+    "add_to_tournament": {"es": "➕ Agregar al torneo", "en": "➕ Add to tournament"},
+    "confirm_remove_player": {
+        "es": "¿Quitar a este jugador del torneo? Sus resultados anteriores se conservan.",
+        "en": "Remove this player from the tournament? Their results so far are kept."},
+    "no_tournament_players": {
+        "es": "Este torneo aún no tiene lista de jugadores: se puede elegir a cualquiera.",
+        "en": "This tournament has no player list yet: anyone can be picked."},
+    "tournament_players_edit_hint": {
+        "es": 'Quita o agrega jugadores cuando quieras (por ejemplo, para reemplazar a alguien); '
+              'los resultados anteriores se conservan. ¿Alguien nuevo? Agrégalo primero en '
+              '<a href="{url}">Jugadores</a>.',
+        "en": 'Remove or add players any time (e.g. to replace someone); results so far are '
+              'kept. Someone new? Add them first in <a href="{url}">Players</a>.'},
+    "player_mode_note": {
+        "es": "🔑 Entraste como jugador: puedes registrar y corregir los resultados.",
+        "en": "🔑 Logged in as a player: you can enter and correct results."},
     "add_tournament": {"es": "➕ Agregar torneo", "en": "➕ Add tournament"},
     "no_tournaments": {"es": "Aún no hay torneos.", "en": "No tournaments yet."},
     "no_matchdays": {"es": "Aún no hay jornadas.", "en": "No matchdays yet."},
@@ -148,10 +179,10 @@ TEXT = {
     "points_per_match": {"es": "🎯 Puntos por partido", "en": "🎯 Points per match"},
     "tournament_players": {"es": "👥 Jugadores del torneo", "en": "👥 Tournament players"},
     "tournament_players_hint": {
-        "es": "Para Americano y Mexicano: elige quiénes juegan (mínimo 4). Las rondas se "
-              "sortean entre ellos.",
-        "en": "For Americano and Mexicano: choose who plays (at least 4). Rounds are drawn "
-              "among them."},
+        "es": "Elige quiénes juegan; podrás cambiar la lista después. En Americano y Mexicano "
+              "(mínimo 4) las rondas se sortean entre ellos.",
+        "en": "Choose who plays; you can change the list later. In Americano and Mexicano "
+              "(at least 4) the rounds are drawn among them."},
     "courts_available": {"es": "🎾 Canchas disponibles", "en": "🎾 Courts available"},
     "who_rests": {"es": "🛋️ ¿Quién descansa esta ronda?", "en": "🛋️ Who rests this round?"},
     "who_rests_hint": {
@@ -280,10 +311,13 @@ TEXT = {
     "login": {"es": "🔐 Entrar", "en": "🔐 Log in"},
     "logout": {"es": "🚪 Salir", "en": "🚪 Log out"},
     "login_title": {"es": "🔐 Entrar para editar", "en": "🔐 Log in to edit"},
-    "login_hint": {"es": "Cualquiera puede ver los resultados. Para registrar o cambiar datos "
-                         "se necesita la contraseña del club.",
-                   "en": "Anyone can see the results. Recording or changing data needs the "
-                         "club password."},
+    "login_hint": {"es": "Cualquiera puede ver los resultados. Con la contraseña del club se "
+                         "puede cambiar todo; con la contraseña de jugadores de un torneo se "
+                         "registran los resultados de ese torneo.",
+                   "en": "Anyone can see the results. The club password allows every change; "
+                         "a tournament's player password allows entering that tournament's "
+                         "results."},
+    "password": {"es": "🔑 Contraseña", "en": "🔑 Password"},
     "club_password": {"es": "Contraseña del club", "en": "Club password"},
     "err_wrong_password": {"es": "Contraseña incorrecta.", "en": "Wrong password."},
 

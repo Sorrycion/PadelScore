@@ -30,7 +30,10 @@ CREATE TABLE IF NOT EXISTS tournaments (
     held_on DATE NOT NULL CHECK (held_on IS date(held_on)),
     rule_type_id INTEGER NOT NULL DEFAULT 1 REFERENCES rule_types(id),
     -- Americano / Mexicano: the points a match is played to (16, 21, 24, 32...).
-    points_per_match INTEGER CHECK (points_per_match IS NULL OR points_per_match > 0)
+    points_per_match INTEGER CHECK (points_per_match IS NULL OR points_per_match > 0),
+    -- Players who log in with this password may enter results (see auth.py). Editors
+    -- can see it, to share it with the players.
+    player_password TEXT
 );
 
 -- Who plays an Americano or Mexicano tournament (the rounds are drawn among them).
@@ -106,6 +109,8 @@ def add_rule_types(conn):
                      "rule_type_id INTEGER NOT NULL DEFAULT 1 REFERENCES rule_types(id)")
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")
+    if "player_password" not in columns:
+        conn.execute("ALTER TABLE tournaments ADD COLUMN player_password TEXT")
     if "points_per_match" not in columns:
         conn.execute("ALTER TABLE tournaments ADD COLUMN points_per_match INTEGER "
                      "CHECK (points_per_match IS NULL OR points_per_match > 0)")

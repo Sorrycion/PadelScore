@@ -79,6 +79,11 @@ def parse_date(value: str) -> str | None:
         return None
 
 
+def here(request: Request) -> str:
+    """This page's path and query, to come back to after logging in."""
+    return request.url.path + (f"?{request.url.query}" if request.url.query else "")
+
+
 def redirect(url: str):
     return RedirectResponse(url, status_code=303)
 
@@ -145,11 +150,16 @@ def all_matchdays(conn, tournament_id=None):
 
 
 def tournament_players(conn, tournament_id):
-    """The players of an Americano / Mexicano tournament, by name."""
+    """The players of a tournament, by name (its list; may be empty)."""
     return conn.execute(
         "SELECT p.* FROM tournament_players tp JOIN players p ON p.id = tp.player_id "
         "WHERE tp.tournament_id = ? ORDER BY p.name", (tournament_id,)
     ).fetchall()
+
+
+def players_for(conn, tournament_id):
+    """Players to pick from in a tournament: its list, or everyone when it has none."""
+    return tournament_players(conn, tournament_id) or all_players(conn)
 
 
 def get_or_404(conn, table, row_id):
@@ -254,22 +264,35 @@ def login_page(request: Request, next: str = "/"):
 
 @app.post("/login")
 def login(request: Request, password: str = Form(""), next: str = Form("/")):
-    if not auth.password_matches(password):
+    """The club password logs in an editor; a tournament's player password logs in its
+    players (one cookie per tournament whose password it is)."""
+    cookie = {"max_age": auth.COOKIE_MAX_AGE, "httponly": True, "samesite": "lax",
+              "secure": auth.is_https(request)}
+    if auth.password_matches(password):
+        response = redirect(safe_next(next))
+        response.set_cookie(auth.COOKIE, auth.editor_token(auth.edit_password()), **cookie)
+        return response
+    with db.connect() as conn:
+        matches = [t for t in conn.execute(
+            "SELECT * FROM tournaments WHERE player_password IS NOT NULL ORDER BY id DESC")
+            if auth.player_password_matches(password, t)]
+    if not password or not matches:
         time.sleep(1)  # slow down password guessing
         return templates.TemplateResponse(request, "login.html", {
             "next": safe_next(next), "error": "err_wrong_password",
         }, status_code=401)
-    response = redirect(safe_next(next))
-    response.set_cookie(auth.COOKIE, auth.editor_token(auth.edit_password()),
-                        max_age=auth.COOKIE_MAX_AGE, httponly=True, samesite="lax",
-                        secure=auth.is_https(request))
+    response = redirect(safe_next(next) if next not in ("", "/")
+                        else f"/tournaments/{matches[0]['id']}")
+    for t in matches:
+        response.set_cookie(auth.PLAYER_COOKIE.format(t["id"]), auth.player_token(t), **cookie)
     return response
 
 
 @app.post("/logout")
-def logout():
+def logout(request: Request):
     response = redirect("/")
-    response.delete_cookie(auth.COOKIE)
+    for name in [auth.COOKIE, *auth.player_cookies(request)]:
+        response.delete_cookie(name)
     return response
 
 
@@ -297,7 +320,7 @@ def tournaments_page(request: Request, error: str | None = None):
 @app.post("/tournaments", dependencies=EDIT)
 def add_tournament(name: str = Form(...), held_on: str = Form(""),
                    rule_type_id: str = Form("1"), points_per_match: str = Form(""),
-                   players: list[int] = Form([])):
+                   players: list[int] = Form([]), player_password: str = Form("")):
     name, held_on, rule_type_id = name.strip(), parse_date(held_on), opt_int(rule_type_id)
     if not name:
         return redirect("/tournaments?error=err_name_required")
@@ -315,12 +338,14 @@ def add_tournament(name: str = Form(...), held_on: str = Form(""),
             target = opt_int(points_per_match)
             if target is not None and target < 1:
                 target = None
+        password = player_password.strip()
         tournament_id = conn.execute(
-            "INSERT INTO tournaments (name, held_on, rule_type_id, points_per_match) "
-            "VALUES (?, ?, ?, ?)", (name, held_on, rule_type_id, target)).lastrowid
-        if rule["code"] in ROUND_MODES:
-            conn.executemany("INSERT INTO tournament_players (tournament_id, player_id) "
-                             "VALUES (?, ?)", [(tournament_id, p) for p in players])
+            "INSERT INTO tournaments (name, held_on, rule_type_id, points_per_match, "
+            "player_password) VALUES (?, ?, ?, ?, ?)",
+            (name, held_on, rule_type_id, target,
+             password or None)).lastrowid
+        conn.executemany("INSERT INTO tournament_players (tournament_id, player_id) "
+                         "VALUES (?, ?)", [(tournament_id, p) for p in players])
     return redirect(f"/tournaments/{tournament_id}")
 
 
@@ -334,9 +359,43 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
             "results": results,
             "standings": standings,
             "participants": tournament_players(conn, tournament_id),
+            "players": all_players(conn),
             "today": date.today().isoformat(),
             "error": error,
         })
+
+
+@app.post("/tournaments/{tournament_id}/players", dependencies=EDIT)
+def add_tournament_player(tournament_id: int, player_id: int = Form(...)):
+    """Add a player to the tournament (e.g. to replace one who left)."""
+    with db.connect() as conn:
+        get_or_404(conn, "tournaments", tournament_id)
+        get_or_404(conn, "players", player_id)
+        conn.execute("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
+                     "VALUES (?, ?)", (tournament_id, player_id))
+    return redirect(f"/tournaments/{tournament_id}#players")
+
+
+@app.post("/tournaments/{tournament_id}/players/{player_id}/remove", dependencies=EDIT)
+def remove_tournament_player(tournament_id: int, player_id: int):
+    """Take a player out of the tournament. Their sets and points so far are kept."""
+    with db.connect() as conn:
+        get_or_404(conn, "tournaments", tournament_id)
+        conn.execute("DELETE FROM tournament_players WHERE tournament_id = ? AND player_id = ?",
+                     (tournament_id, player_id))
+    return redirect(f"/tournaments/{tournament_id}#players")
+
+
+@app.post("/tournaments/{tournament_id}/player-password", dependencies=EDIT)
+def set_player_password(tournament_id: int, password: str = Form("")):
+    """Set or change the players' password; an empty one turns player login off. Either
+    way players who were logged in must log in again."""
+    password = password.strip()
+    with db.connect() as conn:
+        get_or_404(conn, "tournaments", tournament_id)
+        conn.execute("UPDATE tournaments SET player_password = ? WHERE id = ?",
+                     (password or None, tournament_id))
+    return redirect(f"/tournaments/{tournament_id}#player-password")
 
 
 @app.post("/tournaments/{tournament_id}/delete", dependencies=EDIT)
@@ -380,6 +439,7 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
             "next_number": results[-1]["number"] + 1 if results[-1]["id"] == matchday_id else None,
             "next_date": (date.fromisoformat(matchday["played_on"]) + timedelta(days=7)).isoformat(),
             "score_inline": True,  # pending sets get their games entered right here
+            "scorer": auth.can_score(request, tournament),
         })
 
 
@@ -449,12 +509,12 @@ def previous_matchday(conn, tournament_id, number):
     return before[-1] if before else None
 
 
-def suggest_courts(conn, previous, move):
+def suggest_courts(conn, tournament_id, previous, move):
     """Courts for a new matchday: the previous matchday's courts after `move` players
     of each court go up and `move` go down, or empty courts for everyone."""
     if previous:
         return [ids for _, ids in sorted(next_courts(previous["courts"], move).items())]
-    return [[None] * 4 for _ in range(max(len(all_players(conn)) // 4, 1))]
+    return [[None] * 4 for _ in range(max(len(players_for(conn, tournament_id)) // 4, 1))]
 
 
 def read_courts(form):
@@ -541,7 +601,7 @@ def render_courts(request, conn, tournament, courts, *, matchday=None, number=No
     return templates.TemplateResponse(request, "courts.html", {
         "tournament": tournament, "matchday": matchday, "courts": courts,
         "number": matchday["number"] if matchday else number,
-        "played_on": played_on, "players": all_players(conn),
+        "played_on": played_on, "players": players_for(conn, tournament["id"]),
         "previous": previous, "move": move,
         "resting": [p["name"] for p in all_players(conn) if p["id"] in resting],
         # Americano / Mexicano: the round's settings (courts available, who asked to rest).
@@ -577,7 +637,7 @@ def new_matchday_page(request: Request, tournament_id: int, played_on: str = "",
                                  played_on=played_on, move=1, resting=resting, asked=rest)
         previous = previous_matchday(conn, tournament_id, number)
         move = move_choice(previous, opt_int(move))
-        suggested = suggest_courts(conn, previous, move) if move else []
+        suggested = suggest_courts(conn, tournament["id"], previous, move) if move else []
         return render_courts(request, conn, tournament, suggested, number=number,
                              played_on=played_on, previous=previous, move=move)
 
@@ -641,7 +701,7 @@ def courts_page(request: Request, matchday_id: int, move: str | None = None,
                                  move=1, resting=resting, asked=rest)
         previous = previous_matchday(conn, tournament["id"], matchday["number"])
         move = move_choice(previous, opt_int(move))
-        suggested = suggest_courts(conn, previous, move) if move else []
+        suggested = suggest_courts(conn, tournament["id"], previous, move) if move else []
         return render_courts(request, conn, tournament, suggested, matchday=matchday,
                              previous=previous, move=move)
 
@@ -809,11 +869,44 @@ def match_form_data(matchday_id: int = Form(...), court: int = Form(...),
             "team_a_games": games[0], "team_b_games": games[1]}
 
 
+def tournament_of(conn, matchday_id):
+    matchday = get_or_404(conn, "matchdays", matchday_id)
+    return get_tournament(conn, matchday["tournament_id"])
+
+
+def set_matchdays(request, conn):
+    """Matchdays this browser may add sets to: all for an editor; for players, those of
+    manual tournaments whose player password they logged in with."""
+    if auth.is_editor(request):
+        return all_matchdays(conn)
+    allowed = {t["id"] for t in conn.execute(
+        "SELECT t.*, r.code AS rule_code FROM tournaments t "
+        "JOIN rule_types r ON r.id = t.rule_type_id WHERE r.code = ?", (MANUAL,))
+        if auth.is_player(request, t)}
+    return [d for d in all_matchdays(conn) if d["tournament_id"] in allowed]
+
+
+def require_set_maker(request, conn, *matchday_ids):
+    """Editors, or players of the manual tournament(s) of these matchdays."""
+    if auth.is_editor(request):
+        return
+    allowed = {d["id"] for d in set_matchdays(request, conn)}
+    if not all(i in allowed for i in matchday_ids):
+        raise LoginRequired(here(request) if request.method == "GET" else "/")
+
+
 def render_match_form(request, conn, form, match_id=None, error=None,
                       status_code=200):
+    matchdays = set_matchdays(request, conn)
+    if auth.is_editor(request):
+        players = all_players(conn)
+    else:  # players pick among their tournaments' players
+        tournament_ids = {d["tournament_id"] for d in matchdays}
+        players = sorted({p["id"]: p for t in tournament_ids for p in players_for(conn, t)}.values(),
+                         key=lambda p: p["name"].lower())
     return templates.TemplateResponse(request, "match_form.html", {
-        "players": all_players(conn),
-        "matchdays": all_matchdays(conn),
+        "players": players,
+        "matchdays": matchdays,
         "form": form,
         "match_id": match_id,
         "error": error,
@@ -840,24 +933,28 @@ def validate_match(conn, form, _):
         return _("err_set"), None
 
 
-@app.get("/matches/new", response_class=HTMLResponse, dependencies=EDIT)
+@app.get("/matches/new", response_class=HTMLResponse)
 def new_match_page(request: Request, matchday: str | None = None,
                    court: str | None = None):
     with db.connect() as conn:
+        allowed = set_matchdays(request, conn)
+        if not allowed and not auth.is_editor(request):
+            raise LoginRequired(here(request))
         matchday_id = opt_int(matchday)
-        if matchday_id is None:  # default to the latest jornada
-            latest = conn.execute(
-                "SELECT id FROM matchdays ORDER BY played_on DESC, number DESC, id DESC LIMIT 1"
-            ).fetchone()
-            matchday_id = latest["id"] if latest else None
+        if matchday_id is not None:
+            require_set_maker(request, conn, matchday_id)
+        elif allowed:  # default to the latest jornada
+            latest = max(allowed, key=lambda d: (d["played_on"], d["number"], d["id"]))
+            matchday_id = latest["id"]
         return render_match_form(request, conn, {
             "matchday_id": matchday_id, "court": opt_int(court) or 1,
         })
 
 
-@app.post("/matches", dependencies=EDIT)
+@app.post("/matches")
 def add_match(request: Request, form: dict = Depends(match_form_data)):
     with db.connect() as conn:
+        require_set_maker(request, conn, form["matchday_id"])
         error, winner = validate_match(conn, form, translator(get_lang(request)))
         if error:
             return render_match_form(request, conn, form, error=error,
@@ -870,19 +967,21 @@ def add_match(request: Request, form: dict = Depends(match_form_data)):
     return redirect(f"/matchdays/{form['matchday_id']}")
 
 
-@app.get("/matches/{match_id}/edit", response_class=HTMLResponse, dependencies=EDIT)
+@app.get("/matches/{match_id}/edit", response_class=HTMLResponse)
 def edit_match_page(request: Request, match_id: int):
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
+        require_set_maker(request, conn, match["matchday_id"])
         return render_match_form(request, conn, {c: match[c] for c in MATCH_COLUMNS},
                                  match_id=match_id)
 
 
-@app.post("/matches/{match_id}", dependencies=EDIT)
+@app.post("/matches/{match_id}")
 def update_match(request: Request, match_id: int,
                  form: dict = Depends(match_form_data)):
     with db.connect() as conn:
-        get_or_404(conn, "matches", match_id)
+        match = get_or_404(conn, "matches", match_id)
+        require_set_maker(request, conn, match["matchday_id"], form["matchday_id"])
         error, winner = validate_match(conn, form, translator(get_lang(request)))
         if error:
             return render_match_form(request, conn, form, match_id=match_id,
@@ -903,11 +1002,14 @@ def delete_match(match_id: int):
     return redirect(f"/matchdays/{match['matchday_id']}")
 
 
-@app.post("/matches/{match_id}/score", dependencies=EDIT)
-def save_score(match_id: int, team_a_games: str = Form(""), team_b_games: str = Form("")):
-    """Enter (or clear) the games of a set from the matchday page."""
+@app.post("/matches/{match_id}/score")
+def save_score(request: Request, match_id: int, team_a_games: str = Form(""),
+               team_b_games: str = Form("")):
+    """Enter (or clear) the games of a set from the matchday page: editors and the
+    tournament's players."""
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
+        auth.require_scorer(request, tournament_of(conn, match["matchday_id"]))
         back = f"/matchdays/{match['matchday_id']}"
         try:
             a, b = opt_games(team_a_games), opt_games(team_b_games)

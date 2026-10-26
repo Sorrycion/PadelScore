@@ -1,13 +1,15 @@
 {# One set as a scoreboard card. Needs: m. On the matchday page (score_inline) editors
-   type the games of a pending set straight into the score boxes. #}
+   type the games of a pending set straight into the score boxes; the tournament's
+   players (scorer) can also correct a result that is already in. #}
 {% set pending = m.team_a_games is none %}
-{% set typing = score_inline and editor and pending %}
+{% set typing = score_inline and (pending and editor or scorer and not editor) %}
+{% set can_edit = editor or (scorer and m.rule_code == MANUAL) %}
 <li class="match" id="set-{{ m.id }}">
   {% if typing %}<form method="post" action="/matches/{{ m.id }}/score" class="score-form" id="score-{{ m.id }}"></form>{% endif %}
   <div class="scoreboard">
     {% if typing %}
-      <input class="score-box" form="score-{{ m.id }}" type="number" name="team_a_games" min="0" inputmode="numeric" placeholder="00" required aria-label="{{ _('team_a') }} · {{ _('games_legend') }}">
-      <input class="score-box" form="score-{{ m.id }}" type="number" name="team_b_games" min="0" inputmode="numeric" placeholder="00" required aria-label="{{ _('team_b') }} · {{ _('games_legend') }}">
+      <input class="score-box" form="score-{{ m.id }}" type="number" name="team_a_games" min="0" inputmode="numeric" placeholder="00" required value="{{ m.team_a_games if not pending else '' }}" aria-label="{{ _('team_a') }} · {{ _('games_legend') }}">
+      <input class="score-box" form="score-{{ m.id }}" type="number" name="team_b_games" min="0" inputmode="numeric" placeholder="00" required value="{{ m.team_b_games if not pending else '' }}" aria-label="{{ _('team_b') }} · {{ _('games_legend') }}">
     {% elif pending %}
       <span class="score pending" aria-label="{{ _('pending') }}"><span class="score-box pending">–</span><span class="score-box pending">–</span></span>
     {% else %}
@@ -18,15 +20,17 @@
     <div class="team a {% if m.winner == 'A' %}winner{% endif %}"><a href="/players/{{ m.a1_id }}">{{ m.a1 }}</a><a href="/players/{{ m.a2_id }}">{{ m.a2 }}</a></div>
     <div class="team b {% if m.winner == 'B' %}winner{% endif %}"><a href="/players/{{ m.b1_id }}">{{ m.b1 }}</a><a href="/players/{{ m.b2_id }}">{{ m.b2 }}</a></div>
   </div>
-  {% if not score_inline or editor %}
+  {% if not score_inline or can_edit or typing %}
   <div class="set-actions">
     {% if not score_inline %}<a class="tag" href="/tournaments/{{ m.tournament_id }}">{{ m.tournament }}</a>{% endif %}
-    {% if editor %}
+    {% if can_edit or typing %}
     <span class="edit">
-      <a href="/matches/{{ m.id }}/edit">{{ _("edit") }}</a>
+      {% if can_edit %}<a href="/matches/{{ m.id }}/edit">{{ _("edit") }}</a>{% endif %}
+      {% if editor %}
       <form method="post" action="/matches/{{ m.id }}/delete" onsubmit="return confirm('{{ _('confirm_delete_set') }}')">
         <button type="submit" class="link">{{ _("delete") }}</button>
       </form>
+      {% endif %}
       {% if typing %}<button type="submit" class="save" form="score-{{ m.id }}">{{ _("save") }}</button>{% endif %}
     </span>
     {% endif %}

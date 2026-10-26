@@ -901,3 +901,126 @@ def test_round_draft_with_rests_and_courts(league):
     page = league.get("/tournaments/2/matchdays/new",
                       params={"played_on": "2026-11-01", "courts": "1"}).text
     assert court_count(page) == 1 and page.count("🛋️ ") >= 4
+
+
+# --- Tournament players and the player password ---------------------------------------
+
+def test_tournament_players_can_be_added_and_removed(league):
+    r = new_tournament(league, 1, players=(1, 2, 3, 4), name="Liga 2")
+    assert "👤 Ana" in r.text and "👤 Elena" not in r.text
+    league.post("/tournaments/2/players", data={"player_id": "5"})   # Elena replaces Ana
+    league.post("/tournaments/2/players/1/remove")
+    with db.connect() as conn:
+        ids = [r[0] for r in conn.execute(
+            "SELECT player_id FROM tournament_players WHERE tournament_id = 2 ORDER BY player_id")]
+    assert ids == [2, 3, 4, 5]
+    # The courts screen offers only the tournament's players.
+    page = league.get("/tournaments/2/matchdays/new", params={"played_on": "2026-11-01"}).text
+    assert ">Elena</option>" in page and ">Ana</option>" not in page and court_count(page) == 1
+
+
+def test_removed_player_keeps_results(league):
+    new_tournament(league, 4, players=(1, 2, 3, 4), name="Manual")  # tournament 2
+    league.post("/tournaments/2/matchdays", data={"played_on": "2026-11-01"})
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 3, matchday_id=2))
+    league.post("/tournaments/2/players/1/remove")
+    assert standing_points(league.get("/tournaments/2").text, "Ana") == 10
+
+
+@pytest.fixture
+def with_players(locked):
+    """The locked league; tournament 1 has players' password 'jugamos' and two sets."""
+    from app import auth
+    with db.connect() as conn:
+        conn.execute("UPDATE tournaments SET player_password = 'jugamos' WHERE id = 1")
+        for a1, a2, b1, b2 in ((1, 2, 3, 4), (1, 3, 2, 4)):
+            conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
+                         "VALUES (1, 1, ?, ?, ?, ?)", (a1, a2, b1, b2))
+    return locked
+
+
+def test_player_password_lets_players_enter_results_only(with_players):
+    c = with_players
+    assert c.post("/login", data={"password": "nope", "next": "/"}).status_code == 401
+    r = c.post("/login", data={"password": "jugamos", "next": "/"})
+    assert str(r.url).endswith("/tournaments/1") and "Log out" in r.text
+    assert "player_1" in c.cookies
+
+    page = c.get("/matchdays/1").text
+    assert page.count('class="score-form"') == 2 and "Logged in as a player" in page
+    assert "Delete" not in page and "Assign courts" not in page
+    r = c.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"})
+    assert 'value="6"' in r.text  # entered, and still editable to correct it
+    c.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "2"})
+    with db.connect() as conn:
+        assert tuple(conn.execute("SELECT team_a_games, team_b_games FROM matches WHERE id = 1")
+                     .fetchone()) == (6, 2)
+
+    # Nothing else: no deleting, no new sets in a Liga, no courts, no tournaments.
+    for method, url, data in [("post", "/matches/1/delete", {"x": "1"}),
+                              ("get", "/matches/new", None),
+                              ("post", "/matches", set_form((5, 6, 7, 8), 6, 4)),
+                              ("get", "/matches/1/edit", None),
+                              ("get", "/matchdays/1/courts", None),
+                              ("post", "/tournaments/1/players/1/remove", {"x": "1"}),
+                              ("post", "/tournaments/1/player-password", {"password": ""}),
+                              ("post", "/players", {"name": "Zed"})]:
+        r = getattr(c, method)(url, data=data, follow_redirects=False) if data else \
+            getattr(c, method)(url, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"].startswith("/login"), url
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0] == 2
+
+    c.post("/logout")
+    assert "player_1" not in c.cookies
+    assert c.post("/matches/2/score", data={"team_a_games": "1", "team_b_games": "0"},
+                  follow_redirects=False).status_code == 303
+
+
+def test_players_of_one_tournament_cannot_score_another(with_players):
+    from app import auth
+    with db.connect() as conn:
+        conn.execute("INSERT INTO tournaments (name, held_on, player_password) "
+                     "VALUES ('Otra', '2026-11-01', 'otra')")
+    with_players.post("/login", data={"password": "otra", "next": "/"})
+    r = with_players.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"},
+                          follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")
+
+
+def test_players_create_sets_in_a_manual_tournament(with_players):
+    from app import auth
+    with db.connect() as conn:
+        conn.execute("INSERT INTO tournaments (name, held_on, rule_type_id, player_password) "
+                     "VALUES ('Manual', '2026-11-01', 4, 'manual')")
+        conn.executemany("INSERT INTO tournament_players (tournament_id, player_id) VALUES (2, ?)",
+                         [(p,) for p in (1, 2, 3, 4, 5)])
+        conn.execute("INSERT INTO matchdays (tournament_id, number, played_on) VALUES (2, 1, '2026-11-01')")
+    c = with_players
+    c.post("/login", data={"password": "manual", "next": "/"})
+    form = c.get("/matches/new?matchday=2").text
+    assert ">Elena</option>" in form and ">Fer</option>" not in form  # the tournament's players
+    assert '<option value="1" ' not in form.split('name="matchday_id"')[1].split("</select>")[0]
+    r = c.post("/matches", data=set_form((1, 5, 2, 3), 6, 4, court=2, matchday_id=2))
+    assert r.status_code == 200 and str(r.url).endswith("/matchdays/2")
+    assert c.get("/matches/3/edit").status_code == 200
+    # Not in the Liga tournament, whose players' password they don't have.
+    r = c.post("/matches", data=set_form((1, 2, 3, 4), 6, 4, matchday_id=1), follow_redirects=False)
+    assert r.status_code == 303
+
+
+def test_set_and_remove_the_player_password(league):
+    r = league.post("/tournaments/1/player-password", data={"password": " jugamos "})
+    assert "<code>jugamos</code>" in r.text  # admins can look it up
+    assert "<code>jugamos</code>" in league.get("/tournaments").text
+    r = league.post("/tournaments/1/player-password", data={"password": ""})
+    assert "➖ None" in r.text and "<code>" not in r.text
+
+
+def test_only_admins_see_the_player_password(with_players):
+    assert "jugamos" not in with_players.get("/tournaments/1").text
+    assert "jugamos" not in with_players.get("/tournaments").text
+    with_players.post("/login", data={"password": "jugamos", "next": "/"})  # a player
+    assert "jugamos" not in with_players.get("/tournaments/1").text
+    with_players.post("/login", data={"password": "secreto", "next": "/"})  # the club
+    assert "<code>jugamos</code>" in with_players.get("/tournaments/1").text
