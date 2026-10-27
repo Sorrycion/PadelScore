@@ -36,6 +36,13 @@ header.topbar { display: flex; align-items: center; justify-content: space-betwe
 .lang-switch { display: flex; gap: 8px; font-size: .8rem; color: var(--muted); }
 .lang-switch a { color: var(--muted); }
 form.nav-form { margin: 0; }
+.brand, .top-actions a, .top-actions button { white-space: nowrap; }
+@media (max-width: 420px) {
+  header.topbar { gap: 8px; padding-left: 12px; padding-right: 12px; }
+  .brand { font-size: 1.05rem; }
+  .top-actions { gap: 10px; font-size: .85rem; }
+  .top-actions .button { padding: 6px 10px; font-size: .85rem; }
+}
 
 nav.tabbar { display: flex; gap: 6px; max-width: 820px; margin: 4px auto 0; padding: 0 16px; }
 nav.tabbar a { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px;
@@ -79,9 +86,11 @@ form.stack { display: grid; gap: 12px; }
 form.stack label { display: grid; gap: 4px; }
 form.danger-zone { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--border); }
 fieldset { border: 0; border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow);
-           display: grid; gap: 8px; grid-template-columns: 1fr 1fr; padding: 14px; margin: 0; }
-legend { float: left; width: 100%; grid-column: 1 / -1; font-weight: 700; padding: 0; margin-bottom: 4px; }
-fieldset.team-row { grid-template-columns: 1fr 1fr 6rem; align-items: end; }
+           display: block; padding: 14px; margin: 0; min-width: 0; }
+/* The float keeps the legend inside the card (not on its edge) in every browser. */
+legend { float: left; width: 100%; font-weight: 700; padding: 0; margin: 0 0 8px; }
+fieldset > .fields { clear: both; display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+fieldset.team-row .fields { grid-template-columns: 1fr 1fr 6rem; align-items: end; }
 fieldset.team-row .games input { width: 100%; font-size: 1.3rem; font-weight: 700; text-align: center;
                                  font-variant-numeric: tabular-nums; }
 details.card > summary { cursor: pointer; font-weight: 600; list-style: none; }
@@ -176,7 +185,7 @@ form.next-matchday { margin-top: 18px; }
 
 /* --- Courts screen --- */
 #courts { display: grid; gap: 12px; }
-fieldset.court-pick .remove-court { grid-column: 1 / -1; justify-self: end; font-size: .85rem; }
+fieldset.court-pick .fields .remove-court { grid-column: 1 / -1; justify-self: end; font-size: .85rem; }
 form.move-question { padding: 4px 18px 18px; }
 form.move-question .inline { display: flex; gap: 10px; }
 .form-actions { display: flex; gap: 16px; align-items: center; }
@@ -185,14 +194,14 @@ label.date-field { max-width: 14rem; }
 /* --- Chips (players, resting), tournament player picks, emoji helpers --- */
 ul.chips { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 ul.chips li { background: var(--card); border-radius: 999px; padding: 6px 14px; box-shadow: var(--shadow); }
-fieldset.player-picks { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+fieldset.player-picks .fields { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 fieldset.player-picks .muted { grid-column: 1 / -1; }
 label.check { display: flex !important; align-items: center; gap: 8px; }
 .tabs .done { font-size: .8rem; }
 .error::before { content: "⚠️ "; }
 details.create { margin-bottom: 20px; }
 /* Player search (picker.js): suggestions listed under the box. */
-fieldset.picker { grid-template-columns: 1fr; }
+fieldset.picker .fields { grid-template-columns: 1fr; }
 .picker .picker-input { width: 100%; }
 .picker-suggestions { display: grid; gap: 4px; max-height: 300px; overflow-y: auto;
                       overscroll-behavior: contain; }
@@ -203,6 +212,7 @@ fieldset.picker { grid-template-columns: 1fr; }
 .picker ul.chips { margin: 0; }
 .picker ul.chips:empty { display: none; }
 form.add-player { display: grid; gap: 6px; max-width: 420px; margin-bottom: 12px; }
+form.add-player label { display: grid; gap: 4px; }
 .password-box { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
                 padding: 12px 16px; font-weight: 600; }
 .password-box code, .t-password code { font-size: 1.1rem; background: var(--accent-soft);
@@ -240,8 +250,11 @@ form.filters select { flex: 1 1 180px; }
   h1 { font-size: 1.75rem; }
   .score-box { width: 64px; height: 56px; font-size: 1.8rem; }
   .team { padding: 4px 16px; font-size: 1.05rem; }
-  fieldset.team-row { grid-template-columns: 1fr 5rem; }
-  fieldset.team-row .games { grid-column: 2; grid-row: 2 / span 2; align-self: center; }
-  fieldset { grid-template-columns: 1fr; }
-  fieldset.court-pick { grid-template-columns: 1fr 1fr; }
+  /* A pair: Player 1 above Player 2, games on the right of both. */
+  fieldset > .fields { grid-template-columns: 1fr; }
+  fieldset.team-row .fields { grid-template-columns: 1fr 5.5rem; column-gap: 12px; }
+  fieldset.team-row .fields > label:nth-child(1) { grid-column: 1; grid-row: 1; }
+  fieldset.team-row .fields > label:nth-child(2) { grid-column: 1; grid-row: 2; }
+  fieldset.team-row .fields > .games { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  fieldset.court-pick .fields { grid-template-columns: 1fr 1fr; }
 }

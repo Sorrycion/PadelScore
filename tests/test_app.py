@@ -1132,3 +1132,41 @@ def test_player_names_cannot_repeat_ignoring_case_accents_and_spaces(league):
     with db.connect() as conn:
         names = [r[0] for r in conn.execute("SELECT name FROM players WHERE name LIKE 'Luis%'")]
     assert names == ["Luis Pérez"]
+
+
+def test_admin_replaces_a_player_in_pending_sets_only(league):
+    league.post("/tournaments/1/players", data={"player_name": "Ana"})
+    league.post("/tournaments/1/players", data={"player_name": "Bea"})
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 3))  # played
+    league.post("/matches", data=set_form((1, 3, 2, 4), "", ""))  # pending
+    page = league.get("/tournaments/1").text
+    assert 'action="/tournaments/1/players/replace"' in page
+    r = league.post("/tournaments/1/players/replace",
+                    data={"old_id": "1", "player_name": "Zoe", "create": "1"})
+    assert r.status_code == 200
+    with db.connect() as conn:
+        zoe = conn.execute("SELECT id FROM players WHERE name = 'Zoe'").fetchone()[0]
+        sets = conn.execute("SELECT a1, team_a_games FROM matches ORDER BY id").fetchall()
+        members = {row[0] for row in conn.execute("SELECT player_id FROM tournament_players")}
+    assert [tuple(s) for s in sets] == [(1, 6), (zoe, None)]
+    assert members == {2, zoe}
+    # Errors: nobody chosen to leave, the same player, or someone already in that set.
+    for data, error in (({"old_id": "", "player_name": "Hugo"}, "Choose which player leaves"),
+                        ({"old_id": "2", "player_name": "bea"}, "Choose a different player"),
+                        ({"old_id": "2", "player_name": "Diego"}, "already in a pending set")):
+        assert error in league.post("/tournaments/1/players/replace", data=data).text
+
+
+def test_ended_tournaments_go_to_the_past_tab(league):
+    league.post("/tournaments", data={"name": "Copa", "held_on": "2026-11-01"})  # id 2
+    league.post("/tournaments/1/ended", data={"ended": "1"})
+    current = league.get("/tournaments").text
+    assert "Copa" in current and "Liga Amigos" not in current and "Past (1)" in current
+    past = league.get("/tournaments?past=1").text
+    assert "Liga Amigos" in past and "Copa" not in past
+    assert "Reopen tournament" in league.get("/tournaments/1").text
+    home = league.get("/").text
+    assert "Copa" in home and "/?tournament=1" not in home
+    assert "Liga Amigos" in league.get("/?tournament=1").text  # still reachable
+    league.post("/tournaments/1/ended", data={"ended": "0"})
+    assert "Liga Amigos" in league.get("/tournaments").text

@@ -62,7 +62,8 @@
       if (!multi) {
         input.value = p.name;
         box.querySelector(".picker-create").value = p.id ? "" : "1";
-        input.form.submit();
+        // requestSubmit checks the form's other required fields first.
+        if (input.form.requestSubmit) input.form.requestSubmit(); else input.form.submit();
         return;
       }
       var li = document.createElement("li");

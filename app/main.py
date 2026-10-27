@@ -263,11 +263,13 @@ def load_results(conn, tournament_id):
 def home(request: Request, tournament: str | None = None):
     """Standings of one tournament (the latest unless chosen), with a tournament picker."""
     with db.connect() as conn:
-        tournaments = all_tournaments(conn)
-        ids = [t["id"] for t in tournaments]
+        everyone = all_tournaments(conn)
         chosen = opt_int(tournament)
-        if chosen not in ids:
-            chosen = ids[0] if ids else None
+        if chosen not in [t["id"] for t in everyone]:
+            current = [t for t in everyone if not t["ended"]] or everyone
+            chosen = current[0]["id"] if current else None
+        # Tabs for the tournaments still going (and the chosen one, if it has ended).
+        tournaments = [t for t in everyone if not t["ended"] or t["id"] == chosen]
         latest = chosen and get_tournament(conn, chosen)
         results, standings = load_results(conn, latest["id"]) if latest else ([], [])
         return templates.TemplateResponse(request, "index.html", {
@@ -341,10 +343,15 @@ def rules_page(request: Request):
 
 
 @app.get("/tournaments", response_class=HTMLResponse)
-def tournaments_page(request: Request, error: str | None = None):
+def tournaments_page(request: Request, error: str | None = None, past: str = ""):
+    """Tournaments still going, or (past=1) the ones that have ended."""
     with db.connect() as conn:
+        everyone = all_tournaments(conn)
+        past = past == "1"
         return templates.TemplateResponse(request, "tournaments.html", {
-            "tournaments": all_tournaments(conn), "error": error,
+            "tournaments": [t for t in everyone if bool(t["ended"]) == past], "error": error,
+            "past": past, "n_past": sum(1 for t in everyone if t["ended"]),
+            "n_current": sum(1 for t in everyone if not t["ended"]),
             "rule_types": all_rule_types(conn),
             "players": all_players(conn),
             "players_json": [{"id": p["id"], "name": p["name"]} for p in all_players(conn)],
@@ -426,6 +433,51 @@ def remove_tournament_player(tournament_id: int, player_id: int):
         conn.execute("DELETE FROM tournament_players WHERE tournament_id = ? AND player_id = ?",
                      (tournament_id, player_id))
     return redirect(f"/tournaments/{tournament_id}#players")
+
+
+@app.post("/tournaments/{tournament_id}/players/replace", dependencies=EDIT)
+def replace_tournament_player(tournament_id: int, old_id: int = Form(0),
+                              player_name: str = Form(""), create: str = Form("")):
+    """Put another player (found by name, or new with `create`) in place of one of the
+    tournament: in its list and in its sets not played yet. Sets already played, and
+    their points, stay with the player who leaves."""
+    name = clean_name(player_name)
+    back = f"/tournaments/{tournament_id}"
+    with db.connect() as conn:
+        get_or_404(conn, "tournaments", tournament_id)
+        if not conn.execute("SELECT 1 FROM tournament_players WHERE tournament_id = ? "
+                            "AND player_id = ?", (tournament_id, old_id)).fetchone():
+            return redirect(f"{back}?error=err_choose_leaving#replace")
+        new_id = find_player(conn, name)
+        if new_id is None and not (create and name):
+            return redirect(f"{back}?error=err_unknown_player#replace")
+        if new_id == old_id:
+            return redirect(f"{back}?error=err_replace_same#replace")
+        pending = ("team_a_games IS NULL AND matchday_id IN "
+                   "(SELECT id FROM matchdays WHERE tournament_id = ?)")
+        if new_id and conn.execute(
+                f"SELECT 1 FROM matches WHERE {pending} AND ? IN (a1, a2, b1, b2) "
+                "AND ? IN (a1, a2, b1, b2)", (tournament_id, old_id, new_id)).fetchone():
+            return redirect(f"{back}?error=err_replace_conflict#replace")
+        new_id = new_id or player_id(conn, name)
+        for col in ("a1", "a2", "b1", "b2"):
+            conn.execute(f"UPDATE matches SET {col} = ? WHERE {col} = ? AND {pending}",
+                         (new_id, old_id, tournament_id))
+        conn.execute("DELETE FROM tournament_players WHERE tournament_id = ? AND player_id = ?",
+                     (tournament_id, old_id))
+        conn.execute("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
+                     "VALUES (?, ?)", (tournament_id, new_id))
+    return redirect(f"{back}#players")
+
+
+@app.post("/tournaments/{tournament_id}/ended", dependencies=EDIT)
+def set_tournament_ended(tournament_id: int, ended: str = Form("1")):
+    """End a tournament (it moves to Past tournaments), or reopen it with ended=0."""
+    with db.connect() as conn:
+        get_or_404(conn, "tournaments", tournament_id)
+        conn.execute("UPDATE tournaments SET ended = ? WHERE id = ?",
+                     (int(ended == "1"), tournament_id))
+    return redirect(f"/tournaments/{tournament_id}")
 
 
 @app.post("/tournaments/{tournament_id}/player-password", dependencies=EDIT)

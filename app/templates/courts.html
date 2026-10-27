@@ -6,7 +6,7 @@
 {# One court: four player selects, all named court-<n>. "__N__" is filled in by the script below. #}
 {% macro court_fieldset(n, ids) %}
 <fieldset class="court-pick">
-  <legend>{{ _("court_n", n=n) }}</legend>
+  <legend>{{ _("court_n", n=n) }}</legend><div class="fields">
   {% for pid in ids %}
   <select name="court-{{ n }}" aria-label="{{ _('player') }} {{ loop.index }}">
     <option value="">{{ _("choose") }}</option>
@@ -14,7 +14,7 @@
   </select>
   {% endfor %}
   <button type="button" class="link remove-court">{{ _("remove_court") }}</button>
-</fieldset>
+</div></fieldset>
 {% endmacro %}
 {% block content %}
 <h1>{{ heading }}</h1>
@@ -60,12 +60,12 @@
     </select>
   </label>
   <fieldset class="player-picks">
-    <legend>{{ _("who_rests") }}</legend>
+    <legend>{{ _("who_rests") }}</legend><div class="fields">
     <p class="muted">{{ _("who_rests_hint") }}</p>
     {% for p in participants %}
     <label class="check"><input type="checkbox" name="rest" value="{{ p.id }}" {% if p.id in asked %}checked{% endif %}> {{ p.name }}</label>
     {% endfor %}
-  </fieldset>
+  </div></fieldset>
   <button type="submit" class="secondary">{{ _("update_suggestion") }}</button>
 </form>
 {% endif %}

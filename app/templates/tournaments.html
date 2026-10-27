@@ -24,13 +24,13 @@
                            "one": _("n_players", n=1)|string, "many": _("n_players", n="{n}")|string} %}
     <fieldset class="picker" data-mode="multi" data-players='{{ players_json|tojson }}'
               data-create="{{ picker_texts.create }}" data-one="{{ picker_texts.one }}" data-many="{{ picker_texts.many }}">
-      <legend>{{ _("tournament_players") }}</legend>
+      <legend>{{ _("tournament_players") }}</legend><div class="fields">
       <p class="muted">{{ _("tournament_players_hint") }}</p>
       <input class="picker-input" autocomplete="off" placeholder="{{ _('search_player') }}" aria-label="{{ _('search_player') }}">
       <div class="picker-suggestions"></div>
       <ul class="chips picker-chosen"></ul>
       <p class="muted picker-count"></p>
-    </fieldset>
+    </div></fieldset>
     <label>{{ _("player_password") }}
       <input type="text" name="player_password" id="player-password" autocomplete="off" required>
     </label>
@@ -58,11 +58,15 @@
   })();
 </script>
 {% endif %}
+<nav class="tabs" aria-label="{{ _('tournaments') }}">
+  <a href="/tournaments" {% if not past %}class="active" aria-current="page"{% endif %}>🎾 {{ _("current_tournaments") }} ({{ n_current }})</a>
+  <a href="/tournaments?past=1" {% if past %}class="active" aria-current="page"{% endif %}>🏁 {{ _("past_tournaments") }} ({{ n_past }})</a>
+</nav>
 {% if tournaments %}
 <ul class="cards">
   {% for t in tournaments %}
   <li><a class="t-card" href="/tournaments/{{ t.id }}">
-    <div class="top"><span>{{ RULE_ICONS.get(t.rule_code, "") }} {{ t.rule_type }}</span><span>📅 {{ t.held_on }}</span></div>
+    <div class="top"><span>{{ RULE_ICONS.get(t.rule_code, "") }} {{ t.rule_type }}</span><span>📅 {{ t.held_on }}{% if t.ended %} · 🏁{% endif %}</span></div>
     <div class="name">{{ t.name }}</div>
     {% if editor and t.player_password %}<div class="t-password">🔑 <code>{{ t.player_password }}</code></div>{% endif %}
     <div class="meta">👥 {{ _("n_players_bold", n=t.players) }} · {{ "🔁" if t.rule_code in ROUND_MODES else "📅" }} {{ _("n_rounds_bold" if t.rule_code in ROUND_MODES else "n_matchdays_bold", n=t.matchdays) }}</div>
@@ -70,6 +74,6 @@
   {% endfor %}
 </ul>
 {% else %}
-<p class="empty">{{ _("no_tournaments") }}</p>
+<p class="empty">{{ _("no_past_tournaments" if past else "no_tournaments") }}</p>
 {% endif %}
 {% endblock %}

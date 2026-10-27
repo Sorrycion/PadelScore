@@ -6,7 +6,7 @@
   <div>
     <p class="eyebrow"><a class="plain" href="/rules#{{ tournament.rule_code }}">{{ RULE_ICONS.get(tournament.rule_code, "") }} {{ tournament.rule_type }}</a></p>
     <h1>{{ tournament.name }}</h1>
-    <div class="muted">📅 {{ tournament.held_on }}</div>
+    <div class="muted">📅 {{ tournament.held_on }}{% if tournament.ended %} · {{ _("tournament_ended") }}{% endif %}</div>
   </div>
   <div class="stats">
     {% if round_mode and tournament.points_per_match %}<div><strong>{{ tournament.points_per_match }}</strong> 🎯</div>{% endif %}
@@ -64,6 +64,27 @@
 <script src="/static/picker.js?v={{ css_version }}" defer></script>
 <p class="muted">{{ _("tournament_players_edit_hint", url="/players") }}</p>
 
+{% if participants %}
+<h3 id="replace">🔁 {{ _("replace_player") }}</h3>
+<form method="post" action="/tournaments/{{ tournament.id }}/players/replace" class="picker add-player"
+      data-mode="single" data-players='{{ others|map("pick_player")|list|tojson }}'
+      data-create="{{ _('create_player_option', name='{name}') }}">
+  <label>{{ _("replace_who") }}
+    <select name="old_id" required>
+      <option value="">—</option>
+      {% for p in participants %}<option value="{{ p.id }}">👤 {{ p.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>{{ _("replace_with") }}
+    <input name="player_name" class="picker-input" autocomplete="off" required
+           placeholder="{{ _('search_player') }}">
+  </label>
+  <input type="hidden" name="create" class="picker-create">
+  <div class="picker-suggestions"></div>
+</form>
+<p class="muted">{{ _("replace_hint") }}</p>
+{% endif %}
+
 <h2 id="player-password">{{ _("player_password") }}</h2>
 <p class="password-box">{{ _("current_password") }}: <code>{{ tournament.player_password }}</code></p>
 <p class="muted">{{ _("player_password_on") }}</p>
@@ -76,6 +97,11 @@
 {% endif %}
 
 {% if editor %}
+<form method="post" action="/tournaments/{{ tournament.id }}/ended" class="inline">
+  <input type="hidden" name="ended" value="{{ 0 if tournament.ended else 1 }}">
+  <button type="submit" class="secondary">{{ _("reopen_tournament" if tournament.ended else "end_tournament") }}</button>
+</form>
+<p class="muted">{{ _("end_tournament_hint") }}</p>
 <form method="post" action="/tournaments/{{ tournament.id }}/delete" class="danger-zone"
       onsubmit="return confirm('{{ _('confirm_delete_tournament') }}')">
   <button type="submit" class="danger">{{ _("delete_tournament") }}</button>

@@ -104,6 +104,26 @@ TEXT = {
     "add": {"es": "➕ Agregar", "en": "➕ Add"},
     "create_player_option": {"es": "➕ Crear jugador «{name}»", "en": "➕ Create player “{name}”"},
     "add_to_tournament": {"es": "➕ Agregar al torneo", "en": "➕ Add to tournament"},
+    "current_tournaments": {"es": "En curso", "en": "Current"},
+    "past_tournaments": {"es": "Pasados", "en": "Past"},
+    "no_past_tournaments": {"es": "Todavía no hay torneos terminados.",
+                            "en": "No tournaments have ended yet."},
+    "tournament_ended": {"es": "🏁 Terminado", "en": "🏁 Ended"},
+    "end_tournament": {"es": "🏁 Terminar torneo", "en": "🏁 End tournament"},
+    "reopen_tournament": {"es": "↩️ Reabrir torneo", "en": "↩️ Reopen tournament"},
+    "end_tournament_hint": {
+        "es": "Un torneo terminado pasa a Torneos pasados; sus resultados se conservan y "
+              "puedes reabrirlo cuando quieras.",
+        "en": "An ended tournament moves to Past tournaments; its results are kept and you "
+              "can reopen it any time."},
+    "replace_player": {"es": "Reemplazar a un jugador", "en": "Replace a player"},
+    "replace_who": {"es": "Sale", "en": "Leaves"},
+    "replace_with": {"es": "Entra", "en": "Comes in"},
+    "replace_hint": {
+        "es": "El nuevo jugador toma su lugar en la lista y en los sets sin jugar. Los sets "
+              "ya jugados y sus puntos se quedan con quien sale.",
+        "en": "The new player takes their place in the list and in the sets not played yet. "
+              "Sets already played, and their points, stay with the player who leaves."},
     "confirm_remove_player": {
         "es": "¿Quitar a este jugador del torneo? Sus resultados anteriores se conservan.",
         "en": "Remove this player from the tournament? Their results so far are kept."},
@@ -332,6 +352,12 @@ TEXT = {
     # Errors
     "err_name_required": {"es": "El nombre es obligatorio.", "en": "Name is required."},
     "err_player_exists": {"es": "Ese jugador ya existe.", "en": "That player already exists."},
+    "err_choose_leaving": {"es": "Elige qué jugador sale.", "en": "Choose which player leaves."},
+    "err_replace_same": {"es": "Elige a otro jugador para entrar.",
+                         "en": "Choose a different player to come in."},
+    "err_replace_conflict": {
+        "es": "Ese jugador ya está en un set sin jugar con quien sale; cambia ese set primero.",
+        "en": "That player is already in a pending set with the one leaving; change that set first."},
     "err_invalid_date": {"es": "Ingresa una fecha válida.", "en": "Enter a valid date."},
     "err_four_players": {"es": "Elige cuatro jugadores diferentes.",
                          "en": "Pick four different players."},

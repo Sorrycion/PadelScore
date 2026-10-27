@@ -33,7 +33,9 @@ CREATE TABLE IF NOT EXISTS tournaments (
     points_per_match INTEGER CHECK (points_per_match IS NULL OR points_per_match > 0),
     -- Players who log in with this password may enter results (see auth.py). Editors
     -- can see it, to share it with the players.
-    player_password TEXT
+    player_password TEXT,
+    -- 1 once an editor marks the tournament as ended: it moves to "Past tournaments".
+    ended INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0, 1))
 );
 
 -- Who plays an Americano or Mexicano tournament (the rounds are drawn among them).
@@ -105,7 +107,8 @@ def init_db():
 
 def add_rule_types(conn):
     """Databases made before rule types: every tournament gets rule type 1 (Liga de
-    amigos score), the rules it was played with. Also adds points_per_match."""
+    amigos score), the rules it was played with. Also adds points_per_match, the
+    player password and the ended flag."""
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(tournaments)")}
     if "rule_type_id" not in columns:
         # SQLite only adds a column with REFERENCES and a non-NULL default while
@@ -117,6 +120,9 @@ def add_rule_types(conn):
         conn.execute("PRAGMA foreign_keys = ON")
     if "player_password" not in columns:
         conn.execute("ALTER TABLE tournaments ADD COLUMN player_password TEXT")
+    if "ended" not in columns:
+        conn.execute("ALTER TABLE tournaments ADD COLUMN "
+                     "ended INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0, 1))")
     if "points_per_match" not in columns:
         conn.execute("ALTER TABLE tournaments ADD COLUMN points_per_match INTEGER "
                      "CHECK (points_per_match IS NULL OR points_per_match > 0)")

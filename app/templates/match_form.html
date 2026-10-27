@@ -19,7 +19,7 @@
 {% else %}
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 <form method="post" action="{{ '/matches/%d'|format(match_id) if match_id else '/matches' }}" class="stack">
-  <fieldset><legend>{{ _("where") }}</legend>
+  <fieldset><legend>{{ _("where") }}</legend><div class="fields">
     <label>{{ _("matchday") }}
       <select name="matchday_id" required>
         <option value="">{{ _("choose") }}</option>
@@ -29,14 +29,14 @@
       </select>
     </label>
     <label>{{ _("court") }} <input type="number" name="court" min="1" value="{{ form.court or 1 }}" required></label>
-  </fieldset>
+  </div></fieldset>
   {% for team, p1, p2, games in [("team_a", "a1", "a2", "team_a_games"), ("team_b", "b1", "b2", "team_b_games")] %}
-  <fieldset class="team-row"><legend>{{ _(team) }}</legend>
+  <fieldset class="team-row"><legend>{{ _(team) }}</legend><div class="fields">
     {{ pick(p1, _("player_1")) }}{{ pick(p2, _("player_2")) }}
     <label class="games">{{ _("games_legend") }}
       <input type="number" name="{{ games }}" min="0" inputmode="numeric" value="{{ form[games] if form[games] is not none else '' }}">
     </label>
-  </fieldset>
+  </div></fieldset>
   {% endfor %}
   <p class="muted">{{ _("games_later") }}</p>
   <button type="submit">{{ _("save_changes") if match_id else _("save_set") }}</button>
