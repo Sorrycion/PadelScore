@@ -348,21 +348,32 @@ def set_language(lang: str, next: str = "/"):
     return response
 
 
+def top_orgs(conn, limit=10):
+    """The organizations with the most tournaments (then by name), for the enter page."""
+    return conn.execute(
+        "SELECT o.name, (SELECT COUNT(*) FROM tournaments t WHERE t.organization_id = o.id) "
+        "AS tournaments FROM organizations o ORDER BY tournaments DESC, o.name LIMIT ?",
+        (limit,)).fetchall()
+
+
 @app.get("/enter", response_class=HTMLResponse)
 def enter_page(request: Request, next: str = "/"):
-    """Choose the organization to see (by its name)."""
-    return templates.TemplateResponse(request, "enter.html", {"next": safe_next(next)})
+    """Choose the organization to see: one of the top ones, or any by its name."""
+    with db.connect() as conn:
+        return templates.TemplateResponse(request, "enter.html", {
+            "next": safe_next(next), "orgs": top_orgs(conn)})
 
 
 @app.post("/enter")
 def enter(request: Request, name: str = Form(""), next: str = Form("/")):
     with db.connect() as conn:
         org = auth.find_org(conn, name)
-    if org is None:
-        time.sleep(1)  # slow down guessing
-        return templates.TemplateResponse(request, "enter.html", {
-            "next": safe_next(next), "name": name, "error": "err_unknown_org",
-        }, status_code=404)
+        if org is None:
+            time.sleep(1)  # slow down guessing
+            return templates.TemplateResponse(request, "enter.html", {
+                "next": safe_next(next), "name": name, "error": "err_unknown_org",
+                "orgs": top_orgs(conn),
+            }, status_code=404)
     return enter_org(request, org, safe_next(next))
 
 

@@ -348,13 +348,15 @@ TEXT = {
 
     # Organizations
     "enter_title": {"es": "🏢 Entrar a una organización", "en": "🏢 Enter an organization"},
-    "enter_hint": {"es": "Escribe el nombre de tu organización para ver sus torneos, "
-                         "clasificaciones y jugadores.",
-                   "en": "Type your organization's name to see its tournaments, standings and "
+    "enter_hint": {"es": "Elige tu organización para ver sus torneos, clasificaciones y "
+                         "jugadores.",
+                   "en": "Choose your organization to see its tournaments, standings and "
                          "players."},
     "enter_login_hint": {"es": '¿Eres administrador o jugador con contraseña? <a href="{url}">Entra aquí</a>.',
                          "en": 'An admin, or a player with a password? <a href="{url}">Log in here</a>.'},
     "org_name": {"es": "🏢 Organización", "en": "🏢 Organization"},
+    "enter_other": {"es": "¿No está en la lista? Escribe su nombre:",
+                    "en": "Not in the list? Type its name:"},
     "enter": {"es": "➡️ Entrar", "en": "➡️ Enter"},
     "change_org": {"es": "Cambiar de organización", "en": "Change organization"},
     "current_org": {"es": "Actual", "en": "Current"},

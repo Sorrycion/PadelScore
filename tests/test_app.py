@@ -1301,3 +1301,16 @@ def test_first_organization_adopts_existing_data(tmp_path, monkeypatch):
         assert org["admin_password"] != "clave-uno"
         assert orgs.check_password("clave-uno", org["admin_password"])
         conn.execute("INSERT INTO players (organization_id, name) VALUES (2, 'A')")  # per org
+
+
+def test_enter_page_lists_the_top_ten_organizations(league):
+    with db.connect() as conn:
+        for i in range(11):
+            orgs.create_org(conn, f"Org {i:02d}", f"admin{i}", "x")
+    league.cookies.delete("org")
+    page = league.get("/enter").text
+    names = re.findall(r'class="org-pick"><span>🏢 ([^<]+)</span>', page)
+    assert names[0] == "Club" and len(names) == 10  # the most tournaments first, then by name
+    assert "Org 09" not in names and "Org 08" in names
+    r = league.post("/enter", data={"name": "Club", "next": "/"})
+    assert "Liga Amigos" in r.text
