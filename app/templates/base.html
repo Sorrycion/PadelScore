@@ -25,7 +25,13 @@
 <body>
   {% set path = request.url.path %}
   <header class="topbar">
-    <a class="brand" href="/">🎾 PadelScore</a>
+    <div class="brand-box">
+      <a class="brand" href="/">🎾 PadelScore</a>
+      {% if org or superadmin %}<div class="org-line">
+        {% if org %}<a href="/enter" title="{{ _('change_org') }}">🏢 {{ org.name }}</a>{% endif %}
+        {% if superadmin %}<a href="/orgs">⭐ {{ _("nav_orgs") }}</a>{% endif %}
+      </div>{% endif %}
+    </div>
     <div class="top-actions">
       {% if editor %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
       {% if login_enabled %}

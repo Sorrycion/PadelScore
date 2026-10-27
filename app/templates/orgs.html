@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ _("nav_orgs") }} · PadelScore{% endblock %}
+{% block content %}
+<h1>⭐ {{ _("nav_orgs") }}</h1>
+<p class="muted">{{ _("orgs_hint") }}</p>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+<details class="create">
+  <summary class="button">{{ _("create_org") }}</summary>
+  <form method="post" action="/orgs" class="stack card">
+    <label>{{ _("org_name") }} <input name="name" required></label>
+    <label>{{ _("admin_user") }} <input name="admin_user" autocomplete="off" autocapitalize="off" required></label>
+    <label>{{ _("admin_password") }} <input type="password" name="admin_password" autocomplete="new-password" required></label>
+    <button type="submit">{{ _("create_org") }}</button>
+  </form>
+</details>
+{% if orgs %}
+<ul class="cards">
+  {% for o in orgs %}
+  <li class="card org-card">
+    <div class="name">🏢 {{ o.name }}{% if org and org.id == o.id %} <span class="tag">✅ {{ _("current_org") }}</span>{% endif %}</div>
+    <div class="meta muted">👤 {{ o.admin_user }} · 🏆 {{ o.tournaments }} · 👥 {{ o.players }}</div>
+    <div class="inline">
+      <form method="post" action="/orgs/{{ o.id }}/enter"><button type="submit">{{ _("enter") }}</button></form>
+    </div>
+    <form method="post" action="/orgs/{{ o.id }}/password" class="inline">
+      <input type="password" name="admin_password" autocomplete="new-password" placeholder="{{ _('new_admin_password') }}" aria-label="{{ _('new_admin_password') }}" required>
+      <button type="submit" class="secondary">{{ _("save") }}</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty">{{ _("no_orgs") }}</p>
+{% endif %}
+{% endblock %}

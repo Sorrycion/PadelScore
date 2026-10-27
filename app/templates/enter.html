@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ _("enter_title") }} · PadelScore{% endblock %}
+{% block content %}
+<h1>{{ _("enter_title") }}</h1>
+<p class="muted">{{ _("enter_hint") }}</p>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+<form method="post" action="/enter" class="stack card">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label>{{ _("org_name") }}
+    <input name="name" value="{{ name or '' }}" autocomplete="organization" required autofocus>
+  </label>
+  <button type="submit">{{ _("enter") }}</button>
+</form>
+<p class="muted">{{ _("enter_login_hint", url="/login") }}</p>
+{% endblock %}

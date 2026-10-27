@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app import db
+from app import db, orgs
 from app.i18n import LANGS, TEXT
 from app.main import app
 from app.scoring import (ScoreError, check_set, court_moves, court_rotation, court_table,
@@ -16,12 +16,15 @@ APP_DIR = Path(__file__).parent.parent / "app"
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    """A client using the English UI (most assertions below check English texts).
-    No club password is set, so editing is open (as on a developer's machine)."""
+    """A client using the English UI (most assertions below check English texts),
+    logged in as the admin of organization 1, "Club" (user "admin", password "secreto")."""
     monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "test.db"))
-    monkeypatch.delenv("PADELSCORE_EDIT_PASSWORD", raising=False)
+    monkeypatch.setattr("app.main.time.sleep", lambda s: None)  # skip the wrong-password delay
     with TestClient(app) as c:
+        with db.connect() as conn:
+            orgs.create_org(conn, "Club", "admin", "secreto")
         c.cookies.set("lang", "en")
+        assert c.post("/login", data={"username": "admin", "password": "secreto"}).status_code == 200
         yield c
 
 
@@ -273,7 +276,7 @@ def test_missing_pages_return_404(league):
 
 
 def test_spanish_is_the_default_language(league):
-    league.cookies.clear()
+    league.cookies.delete("lang")
     home = league.get("/").text
     assert '<html lang="es">' in home and "Clasificación" in home and "Jornada 1" in home
     r = league.post("/matches", data=set_form((1, 1, 3, 4), 6, 4))
@@ -283,7 +286,7 @@ def test_spanish_is_the_default_language(league):
 
 
 def test_switch_language(league):
-    league.cookies.clear()
+    league.cookies.delete("lang")
     r = league.get("/lang/en?next=/tournaments/1")
     assert r.status_code == 200 and str(r.url).endswith("/tournaments/1")
     assert "Matchdays" in r.text and '<html lang="en">' in r.text
@@ -330,10 +333,8 @@ def test_new_set_form_selects_the_latest_matchday(league):
 # --- Club password ---------------------------------------------------------------
 
 @pytest.fixture
-def locked(league, monkeypatch):
-    """The league, with a club password set and this browser not logged in."""
-    monkeypatch.setenv("PADELSCORE_EDIT_PASSWORD", "secreto")
-    monkeypatch.setattr("app.main.time.sleep", lambda s: None)  # skip the wrong-password delay
+def locked(league):
+    """The league, seen by a browser that entered the organization but isn't logged in."""
     league.cookies.delete("editor")
     return league
 
@@ -380,7 +381,7 @@ def test_wrong_password_is_rejected(locked):
 
 
 def test_login_then_edit_then_logout(locked):
-    r = locked.post("/login", data={"password": "secreto", "next": "/players"})
+    r = locked.post("/login", data={"username": "admin", "password": "secreto", "next": "/players"})
     assert r.status_code == 200 and str(r.url).endswith("/players") and "Add player" in r.text
     assert "Zed" in locked.post("/players", data={"name": "Zed"}).text
     assert locked.post("/matches", data=set_form((1, 2, 3, 4), 6, 4)).status_code == 200
@@ -392,13 +393,14 @@ def test_login_then_edit_then_logout(locked):
 
 
 def test_changing_the_password_logs_everyone_out(locked, monkeypatch):
-    locked.post("/login", data={"password": "secreto", "next": "/"})
-    monkeypatch.setenv("PADELSCORE_EDIT_PASSWORD", "nuevo")
+    locked.post("/login", data={"username": "admin", "password": "secreto", "next": "/"})
+    with db.connect() as conn:
+        orgs.set_password(conn, "admin", "nuevo")
     assert locked.post("/players", data={"name": "Zed"}, follow_redirects=False).status_code == 303
 
 
 def test_login_only_redirects_within_the_site(locked):
-    r = locked.post("/login", data={"password": "secreto", "next": "https://evil.example"},
+    r = locked.post("/login", data={"username": "admin", "password": "secreto", "next": "https://evil.example"},
                     follow_redirects=False)
     assert r.headers["location"] == "/"
 
@@ -1008,8 +1010,8 @@ def test_player_password_lets_players_enter_results_only(with_players):
 def test_players_of_one_tournament_cannot_score_another(with_players):
     from app import auth
     with db.connect() as conn:
-        conn.execute("INSERT INTO tournaments (name, held_on, player_password) "
-                     "VALUES ('Otra', '2026-11-01', 'otra')")
+        conn.execute("INSERT INTO tournaments (name, held_on, player_password, organization_id) "
+                     "VALUES ('Otra', '2026-11-01', 'otra', 1)")
     with_players.post("/login", data={"password": "otra", "next": "/"})
     r = with_players.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"},
                           follow_redirects=False)
@@ -1019,8 +1021,8 @@ def test_players_of_one_tournament_cannot_score_another(with_players):
 def test_players_create_sets_in_a_manual_tournament(with_players):
     from app import auth
     with db.connect() as conn:
-        conn.execute("INSERT INTO tournaments (name, held_on, rule_type_id, player_password) "
-                     "VALUES ('Manual', '2026-11-01', 4, 'manual')")
+        conn.execute("INSERT INTO tournaments (name, held_on, rule_type_id, player_password, "
+                     "organization_id) VALUES ('Manual', '2026-11-01', 4, 'manual', 1)")
         conn.executemany("INSERT INTO tournament_players (tournament_id, player_id) VALUES (2, ?)",
                          [(p,) for p in (1, 2, 3, 4, 5)])
         conn.execute("INSERT INTO matchdays (tournament_id, number, played_on) VALUES (2, 1, '2026-11-01')")
@@ -1081,7 +1083,7 @@ def test_only_admins_see_the_player_password(with_players):
     assert "jugamos" not in with_players.get("/tournaments").text
     with_players.post("/login", data={"password": "jugamos", "next": "/"})  # a player
     assert "jugamos" not in with_players.get("/tournaments/1").text
-    with_players.post("/login", data={"password": "secreto", "next": "/"})  # the club
+    with_players.post("/login", data={"username": "admin", "password": "secreto", "next": "/"})  # the club
     assert "<code>jugamos</code>" in with_players.get("/tournaments/1").text
 
 
@@ -1188,3 +1190,114 @@ def test_replace_a_player_from_the_matchday_court_table(league):
     with db.connect() as conn:
         assert [r[0] for r in conn.execute("SELECT a1 FROM matches ORDER BY id")][0] == 1
     assert league.get("/tournaments/1/players/8/replace").status_code == 404  # no sets
+
+
+# --- Organizations and super admins ------------------------------------------------------
+
+def test_visitors_enter_an_organization_first(league):
+    league.cookies.delete("org")
+    r = league.get("/tournaments", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/enter?next=/tournaments"
+    assert league.get("/rules").status_code == 200  # the rules are for everyone
+    r = league.post("/enter", data={"name": "Nadie", "next": "/tournaments"})
+    assert r.status_code == 404 and "no organization with that name" in r.text
+    r = league.post("/enter", data={"name": "  club ", "next": "/tournaments"})
+    assert str(r.url).endswith("/tournaments") and "Liga Amigos" in r.text and "🏢 Club" in r.text
+    # A forged cookie is ignored.
+    league.cookies.delete("org")
+    league.cookies.set("org", "1.forged")
+    assert league.get("/", follow_redirects=False).headers["location"].startswith("/enter")
+
+
+def test_organizations_only_see_their_own_data(league):
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4))
+    with db.connect() as conn:
+        orgs.create_org(conn, "Otro club", "otro", "clave")
+    other = league.post("/login", data={"username": "otro", "password": "clave"})
+    assert "🏢 Otro club" in other.text and "Liga Amigos" not in other.text
+    assert "Liga Amigos" not in league.get("/tournaments").text
+    assert "Ana" not in league.get("/players").text and "Ana" not in league.get("/matches").text
+    for url in ("/tournaments/1", "/matchdays/1", "/players/1", "/matches/1/edit"):
+        assert league.get(url).status_code == 404, url
+    assert league.post("/matches/1/score", data={"team_a_games": "0", "team_b_games": "6"}
+                       ).status_code == 404
+    # Its own players, even with names the other club uses; no sets with the other's players.
+    league.post("/players", data={"name": "Ana"})
+    league.post("/tournaments", data={"name": "Copa", "held_on": "2026-11-01"})
+    with db.connect() as conn:
+        conn.execute("INSERT INTO matchdays (tournament_id, number, played_on) "
+                     "VALUES (2, 1, '2026-11-01')")
+    r = league.post("/matches", data=set_form((1, 2, 3, 9), 6, 4, matchday_id=2))
+    assert r.status_code == 400
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM players WHERE name = 'Ana'").fetchone()[0] == 2
+        assert conn.execute("SELECT team_a_games FROM matches WHERE id = 1").fetchone()[0] == 6
+    # The first club's admin cookie is no admin here.
+    league.cookies.delete("editor")
+    assert league.post("/players", data={"name": "Zed"}, follow_redirects=False) \
+        .headers["location"].startswith("/login")
+
+
+def test_admins_log_in_with_user_and_password(locked):
+    r = locked.post("/login", data={"username": "admin", "password": "nope"})
+    assert r.status_code == 401 and "Wrong password." in r.text
+    r = locked.post("/login", data={"username": "ADMIN", "password": "secreto", "next": "/players"})
+    assert str(r.url).endswith("/players") and "Add player" in r.text
+
+
+def test_super_admin_creates_and_enters_organizations(locked):
+    assert locked.get("/orgs", follow_redirects=False).headers["location"].startswith("/login")
+    assert locked.post("/orgs", data={"name": "X", "admin_user": "x", "admin_password": "x"},
+                       follow_redirects=False).status_code == 303
+    with db.connect() as conn:
+        orgs.set_superadmin(conn, "julio", "super")
+        assert conn.execute("SELECT COUNT(*) FROM organizations").fetchone()[0] == 1
+    locked.cookies.delete("org")
+    r = locked.post("/login", data={"username": "julio", "password": "super"})
+    assert str(r.url).endswith("/orgs") and "Club" in r.text
+    r = locked.post("/orgs", data={"name": "Nene", "admin_user": "nene", "admin_password": "pa"})
+    assert "Nene" in r.text
+    assert "already" in locked.post("/orgs", data={"name": "nene", "admin_user": "y",
+                                                   "admin_password": "p"}).text
+    # Admin in every organization.
+    r = locked.post("/orgs/1/enter")
+    assert "Liga Amigos" in r.text and "Delete tournament" in locked.get("/tournaments/1").text
+    assert "Zed" in locked.post("/players", data={"name": "Zed"}).text
+    locked.post("/orgs/2/enter")
+    assert "Liga Amigos" not in locked.get("/tournaments").text
+    # And can reset an organization's admin password.
+    locked.post("/orgs/2/password", data={"admin_password": "nueva"})
+    locked.post("/logout")
+    r = locked.post("/login", data={"username": "nene", "password": "nueva"})
+    assert "🏢 Nene" in r.text
+
+
+def test_player_password_enters_its_organization(with_players):
+    with_players.cookies.delete("org")
+    r = with_players.post("/login", data={"password": "jugamos", "next": "/"})
+    assert str(r.url).endswith("/tournaments/1") and "🏢 Club" in r.text
+
+
+def test_first_organization_adopts_existing_data(tmp_path, monkeypatch):
+    import sqlite3
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript("""
+        CREATE TABLE players (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE tournaments (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+            held_on DATE NOT NULL CHECK (held_on IS date(held_on)));
+        INSERT INTO players (name) VALUES ('A'), ('B'), ('C'), ('D');
+        INSERT INTO tournaments (name, held_on) VALUES ('Vieja', '2026-10-01');
+    """)
+    conn.close()
+    monkeypatch.setattr(db, "DB_PATH", str(path))
+    assert orgs.main(["create", "Primera", "primera", "clave-uno"]) == 0
+    assert orgs.main(["create", "Otra", "otra", "x"]) == 0
+    with db.connect() as conn:
+        assert [r[0] for r in conn.execute("SELECT organization_id FROM players")] == [1] * 4
+        assert conn.execute("SELECT organization_id FROM tournaments").fetchone()[0] == 1
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        org = conn.execute("SELECT * FROM organizations WHERE id = 1").fetchone()
+        assert org["admin_password"] != "clave-uno"
+        assert orgs.check_password("clave-uno", org["admin_password"])
+        conn.execute("INSERT INTO players (organization_id, name) VALUES (2, 'A')")  # per org

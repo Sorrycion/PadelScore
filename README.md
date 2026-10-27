@@ -39,11 +39,30 @@ Then open http://127.0.0.1:8000 in your browser.
 
 The database is a file named `padelscore.db` created in the project folder. Set the `PADELSCORE_DB` environment variable to store it somewhere else.
 
-## Editing password
+## Organizations and logins
 
-Anyone can view the site. To add or change data, set a club password in the
-`PADELSCORE_EDIT_PASSWORD` environment variable; people then use **Entrar / Log in**
-once per browser. Without it (e.g. on your own computer) editing is open.
+Everything (players, tournaments, sets) belongs to an **organization**. Visitors first
+enter one by its name (🏢 in the top bar changes it) and can then see its tournaments.
+
+- **Organization admin**: logs in with the organization's admin user and password and
+  may change everything in it.
+- **Super admin**: logs in with their own user and password, sees every organization
+  (⭐ Organizaciones), creates organizations with their admin, resets admin passwords,
+  and is admin in every organization.
+- **Players**: leave the user empty and type their tournament's player password to
+  enter its results.
+
+Passwords are stored hashed. Create organizations and super admins from the command
+line (it only needs the standard library, so it also works in Azure's Kudu console):
+
+```
+python -m app.orgs create "Name" "admin user" "admin password"
+python -m app.orgs password "admin user" "new password"
+python -m app.orgs superadmin "user" "password"
+```
+
+The first organization created adopts the players and tournaments from before
+organizations existed.
 
 ## Deploy to Azure (free F1 plan)
 
@@ -52,7 +71,6 @@ The app runs on Azure App Service (Linux, Python 3.12) with these app settings:
 | Setting | Value |
 |---|---|
 | `PADELSCORE_DB` | `/home/data/padelscore.db` (`/home` is the only folder that survives restarts) |
-| `PADELSCORE_EDIT_PASSWORD` | the club password |
 | `SCM_DO_BUILD_DURING_DEPLOYMENT` | `true` (installs `requirements.txt` on deploy) |
 
 Startup command: `gunicorn -w 1 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 app.main:app`

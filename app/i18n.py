@@ -338,12 +338,45 @@ TEXT = {
     "login": {"es": "🔐 Entrar", "en": "🔐 Log in"},
     "logout": {"es": "🚪 Salir", "en": "🚪 Log out"},
     "login_title": {"es": "🔐 Entrar para editar", "en": "🔐 Log in to edit"},
-    "login_hint": {"es": "Cualquiera puede ver los resultados. Con la contraseña del club se "
-                         "puede cambiar todo; con la contraseña de jugadores de un torneo se "
-                         "registran los resultados de ese torneo.",
-                   "en": "Anyone can see the results. The club password allows every change; "
-                         "a tournament's player password allows entering that tournament's "
+    "login_hint": {"es": "Administradores: usuario y contraseña de la organización. Jugadores: "
+                         "deja el usuario vacío y escribe la contraseña de jugadores de tu "
+                         "torneo para registrar sus resultados.",
+                   "en": "Admins: the organization's user and password. Players: leave the user "
+                         "empty and type your tournament's player password to enter its "
                          "results."},
+    "username": {"es": "👤 Usuario", "en": "👤 User"},
+
+    # Organizations
+    "enter_title": {"es": "🏢 Entrar a una organización", "en": "🏢 Enter an organization"},
+    "enter_hint": {"es": "Escribe el nombre de tu organización para ver sus torneos, "
+                         "clasificaciones y jugadores.",
+                   "en": "Type your organization's name to see its tournaments, standings and "
+                         "players."},
+    "enter_login_hint": {"es": '¿Eres administrador o jugador con contraseña? <a href="{url}">Entra aquí</a>.',
+                         "en": 'An admin, or a player with a password? <a href="{url}">Log in here</a>.'},
+    "org_name": {"es": "🏢 Organización", "en": "🏢 Organization"},
+    "enter": {"es": "➡️ Entrar", "en": "➡️ Enter"},
+    "change_org": {"es": "Cambiar de organización", "en": "Change organization"},
+    "current_org": {"es": "Actual", "en": "Current"},
+    "err_unknown_org": {"es": "No hay ninguna organización con ese nombre.",
+                        "en": "There's no organization with that name."},
+    "nav_orgs": {"es": "Organizaciones", "en": "Organizations"},
+    "orgs_hint": {"es": "Como super administrador puedes crear organizaciones con su "
+                        "administrador, entrar a cualquiera y administrar todos sus torneos.",
+                  "en": "As a super admin you can create organizations with their admin, enter "
+                        "any of them and manage all their tournaments."},
+    "create_org": {"es": "➕ Crear organización", "en": "➕ Create organization"},
+    "admin_user": {"es": "👤 Usuario administrador", "en": "👤 Admin user"},
+    "admin_password": {"es": "🔑 Contraseña del administrador", "en": "🔑 Admin password"},
+    "new_admin_password": {"es": "Nueva contraseña del administrador",
+                           "en": "New admin password"},
+    "no_orgs": {"es": "Todavía no hay organizaciones.", "en": "No organizations yet."},
+    "err_org_fields": {"es": "Escribe el nombre, el usuario y la contraseña.",
+                       "en": "Type the name, the user and the password."},
+    "err_org_exists": {"es": "Ya existe una organización con ese nombre.",
+                       "en": "There's already an organization with that name."},
+    "err_admin_user_exists": {"es": "Ese usuario administrador ya existe.",
+                              "en": "That admin user already exists."},
     "password": {"es": "🔑 Contraseña", "en": "🔑 Password"},
     "club_password": {"es": "Contraseña del club", "en": "Club password"},
     "err_wrong_password": {"es": "Contraseña incorrecta.", "en": "Wrong password."},

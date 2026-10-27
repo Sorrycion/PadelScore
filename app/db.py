@@ -1,14 +1,41 @@
-"""SQLite storage for players, tournaments, matchdays and matches (one row per set)."""
+"""SQLite storage for organizations, players, tournaments, matchdays and matches (one
+row per set). Players and tournaments belong to an organization; the rest hangs from
+a tournament."""
 import os
 import sqlite3
 from contextlib import contextmanager
+from contextvars import ContextVar
 
 DB_PATH = os.environ.get("PADELSCORE_DB", "padelscore.db")
 
+# The organization of the request being served (set by the app for each request);
+# the app's queries only see that organization's rows.
+ORG = ContextVar("org", default=None)
+
 SCHEMA = """
+-- A club or group of friends. Its admin logs in with admin_user and the password
+-- (a hash, see orgs.py); `secret` signs its cookies.
+CREATE TABLE IF NOT EXISTS organizations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    admin_user TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    admin_password TEXT NOT NULL,
+    secret TEXT NOT NULL
+);
+
+-- May create organizations and is admin in all of them (see auth.py).
+CREATE TABLE IF NOT EXISTS superadmins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password TEXT NOT NULL,
+    secret TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS players (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE
+    organization_id INTEGER REFERENCES organizations(id),
+    name TEXT NOT NULL,
+    UNIQUE (organization_id, name)
 );
 
 -- How a tournament is scored. `code` picks the scoring in the app (scoring.SCORING).
@@ -35,7 +62,8 @@ CREATE TABLE IF NOT EXISTS tournaments (
     -- can see it, to share it with the players.
     player_password TEXT,
     -- 1 once an editor marks the tournament as ended: it moves to "Past tournaments".
-    ended INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0, 1))
+    ended INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0, 1)),
+    organization_id INTEGER REFERENCES organizations(id)
 );
 
 -- Who plays an Americano or Mexicano tournament (the rounds are drawn among them).
@@ -97,12 +125,42 @@ def init_db():
         conn.executescript(SCHEMA)
         allow_pending_sets(conn)
         add_rule_types(conn)
+        add_organizations(conn)
         # Every tournament has a player password; older ones get the default.
-        from .auth import default_player_password
         for t in conn.execute("SELECT id, name FROM tournaments WHERE player_password IS NULL "
                               "OR player_password = ''").fetchall():
             conn.execute("UPDATE tournaments SET player_password = ? WHERE id = ?",
                          (default_player_password(t["name"]), t["id"]))
+
+
+def default_player_password(tournament_name):
+    """A tournament's default player password: its name in lowercase, words joined by
+    underscores ("Liga de la Amistad" -> "liga_de_la_amistad")."""
+    return "_".join(tournament_name.lower().split())
+
+
+def add_organizations(conn):
+    """Databases made before organizations: players get an organization_id (and names
+    are unique per organization, so the table is rebuilt with the same ids), and
+    tournaments get one too. They stay NULL until the first organization adopts them
+    (orgs.create_org)."""
+    if "organization_id" not in {r["name"] for r in conn.execute("PRAGMA table_info(players)")}:
+        create = SCHEMA[SCHEMA.index("CREATE TABLE IF NOT EXISTS players"):]
+        create = create[:create.index(");") + 2].replace("IF NOT EXISTS players", "players_new")
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = OFF")  # matches etc. point at players
+        conn.executescript(f"""
+            BEGIN;
+            {create}
+            INSERT INTO players_new (id, name) SELECT id, name FROM players;
+            DROP TABLE players;
+            ALTER TABLE players_new RENAME TO players;
+            COMMIT;
+        """)
+        conn.execute("PRAGMA foreign_keys = ON")
+    if "organization_id" not in {r["name"] for r in conn.execute("PRAGMA table_info(tournaments)")}:
+        conn.execute("ALTER TABLE tournaments ADD COLUMN "
+                     "organization_id INTEGER REFERENCES organizations(id)")
 
 
 def add_rule_types(conn):

@@ -1,23 +1,33 @@
-"""Shared club password for editing; viewing stays open to everyone.
+"""Who sees and changes what.
 
-The password comes from the PADELSCORE_EDIT_PASSWORD environment variable (an App
-Service setting in production). When it is not set, as on a developer's machine,
-editing is open. Logging in stores a cookie holding an HMAC of the password, so
-changing the password logs every browser out.
+Everything belongs to an organization (see orgs.py). Visitors first enter one by its
+name; a cookie remembers it, signed with the organization's secret, and from then on
+they see its tournaments. Viewing needs nothing more.
 
-A tournament can also have a player password. It is stored as typed so the club's
-editors can look it up and share it. Players who log in with it may enter set results
-in that tournament, and create sets in a manual one; nothing else. Their cookie, one
-per tournament, is an HMAC of that password, so a new password logs them out.
+The organization's admin logs in with its admin user and password and may change
+everything in it. The admin cookie is an HMAC (with the organization's secret) of the
+stored password hash, so changing the password logs every admin out.
+
+A super admin (table superadmins, created with orgs.py) logs in the same way, with
+their own user and password. They may create organizations (with their admin user and
+password), enter any of them, and are admin in all of them.
+
+A tournament also has a player password. It is stored as typed so the admin can look
+it up and share it. Players who log in with it may enter set results in that
+tournament, and create sets in a manual one; nothing else. Their cookie, one per
+tournament, is an HMAC of that password, so a new password logs them out.
 """
 import hashlib
 import hmac
-import os
 
 from fastapi import Request
 
-PASSWORD_ENV = "PADELSCORE_EDIT_PASSWORD"
+from . import db, orgs
+from .db import default_player_password  # noqa: F401 (used by the app and tests)
+
+ORG_COOKIE = "org"
 COOKIE = "editor"
+SUPER_COOKIE = "super"
 COOKIE_MAX_AGE = 180 * 24 * 3600  # stay logged in for about 6 months
 PLAYER_COOKIE = "player_{}"       # per tournament id
 
@@ -29,31 +39,90 @@ class LoginRequired(Exception):
         self.next_url = next_url
 
 
-def edit_password() -> str | None:
-    return os.environ.get(PASSWORD_ENV) or None
+def _sign(org, message: str) -> str:
+    return hmac.new(org["secret"].encode(), message.encode(), hashlib.sha256).hexdigest()
 
 
-def editor_token(password: str) -> str:
-    return hmac.new(password.encode(), b"padelscore-editor", hashlib.sha256).hexdigest()
+# --- The organization being viewed --------------------------------------------------
+
+def org_cookie(org) -> str:
+    return f"{org['id']}.{_sign(org, 'org:%d' % org['id'])}"
 
 
-def password_matches(given: str) -> bool:
-    password = edit_password()
-    return password is not None and hmac.compare_digest(given.encode(), password.encode())
+def org_from_cookie(request: Request):
+    """The organization this browser entered, or None."""
+    org_id, _, token = request.cookies.get(ORG_COOKIE, "").partition(".")
+    if not org_id.isdigit():
+        return None
+    with db.connect() as conn:
+        org = conn.execute("SELECT * FROM organizations WHERE id = ?", (int(org_id),)).fetchone()
+    return org if org and hmac.compare_digest(token, _sign(org, f"org:{org['id']}")) else None
+
+
+def current_org(request: Request):
+    """The organization of this request (set by the app's middleware)."""
+    return request.scope.get("state", {}).get("org")
+
+
+def find_org(conn, name: str):
+    return conn.execute("SELECT * FROM organizations WHERE name = ?",
+                        (" ".join(name.split()),)).fetchone()
+
+
+# --- Admins ------------------------------------------------------------------------
+
+def editor_token(org) -> str:
+    return _sign(org, f"admin:{org['id']}:{org['admin_password']}")
+
+
+def admin_login(conn, user: str, password: str):
+    """The organization whose admin this is, or None."""
+    org = conn.execute("SELECT * FROM organizations WHERE admin_user = ?",
+                       (user.strip(),)).fetchone()
+    return org if org and orgs.check_password(password, org["admin_password"]) else None
 
 
 def is_editor(request: Request) -> bool:
-    password = edit_password()
-    if password is None:
-        return True
-    return hmac.compare_digest(request.cookies.get(COOKIE, ""), editor_token(password))
+    """Admin of the organization being viewed: its own admin, or a super admin."""
+    org = current_org(request)
+    if org is None:
+        return False
+    return is_super(request) or hmac.compare_digest(request.cookies.get(COOKIE, ""),
+                                                    editor_token(org))
 
 
-def default_player_password(tournament_name: str) -> str:
-    """A tournament's default player password: its name in lowercase, words joined by
-    underscores ("Liga de la Amistad" -> "liga_de_la_amistad")."""
-    return "_".join(tournament_name.lower().split())
+# --- Super admins ----------------------------------------------------------------------
 
+def super_cookie(admin) -> str:
+    return f"{admin['id']}.{_sign(admin, 'super:%d:%s' % (admin['id'], admin['password']))}"
+
+
+def super_login(conn, user: str, password: str):
+    """The super admin with this user and password, or None."""
+    admin = conn.execute("SELECT * FROM superadmins WHERE username = ?",
+                         (user.strip(),)).fetchone()
+    return admin if admin and orgs.check_password(password, admin["password"]) else None
+
+
+def is_super(request: Request) -> bool:
+    cached = request.scope.setdefault("state", {})
+    if "super" not in cached:
+        admin_id, _, token = request.cookies.get(SUPER_COOKIE, "").partition(".")
+        admin = None
+        if admin_id.isdigit():
+            with db.connect() as conn:
+                admin = conn.execute("SELECT * FROM superadmins WHERE id = ?",
+                                     (int(admin_id),)).fetchone()
+        cached["super"] = bool(admin) and hmac.compare_digest(super_cookie(admin), f"{admin_id}.{token}")
+    return cached["super"]
+
+
+def require_super(request: Request):
+    if not is_super(request):
+        raise LoginRequired(request.url.path if request.method == "GET" else "/orgs")
+
+
+# --- Players of a tournament ------------------------------------------------------------
 
 def player_password_matches(given: str, tournament) -> bool:
     password = tournament["player_password"]
@@ -74,7 +143,7 @@ def is_player(request: Request, tournament) -> bool:
 
 
 def can_score(request: Request, tournament) -> bool:
-    """May enter results in this tournament: an editor, or one of its players."""
+    """May enter results in this tournament: the admin, or one of its players."""
     return is_editor(request) or is_player(request, tournament)
 
 
@@ -100,7 +169,8 @@ def player_cookies(request: Request) -> list[str]:
 
 
 def auth_context(request: Request) -> dict:
-    """Jinja context processor: whether this browser may edit, to show or hide controls."""
-    editor = is_editor(request)
-    return {"editor": editor, "login_enabled": edit_password() is not None,
-            "logged_in": (editor and edit_password() is not None) or bool(player_cookies(request))}
+    """Jinja context processor: the organization, and whether this browser may edit."""
+    editor, superadmin = is_editor(request), is_super(request)
+    return {"editor": editor, "superadmin": superadmin, "org": current_org(request),
+            "login_enabled": True,
+            "logged_in": editor or superadmin or bool(player_cookies(request))}

@@ -14,8 +14,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import auth, db, rounds
-from .auth import LoginRequired, require_editor
+from . import auth, db, orgs, rounds
+from .auth import LoginRequired, require_editor, require_super
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
 from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
                       court_rotation, is_played, next_courts)
@@ -35,9 +35,41 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="PadelScore", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
+
+# Pages that work before entering an organization.
+OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs")
+
+
+class OrganizationGate:
+    """Every request works inside the organization this browser entered (auth.py): its
+    queries only see that organization's rows (db.ORG). Without one, pages other than
+    OPEN_PATHS send the browser to choose one."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["path"].startswith("/static"):
+            return await self.app(scope, receive, send)
+        request = Request(scope)
+        org = auth.org_from_cookie(request)
+        scope.setdefault("state", {})["org"] = org
+        if org is None and not scope["path"].startswith(OPEN_PATHS):
+            target = "/orgs" if auth.is_super(request) else \
+                "/enter" + (f"?next={quote(here(request), safe='/')}" if scope["method"] == "GET" else "")
+            return await redirect(target)(scope, receive, send)
+        token = db.ORG.set(org["id"] if org else None)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            db.ORG.reset(token)
+
+
+app.add_middleware(OrganizationGate)
 templates = Jinja2Templates(directory=BASE / "templates",
                             context_processors=[i18n_context, auth.auth_context])
-EDIT = [Depends(require_editor)]  # routes that change data need the club password
+EDIT = [Depends(require_editor)]  # routes that change data need the organization's admin
+SUPER = [Depends(require_super)]  # managing organizations needs a super admin
 MANUAL = "manual"  # rule type whose sets are all made by hand
 templates.env.filters["pick_player"] = lambda p: {"id": p["id"], "name": p["name"]}
 templates.env.globals.update(
@@ -91,10 +123,21 @@ def redirect(url: str):
     return RedirectResponse(url, status_code=303)
 
 
+def org_id():
+    """The organization of this request (see OrganizationGate)."""
+    return db.ORG.get()
+
+
+def cookie_options(request):
+    return {"max_age": auth.COOKIE_MAX_AGE, "httponly": True, "samesite": "lax",
+            "secure": auth.is_https(request)}
+
+
 # --- Queries -------------------------------------------------------------------
 
 def all_players(conn):
-    return conn.execute("SELECT * FROM players ORDER BY name").fetchall()
+    return conn.execute("SELECT * FROM players WHERE organization_id = ? ORDER BY name",
+                        (org_id(),)).fetchall()
 
 
 def all_rule_types(conn):
@@ -105,8 +148,9 @@ def get_tournament(conn, tournament_id):
     """A tournament with its rule type's name and code, or 404."""
     row = conn.execute(
         "SELECT t.*, r.name AS rule_type, r.code AS rule_code "
-        "FROM tournaments t JOIN rule_types r ON r.id = t.rule_type_id WHERE t.id = ?",
-        (tournament_id,),
+        "FROM tournaments t JOIN rule_types r ON r.id = t.rule_type_id "
+        "WHERE t.id = ? AND t.organization_id = ?",
+        (tournament_id, org_id()),
     ).fetchone()
     if row is None:
         raise HTTPException(404, "Tournament not found")
@@ -133,9 +177,10 @@ def all_tournaments(conn):
         FROM tournaments t
         JOIN rule_types r ON r.id = t.rule_type_id
         LEFT JOIN matchdays d ON d.tournament_id = t.id
+        WHERE t.organization_id = ?
         GROUP BY t.id
         ORDER BY t.held_on DESC, t.id DESC
-        """
+        """, (org_id(),)
     )]
 
 
@@ -146,9 +191,9 @@ def all_matchdays(conn, tournament_id=None):
         FROM matchdays d
         JOIN tournaments t ON t.id = d.tournament_id
         JOIN rule_types r ON r.id = t.rule_type_id
-        WHERE ? IS NULL OR d.tournament_id = ?
+        WHERE (? IS NULL OR d.tournament_id = ?) AND t.organization_id = ?
         ORDER BY d.played_on DESC, t.name, d.number DESC
-        """, (tournament_id, tournament_id)
+        """, (tournament_id, tournament_id, org_id())
     ).fetchall()
 
 
@@ -174,7 +219,7 @@ def name_key(name):
 def find_player(conn, name, exclude=None):
     """The id of the player with this name (see `name_key`), or None."""
     key = name_key(name)
-    return next((p["id"] for p in conn.execute("SELECT id, name FROM players")
+    return next((p["id"] for p in all_players(conn)
                  if p["id"] != exclude and name_key(p["name"]) == key), None)
 
 
@@ -184,7 +229,8 @@ def player_id(conn, name):
     found = find_player(conn, name)
     if found:
         return found
-    return conn.execute("INSERT INTO players (name) VALUES (?)", (name,)).lastrowid
+    return conn.execute("INSERT INTO players (organization_id, name) VALUES (?, ?)",
+                        (org_id(), name)).lastrowid
 
 
 def players_for(conn, tournament_id):
@@ -192,8 +238,20 @@ def players_for(conn, tournament_id):
     return tournament_players(conn, tournament_id) or all_players(conn)
 
 
+# How each table's rows belong to an organization (the `?` is its id).
+ORG_SCOPE = {
+    "players": "organization_id = ?",
+    "tournaments": "organization_id = ?",
+    "matchdays": "tournament_id IN (SELECT id FROM tournaments WHERE organization_id = ?)",
+    "matches": "matchday_id IN (SELECT d.id FROM matchdays d JOIN tournaments t "
+               "ON t.id = d.tournament_id WHERE t.organization_id = ?)",
+}
+
+
 def get_or_404(conn, table, row_id):
-    row = conn.execute(f"SELECT * FROM {table} WHERE id = ?", (row_id,)).fetchone()
+    """A row of this organization, or 404."""
+    row = conn.execute(f"SELECT * FROM {table} WHERE id = ? AND {ORG_SCOPE[table]}",
+                       (row_id, org_id())).fetchone()
     if row is None:
         raise HTTPException(404, f"{table[:-1].capitalize()} not found")
     return row
@@ -216,7 +274,7 @@ def set_rows(conn, tournament_id=None, matchday_id=None, player_id=None, limit=N
         JOIN players pb1 ON pb1.id = m.b1
         JOIN players pb2 ON pb2.id = m.b2
     """
-    where, params = [], []
+    where, params = ["t.organization_id = ?"], [org_id()]
     if tournament_id is not None:
         where.append("d.tournament_id = ?")
         params.append(tournament_id)
@@ -226,8 +284,7 @@ def set_rows(conn, tournament_id=None, matchday_id=None, player_id=None, limit=N
     if player_id is not None:
         where.append("? IN (m.a1, m.a2, m.b1, m.b2)")
         params.append(player_id)
-    if where:
-        sql += " WHERE " + " AND ".join(where)
+    sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY d.played_on DESC, d.number DESC, m.court, m.id"
     if limit:
         sql += " LIMIT ?"
@@ -291,6 +348,31 @@ def set_language(lang: str, next: str = "/"):
     return response
 
 
+@app.get("/enter", response_class=HTMLResponse)
+def enter_page(request: Request, next: str = "/"):
+    """Choose the organization to see (by its name)."""
+    return templates.TemplateResponse(request, "enter.html", {"next": safe_next(next)})
+
+
+@app.post("/enter")
+def enter(request: Request, name: str = Form(""), next: str = Form("/")):
+    with db.connect() as conn:
+        org = auth.find_org(conn, name)
+    if org is None:
+        time.sleep(1)  # slow down guessing
+        return templates.TemplateResponse(request, "enter.html", {
+            "next": safe_next(next), "name": name, "error": "err_unknown_org",
+        }, status_code=404)
+    return enter_org(request, org, safe_next(next))
+
+
+def enter_org(request, org, next_url="/"):
+    """Remember this organization in the browser and go to `next_url`."""
+    response = redirect(next_url)
+    response.set_cookie(auth.ORG_COOKIE, auth.org_cookie(org), **cookie_options(request))
+    return response
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, next: str = "/"):
     if auth.is_editor(request):
@@ -299,26 +381,47 @@ def login_page(request: Request, next: str = "/"):
 
 
 @app.post("/login")
-def login(request: Request, password: str = Form(""), next: str = Form("/")):
-    """The club password logs in an editor; a tournament's player password logs in its
-    players (one cookie per tournament whose password it is)."""
-    cookie = {"max_age": auth.COOKIE_MAX_AGE, "httponly": True, "samesite": "lax",
-              "secure": auth.is_https(request)}
-    if auth.password_matches(password):
-        response = redirect(safe_next(next))
-        response.set_cookie(auth.COOKIE, auth.editor_token(auth.edit_password()), **cookie)
-        return response
+def login(request: Request, username: str = Form(""), password: str = Form(""),
+          next: str = Form("/")):
+    """With a user: a super admin, or an organization's admin (who enters it too).
+    Without one: a tournament's player password, which logs in its players (one cookie
+    per tournament whose password it is) in the organization being viewed, or in the
+    one of that tournament if none is."""
+    cookie = cookie_options(request)
+    failed = templates.TemplateResponse(request, "login.html", {
+        "next": safe_next(next), "username": username, "error": "err_wrong_password",
+    }, status_code=401)
     with db.connect() as conn:
+        if username.strip():
+            admin = password and auth.super_login(conn, username, password)
+            if admin:
+                response = redirect(safe_next(next) if next not in ("", "/") else
+                                    "/" if auth.current_org(request) else "/orgs")
+                response.set_cookie(auth.SUPER_COOKIE, auth.super_cookie(admin), **cookie)
+                return response
+            org = password and auth.admin_login(conn, username, password)
+            if not org:
+                time.sleep(1)  # slow down password guessing
+                return failed
+            current = auth.current_org(request)
+            response = enter_org(request, org, safe_next(next) if current
+                                 and current["id"] == org["id"] else "/")
+            response.set_cookie(auth.COOKIE, auth.editor_token(org), **cookie)
+            return response
+        current = auth.current_org(request)
         matches = [t for t in conn.execute(
-            "SELECT * FROM tournaments WHERE player_password IS NOT NULL ORDER BY id DESC")
-            if auth.player_password_matches(password, t)]
-    if not password or not matches:
-        time.sleep(1)  # slow down password guessing
-        return templates.TemplateResponse(request, "login.html", {
-            "next": safe_next(next), "error": "err_wrong_password",
-        }, status_code=401)
-    response = redirect(safe_next(next) if next not in ("", "/")
-                        else f"/tournaments/{matches[0]['id']}")
+            "SELECT * FROM tournaments WHERE player_password IS NOT NULL "
+            "AND organization_id IS NOT NULL ORDER BY id DESC")
+            if auth.player_password_matches(password, t)
+            and (current is None or t["organization_id"] == current["id"])]
+        if not password or not matches:
+            time.sleep(1)
+            return failed
+        org = current or conn.execute("SELECT * FROM organizations WHERE id = ?",
+                                      (matches[0]["organization_id"],)).fetchone()
+    matches = [t for t in matches if t["organization_id"] == org["id"]]
+    response = enter_org(request, org, safe_next(next) if current and next not in ("", "/")
+                         else f"/tournaments/{matches[0]['id']}")
     for t in matches:
         response.set_cookie(auth.PLAYER_COOKIE.format(t["id"]), auth.player_token(t), **cookie)
     return response
@@ -327,9 +430,57 @@ def login(request: Request, password: str = Form(""), next: str = Form("/")):
 @app.post("/logout")
 def logout(request: Request):
     response = redirect("/")
-    for name in [auth.COOKIE, *auth.player_cookies(request)]:
+    for name in [auth.COOKIE, auth.SUPER_COOKIE, *auth.player_cookies(request)]:
         response.delete_cookie(name)
     return response
+
+
+@app.get("/orgs", response_class=HTMLResponse, dependencies=SUPER)
+def orgs_page(request: Request, error: str | None = None):
+    """Super admins: every organization, to enter one or create a new one."""
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT o.id, o.name, o.admin_user, "
+            "(SELECT COUNT(*) FROM tournaments t WHERE t.organization_id = o.id) AS tournaments, "
+            "(SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id) AS players "
+            "FROM organizations o ORDER BY o.name").fetchall()
+    return templates.TemplateResponse(request, "orgs.html", {"orgs": rows, "error": error})
+
+
+@app.post("/orgs", dependencies=SUPER)
+def add_org(name: str = Form(""), admin_user: str = Form(""), admin_password: str = Form("")):
+    with db.connect() as conn:
+        if not (" ".join(name.split()) and admin_user.strip() and admin_password):
+            return redirect("/orgs?error=err_org_fields")
+        if auth.find_org(conn, name):
+            return redirect("/orgs?error=err_org_exists")
+        if conn.execute("SELECT 1 FROM organizations WHERE admin_user = ?",
+                        (admin_user.strip(),)).fetchone():
+            return redirect("/orgs?error=err_admin_user_exists")
+        orgs.create_org(conn, name, admin_user, admin_password)
+    return redirect("/orgs")
+
+
+@app.post("/orgs/{org}/enter", dependencies=SUPER)
+def super_enter(request: Request, org: int):
+    with db.connect() as conn:
+        row = conn.execute("SELECT * FROM organizations WHERE id = ?", (org,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "Organization not found")
+    return enter_org(request, row)
+
+
+@app.post("/orgs/{org}/password", dependencies=SUPER)
+def super_set_admin_password(org: int, admin_password: str = Form("")):
+    """Super admins: give an organization's admin a new password."""
+    with db.connect() as conn:
+        row = conn.execute("SELECT * FROM organizations WHERE id = ?", (org,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Organization not found")
+        if not admin_password:
+            return redirect("/orgs?error=err_org_fields")
+        orgs.set_password(conn, row["admin_user"], admin_password)
+    return redirect("/orgs")
 
 
 @app.get("/rules", response_class=HTMLResponse)
@@ -385,9 +536,8 @@ def add_tournament(name: str = Form(...), held_on: str = Form(""),
         password = player_password.strip() or auth.default_player_password(name)
         tournament_id = conn.execute(
             "INSERT INTO tournaments (name, held_on, rule_type_id, points_per_match, "
-            "player_password) VALUES (?, ?, ?, ?, ?)",
-            (name, held_on, rule_type_id, target,
-             password)).lastrowid
+            "player_password, organization_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (name, held_on, rule_type_id, target, password, org_id())).lastrowid
         conn.executemany("INSERT INTO tournament_players (tournament_id, player_id) "
                          "VALUES (?, ?)", [(tournament_id, p) for p in players])
     return redirect(f"/tournaments/{tournament_id}")
@@ -809,8 +959,9 @@ def latest_courts():
     """The '+ Courts' button: the courts of the latest matchday."""
     with db.connect() as conn:
         latest = conn.execute(
-            "SELECT id FROM matchdays ORDER BY played_on DESC, number DESC, id DESC LIMIT 1"
-        ).fetchone()
+            "SELECT d.id FROM matchdays d JOIN tournaments t ON t.id = d.tournament_id "
+            "WHERE t.organization_id = ? ORDER BY d.played_on DESC, d.number DESC, d.id DESC "
+            "LIMIT 1", (org_id(),)).fetchone()
     return redirect(f"/matchdays/{latest['id']}/courts" if latest else "/tournaments")
 
 
@@ -883,7 +1034,7 @@ def add_player(name: str = Form(...)):
     with db.connect() as conn:
         if find_player(conn, name):
             return redirect("/players?error=err_player_exists")
-        conn.execute("INSERT INTO players (name) VALUES (?)", (name,))
+        player_id(conn, name)
     return redirect("/players")
 
 
@@ -1007,7 +1158,8 @@ def set_matchdays(request, conn):
         return all_matchdays(conn)
     allowed = {t["id"] for t in conn.execute(
         "SELECT t.*, r.code AS rule_code FROM tournaments t "
-        "JOIN rule_types r ON r.id = t.rule_type_id WHERE r.code = ?", (MANUAL,))
+        "JOIN rule_types r ON r.id = t.rule_type_id WHERE r.code = ? AND t.organization_id = ?",
+        (MANUAL, org_id()))
         if auth.is_player(request, t)}
     return [d for d in all_matchdays(conn) if d["tournament_id"] in allowed]
 
@@ -1044,8 +1196,10 @@ def validate_match(conn, form, _):
     players = [form[k] for k in ("a1", "a2", "b1", "b2")]
     if len(set(players)) != 4:
         return _("err_four_players"), None
-    if not conn.execute("SELECT 1 FROM matchdays WHERE id = ?",
-                        (form["matchday_id"],)).fetchone():
+    if not set(players) <= {p["id"] for p in all_players(conn)}:
+        return _("err_four_players"), None
+    if not conn.execute(f"SELECT 1 FROM matchdays WHERE id = ? AND {ORG_SCOPE['matchdays']}",
+                        (form["matchday_id"], org_id())).fetchone():
         return _("err_pick_matchday"), None
     if form["court"] < 1:
         return _("err_court"), None
