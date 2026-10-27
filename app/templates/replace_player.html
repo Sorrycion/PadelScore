@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ _("replace_player") }} · {{ tournament.name }} · PadelScore{% endblock %}
+{% block content %}
+<h1>🔁 {{ _("replace_name", name=player.name) }}</h1>
+<p class="muted"><a href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · {{ RULE_ICONS.get(tournament.rule_code, "") }} {{ tournament.rule_type }}</p>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+<form method="post" action="/tournaments/{{ tournament.id }}/players/replace" class="picker add-player card"
+      data-mode="single" data-players='{{ candidates|tojson }}'
+      data-create="{{ _('create_player_option', name='{name}') }}">
+  <input type="hidden" name="old_id" value="{{ player.id }}">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label>{{ _("replace_with") }}
+    <input name="player_name" class="picker-input" autocomplete="off" required
+           placeholder="{{ _('search_player') }}">
+  </label>
+  <input type="hidden" name="create" class="picker-create">
+  <div class="picker-suggestions"></div>
+</form>
+<p class="muted">{{ _("replace_hint") }}</p>
+<p><a href="{{ next }}">{{ _("cancel") }}</a></p>
+<script src="/static/picker.js?v={{ css_version }}" defer></script>
+{% endblock %}

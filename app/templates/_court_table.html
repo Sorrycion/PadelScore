@@ -11,6 +11,7 @@
         <form method="post" action="/matchdays/{{ matchday.id }}/absent/{{ r.id }}" class="absent-form">
           <button type="submit" class="link plain-link">{{ _("mark_present") if r.absent else _("mark_absent") }}</button>
         </form>
+        <a class="replace-link" href="/tournaments/{{ tournament.id }}/players/{{ r.id }}/replace?next={{ ('/matchdays/%d'|format(matchday.id))|urlencode }}">{{ _("replace") }}</a>
         {% endif %}</td>
       <td><span class="diff {% if r.diff > 0 %}up{% elif r.diff < 0 %}down{% endif %}">{{ "%+d"|format(r.diff) if r.diff else 0 }}</span></td>
       <td>{{ r.sets_won }} / {{ r.sets }}</td>

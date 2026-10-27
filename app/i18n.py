@@ -116,6 +116,8 @@ TEXT = {
               "puedes reabrirlo cuando quieras.",
         "en": "An ended tournament moves to Past tournaments; its results are kept and you "
               "can reopen it any time."},
+    "replace": {"es": "🔁 Reemplazar", "en": "🔁 Replace"},
+    "replace_name": {"es": "Reemplazar a {name}", "en": "Replace {name}"},
     "replace_player": {"es": "Reemplazar a un jugador", "en": "Replace a player"},
     "replace_who": {"es": "Sale", "en": "Leaves"},
     "replace_with": {"es": "Entra", "en": "Comes in"},

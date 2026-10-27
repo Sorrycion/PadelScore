@@ -1170,3 +1170,21 @@ def test_ended_tournaments_go_to_the_past_tab(league):
     assert "Liga Amigos" in league.get("/?tournament=1").text  # still reachable
     league.post("/tournaments/1/ended", data={"ended": "0"})
     assert "Liga Amigos" in league.get("/tournaments").text
+
+
+def test_replace_a_player_from_the_matchday_court_table(league):
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 3))  # played
+    league.post("/matches", data=set_form((1, 3, 2, 4), "", ""))  # pending
+    link = "/tournaments/1/players/1/replace?next=/matchdays/1"
+    assert link in league.get("/matchdays/1").text
+    page = league.get(link).text
+    assert "Replace Ana" in page and '"name": "Hugo"' in page and '"name": "Ana"' not in page
+    r = league.post("/tournaments/1/players/replace", data={
+        "old_id": "1", "player_name": "Diego", "next": "/matchdays/1"})
+    assert "already in a pending set" in r.text and "Replace Ana" in r.text
+    r = league.post("/tournaments/1/players/replace", data={
+        "old_id": "1", "player_name": "Nuevo", "create": "1", "next": "/matchdays/1"})
+    assert str(r.url).endswith("/matchdays/1") and "Nuevo" in r.text
+    with db.connect() as conn:
+        assert [r[0] for r in conn.execute("SELECT a1 FROM matches ORDER BY id")][0] == 1
+    assert league.get("/tournaments/1/players/8/replace").status_code == 404  # no sets

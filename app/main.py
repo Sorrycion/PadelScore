@@ -435,30 +435,68 @@ def remove_tournament_player(tournament_id: int, player_id: int):
     return redirect(f"/tournaments/{tournament_id}#players")
 
 
+def in_tournament(conn, tournament_id, pid):
+    """Whether the player is in the tournament's list or has a set in it."""
+    return conn.execute(
+        "SELECT 1 FROM tournament_players WHERE tournament_id = ? AND player_id = ? "
+        "UNION SELECT 1 FROM matches m JOIN matchdays d ON d.id = m.matchday_id "
+        "WHERE d.tournament_id = ? AND ? IN (m.a1, m.a2, m.b1, m.b2)",
+        (tournament_id, pid, tournament_id, pid)).fetchone() is not None
+
+
+@app.get("/tournaments/{tournament_id}/players/{pid}/replace", response_class=HTMLResponse,
+         dependencies=EDIT)
+def replace_player_page(request: Request, tournament_id: int, pid: int,
+                        next: str = "", error: str | None = None):
+    """Choose who replaces a player (e.g. from a matchday's court table)."""
+    with db.connect() as conn:
+        tournament = get_tournament(conn, tournament_id)
+        player = get_or_404(conn, "players", pid)
+        if not in_tournament(conn, tournament_id, pid):
+            raise HTTPException(404, "Player not in this tournament")
+        members = {p["id"] for p in tournament_players(conn, tournament_id)}
+        return templates.TemplateResponse(request, "replace_player.html", {
+            "tournament": tournament, "player": player, "error": error,
+            "next": safe_next(next or f"/tournaments/{tournament_id}"),
+            "candidates": [{"id": p["id"], "name": p["name"]} for p in all_players(conn)
+                           if p["id"] != pid and p["id"] not in members],
+        })
+
+
 @app.post("/tournaments/{tournament_id}/players/replace", dependencies=EDIT)
 def replace_tournament_player(tournament_id: int, old_id: int = Form(0),
-                              player_name: str = Form(""), create: str = Form("")):
+                              player_name: str = Form(""), create: str = Form(""),
+                              next: str = Form("")):
     """Put another player (found by name, or new with `create`) in place of one of the
     tournament: in its list and in its sets not played yet. Sets already played, and
-    their points, stay with the player who leaves."""
+    their points, stay with the player who leaves. With `next` (the replace page),
+    errors go back to that page and success goes to `next`."""
     name = clean_name(player_name)
     back = f"/tournaments/{tournament_id}"
+    done = f"{back}#players"
+    if next:
+        done = safe_next(next)
+        back = f"{back}/players/{old_id}/replace?{urlencode({'next': done})}"
+
+    def fail(error):
+        sep = "&" if "?" in back else "?"
+        return redirect(f"{back}{sep}error={error}" + ("" if next else "#replace"))
+
     with db.connect() as conn:
         get_or_404(conn, "tournaments", tournament_id)
-        if not conn.execute("SELECT 1 FROM tournament_players WHERE tournament_id = ? "
-                            "AND player_id = ?", (tournament_id, old_id)).fetchone():
-            return redirect(f"{back}?error=err_choose_leaving#replace")
+        if not old_id or not in_tournament(conn, tournament_id, old_id):
+            return fail("err_choose_leaving")
         new_id = find_player(conn, name)
         if new_id is None and not (create and name):
-            return redirect(f"{back}?error=err_unknown_player#replace")
+            return fail("err_unknown_player")
         if new_id == old_id:
-            return redirect(f"{back}?error=err_replace_same#replace")
+            return fail("err_replace_same")
         pending = ("team_a_games IS NULL AND matchday_id IN "
                    "(SELECT id FROM matchdays WHERE tournament_id = ?)")
         if new_id and conn.execute(
                 f"SELECT 1 FROM matches WHERE {pending} AND ? IN (a1, a2, b1, b2) "
                 "AND ? IN (a1, a2, b1, b2)", (tournament_id, old_id, new_id)).fetchone():
-            return redirect(f"{back}?error=err_replace_conflict#replace")
+            return fail("err_replace_conflict")
         new_id = new_id or player_id(conn, name)
         for col in ("a1", "a2", "b1", "b2"):
             conn.execute(f"UPDATE matches SET {col} = ? WHERE {col} = ? AND {pending}",
@@ -467,7 +505,7 @@ def replace_tournament_player(tournament_id: int, old_id: int = Form(0),
                      (tournament_id, old_id))
         conn.execute("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
                      "VALUES (?, ?)", (tournament_id, new_id))
-    return redirect(f"{back}#players")
+    return redirect(done)
 
 
 @app.post("/tournaments/{tournament_id}/ended", dependencies=EDIT)
