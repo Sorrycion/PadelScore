@@ -29,7 +29,7 @@
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if matchday.courts %}
 {% for court, rows in matchday.courts.items() %}
-<section class="court-block">
+<section class="court-block {{ loop.cycle('court-a', 'court-b') }}">
   <div class="court-head">
     <h2>{{ _("court_n", n=court) }}</h2>
     {% if editor %}
