@@ -77,6 +77,33 @@ Startup command: `gunicorn -w 1 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:
 
 Keep the plan at one instance: SQLite must not be shared between servers.
 
+### Automatic deploy
+
+`.github/workflows/deploy.yml` runs on every push to `main` (merged pull requests
+included) and from the Actions tab: it runs the tests, copies the live database to
+`/home/data/padelscore-backup-<date>-gh.db`, deploys and checks that the site answers.
+
+It logs in to Azure as the service principal `padelscore-github`, which has no password:
+GitHub's OpenID Connect token for this repo's `production` environment is trusted
+instead, and it can only manage this web app (role Website Contributor). To set it up
+once, in Azure Cloud Shell (Bash) signed in with the account that owns the subscription:
+
+```bash
+SUB=<subscription id>
+SITE=/subscriptions/$SUB/resourceGroups/padelscore-rg/providers/Microsoft.Web/sites/padelscore-sorrycion
+APP=$(az ad app create --display-name padelscore-github --query appId -o tsv)
+az ad sp create --id $APP -o none
+az role assignment create --assignee $APP --role "Website Contributor" --scope $SITE -o none
+az ad app federated-credential create --id $APP --parameters '{"name": "github-production",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:Sorrycion/PadelScore:environment:production",
+  "audiences": ["api://AzureADTokenExchange"]}' -o none
+echo "AZURE_CLIENT_ID=$APP AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)"
+```
+
+Then add the repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and
+`AZURE_SUBSCRIPTION_ID` (Settings → Secrets and variables → Actions).
+
 ## Run the tests
 
 ```powershell
