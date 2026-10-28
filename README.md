@@ -96,10 +96,14 @@ az ad sp create --id $APP -o none
 az role assignment create --assignee $APP --role "Website Contributor" --scope $SITE -o none
 az ad app federated-credential create --id $APP --parameters '{"name": "github-production",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:Sorrycion/PadelScore:environment:production",
+  "subject": "repo:Sorrycion@28118944/PadelScore@1432403444:environment:production",
   "audiences": ["api://AzureADTokenExchange"]}' -o none
 echo "AZURE_CLIENT_ID=$APP AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)"
 ```
+
+The subject names the owner and repo with their GitHub ids (`Sorrycion@28118944`,
+`PadelScore@1432403444`): it's what GitHub sends for this repo, as the failed login
+shows if it ever changes.
 
 Then add the repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and
 `AZURE_SUBSCRIPTION_ID` (Settings → Secrets and variables → Actions).
