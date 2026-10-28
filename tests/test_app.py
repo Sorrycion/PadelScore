@@ -1265,11 +1265,31 @@ def test_super_admin_creates_and_enters_organizations(locked):
     assert "Zed" in locked.post("/players", data={"name": "Zed"}).text
     locked.post("/orgs/2/enter")
     assert "Liga Amigos" not in locked.get("/tournaments").text
-    # And can reset an organization's admin password.
-    locked.post("/orgs/2/password", data={"admin_password": "nueva"})
+    # Sees each admin's user and password, and can change them.
+    page = locked.get("/orgs").text
+    assert "<code>nene</code>" in page and "<code>pa</code>" in page
+    assert "already" in locked.post("/orgs/2/admin", data={"admin_user": "admin"}).text
+    locked.post("/orgs/2/admin", data={"admin_user": "nene2", "admin_password": "nueva"})
+    assert "<code>nene2</code>" in locked.get("/orgs").text
+    locked.post("/orgs/2/admin", data={"admin_user": "nene2", "admin_password": ""})
+    assert "<code>nueva</code>" in locked.get("/orgs").text  # an empty password keeps it
     locked.post("/logout")
-    r = locked.post("/login", data={"username": "nene", "password": "nueva"})
+    r = locked.post("/login", data={"username": "nene2", "password": "nueva", "role": "admin"})
     assert "🏢 Nene" in r.text
+
+
+def test_login_page_has_a_section_per_role(locked):
+    page = locked.get("/login").text
+    assert all(f'value="{role}"' in page for role in ("player", "admin", "super"))
+    with db.connect() as conn:
+        orgs.set_superadmin(conn, "julio", "super")
+    # Each section only accepts its own kind of login.
+    r = locked.post("/login", data={"username": "julio", "password": "super", "role": "admin"})
+    assert r.status_code == 401
+    r = locked.post("/login", data={"username": "admin", "password": "secreto", "role": "super"})
+    assert r.status_code == 401
+    r = locked.post("/login", data={"username": "admin", "password": "secreto", "role": "admin"})
+    assert r.status_code == 200 and "Log out" in r.text
 
 
 def test_player_password_enters_its_organization(with_players):

@@ -2,7 +2,8 @@
 
 Everything (players, tournaments and what hangs from them) belongs to an organization.
 Its admin logs in with the organization's admin user and password. The password is
-stored as a salted PBKDF2 hash; `secret` signs the organization's cookies (auth.py).
+checked against a salted PBKDF2 hash, and also kept as typed so super admins can see it
+on /orgs. `secret` signs the organization's cookies (auth.py).
 
 This module only needs the standard library, so it also runs where the app's
 dependencies aren't installed (e.g. Azure's Kudu console):
@@ -48,9 +49,9 @@ def create_org(conn, name, admin_user, password):
         raise ValueError("Name, admin user and password are required.")
     first = conn.execute("SELECT COUNT(*) FROM organizations").fetchone()[0] == 0
     org_id = conn.execute(
-        "INSERT INTO organizations (name, admin_user, admin_password, secret) "
-        "VALUES (?, ?, ?, ?)",
-        (name, admin_user, hash_password(password), secrets.token_hex(32))).lastrowid
+        "INSERT INTO organizations (name, admin_user, admin_password, admin_password_plain, "
+        "secret) VALUES (?, ?, ?, ?, ?)",
+        (name, admin_user, hash_password(password), password, secrets.token_hex(32))).lastrowid
     if first:
         for table in ("players", "tournaments"):
             conn.execute(f"UPDATE {table} SET organization_id = ? WHERE organization_id IS NULL",
@@ -62,10 +63,25 @@ def set_password(conn, admin_user, password):
     """Change an organization's admin password (its admins must log in again)."""
     if not password:
         raise ValueError("The password can't be empty.")
-    changed = conn.execute("UPDATE organizations SET admin_password = ? WHERE admin_user = ?",
-                           (hash_password(password), admin_user.strip())).rowcount
+    changed = conn.execute("UPDATE organizations SET admin_password = ?, admin_password_plain = ? "
+                           "WHERE admin_user = ?",
+                           (hash_password(password), password, admin_user.strip())).rowcount
     if not changed:
         raise ValueError(f"No organization has the admin user {admin_user!r}.")
+
+
+def update_admin(conn, org_id, admin_user, password=""):
+    """Change an organization's admin user, and its password unless `password` is empty.
+    Raises ValueError if the user is empty or another organization has it."""
+    admin_user = admin_user.strip()
+    if not admin_user:
+        raise ValueError("The admin user can't be empty.")
+    if conn.execute("SELECT 1 FROM organizations WHERE admin_user = ? AND id != ?",
+                    (admin_user, org_id)).fetchone():
+        raise ValueError(f"Another organization has the admin user {admin_user!r}.")
+    conn.execute("UPDATE organizations SET admin_user = ? WHERE id = ?", (admin_user, org_id))
+    if password:
+        set_password(conn, admin_user, password)
 
 
 def set_superadmin(conn, username, password):

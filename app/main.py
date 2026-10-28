@@ -393,24 +393,28 @@ def login_page(request: Request, next: str = "/"):
 
 @app.post("/login")
 def login(request: Request, username: str = Form(""), password: str = Form(""),
-          next: str = Form("/")):
-    """With a user: a super admin, or an organization's admin (who enters it too).
-    Without one: a tournament's player password, which logs in its players (one cookie
-    per tournament whose password it is) in the organization being viewed, or in the
-    one of that tournament if none is."""
+          next: str = Form("/"), role: str = Form("")):
+    """The login page has a section per `role`: "super" (a super admin), "admin" (an
+    organization's admin, who enters it too) and "player": a tournament's player
+    password, which logs in its players (one cookie per tournament whose password it is)
+    in the organization being viewed, or in the one of that tournament if none is.
+    Without a role, a user means a super admin or an admin, and no user a player."""
     cookie = cookie_options(request)
+    if role == "player":
+        username = ""
     failed = templates.TemplateResponse(request, "login.html", {
         "next": safe_next(next), "username": username, "error": "err_wrong_password",
+        "role": role or ("admin" if username.strip() else "player"),
     }, status_code=401)
     with db.connect() as conn:
         if username.strip():
-            admin = password and auth.super_login(conn, username, password)
+            admin = password and role != "admin" and auth.super_login(conn, username, password)
             if admin:
                 response = redirect(safe_next(next) if next not in ("", "/") else
                                     "/" if auth.current_org(request) else "/orgs")
                 response.set_cookie(auth.SUPER_COOKIE, auth.super_cookie(admin), **cookie)
                 return response
-            org = password and auth.admin_login(conn, username, password)
+            org = password and role != "super" and auth.admin_login(conn, username, password)
             if not org:
                 time.sleep(1)  # slow down password guessing
                 return failed
@@ -448,10 +452,11 @@ def logout(request: Request):
 
 @app.get("/orgs", response_class=HTMLResponse, dependencies=SUPER)
 def orgs_page(request: Request, error: str | None = None):
-    """Super admins: every organization, to enter one or create a new one."""
+    """Super admins: every organization with its admin's user and password, to enter
+    one, change its admin or create a new one."""
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT o.id, o.name, o.admin_user, "
+            "SELECT o.id, o.name, o.admin_user, o.admin_password_plain, "
             "(SELECT COUNT(*) FROM tournaments t WHERE t.organization_id = o.id) AS tournaments, "
             "(SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id) AS players "
             "FROM organizations o ORDER BY o.name").fetchall()
@@ -481,16 +486,18 @@ def super_enter(request: Request, org: int):
     return enter_org(request, row)
 
 
-@app.post("/orgs/{org}/password", dependencies=SUPER)
-def super_set_admin_password(org: int, admin_password: str = Form("")):
-    """Super admins: give an organization's admin a new password."""
+@app.post("/orgs/{org}/admin", dependencies=SUPER)
+def super_set_admin(org: int, admin_user: str = Form(""), admin_password: str = Form("")):
+    """Super admins: change an organization's admin user and (if typed) password."""
     with db.connect() as conn:
-        row = conn.execute("SELECT * FROM organizations WHERE id = ?", (org,)).fetchone()
-        if row is None:
+        if not conn.execute("SELECT 1 FROM organizations WHERE id = ?", (org,)).fetchone():
             raise HTTPException(404, "Organization not found")
-        if not admin_password:
+        if not admin_user.strip():
             return redirect("/orgs?error=err_org_fields")
-        orgs.set_password(conn, row["admin_user"], admin_password)
+        try:
+            orgs.update_admin(conn, org, admin_user, admin_password)
+        except ValueError:
+            return redirect("/orgs?error=err_admin_user_exists")
     return redirect("/orgs")
 
 

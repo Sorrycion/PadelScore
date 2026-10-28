@@ -14,12 +14,14 @@ ORG = ContextVar("org", default=None)
 
 SCHEMA = """
 -- A club or group of friends. Its admin logs in with admin_user and the password
--- (a hash, see orgs.py); `secret` signs its cookies.
+-- (a hash, see orgs.py); admin_password_plain keeps it readable for super admins
+-- (NULL for passwords set before it existed). `secret` signs its cookies.
 CREATE TABLE IF NOT EXISTS organizations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE COLLATE NOCASE,
     admin_user TEXT NOT NULL UNIQUE COLLATE NOCASE,
     admin_password TEXT NOT NULL,
+    admin_password_plain TEXT,
     secret TEXT NOT NULL
 );
 
@@ -161,6 +163,9 @@ def add_organizations(conn):
     if "organization_id" not in {r["name"] for r in conn.execute("PRAGMA table_info(tournaments)")}:
         conn.execute("ALTER TABLE tournaments ADD COLUMN "
                      "organization_id INTEGER REFERENCES organizations(id)")
+    if "admin_password_plain" not in {r["name"] for r in
+                                      conn.execute("PRAGMA table_info(organizations)")}:
+        conn.execute("ALTER TABLE organizations ADD COLUMN admin_password_plain TEXT")
 
 
 def add_rule_types(conn):

@@ -338,13 +338,19 @@ TEXT = {
     "login": {"es": "🔐 Entrar", "en": "🔐 Log in"},
     "logout": {"es": "🚪 Salir", "en": "🚪 Log out"},
     "login_title": {"es": "🔐 Entrar para editar", "en": "🔐 Log in to edit"},
-    "login_hint": {"es": "Administradores: usuario y contraseña de la organización. Jugadores: "
-                         "deja el usuario vacío y escribe la contraseña de jugadores de tu "
-                         "torneo para registrar sus resultados.",
-                   "en": "Admins: the organization's user and password. Players: leave the user "
-                         "empty and type your tournament's player password to enter its "
-                         "results."},
     "username": {"es": "👤 Usuario", "en": "👤 User"},
+    "login_player": {"es": "🎾 Jugadores", "en": "🎾 Players"},
+    "login_player_hint": {"es": "Escribe la contraseña de jugadores de tu torneo para "
+                                "registrar sus resultados.",
+                          "en": "Type your tournament's player password to enter its results."},
+    "login_admin": {"es": "🏢 Administrador de la organización", "en": "🏢 Organization admin"},
+    "login_admin_hint": {"es": "El usuario y la contraseña de tu organización: puedes cambiar "
+                               "todo en ella.",
+                         "en": "Your organization's user and password: you can change everything "
+                               "in it."},
+    "login_super": {"es": "⭐ Super administrador", "en": "⭐ Super admin"},
+    "login_super_hint": {"es": "Crea organizaciones y administra todas.",
+                         "en": "Creates organizations and manages all of them."},
 
     # Organizations
     "enter_title": {"es": "🏢 Entrar a una organización", "en": "🏢 Enter an organization"},
@@ -372,6 +378,10 @@ TEXT = {
     "admin_password": {"es": "🔑 Contraseña del administrador", "en": "🔑 Admin password"},
     "new_admin_password": {"es": "Nueva contraseña del administrador",
                            "en": "New admin password"},
+    "change_admin": {"es": "Cambiar usuario o contraseña", "en": "Change user or password"},
+    "keep_password": {"es": "Vacío = no cambiarla", "en": "Empty = keep it"},
+    "password_unknown": {"es": "No se conoce (se guardó antes); cámbiala para verla.",
+                         "en": "Unknown (saved earlier); change it to see it."},
     "no_orgs": {"es": "Todavía no hay organizaciones.", "en": "No organizations yet."},
     "err_org_fields": {"es": "Escribe el nombre, el usuario y la contraseña.",
                        "en": "Type the name, the user and the password."},
