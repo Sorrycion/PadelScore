@@ -11,7 +11,7 @@ flowchart LR
     C --> D["CI: test (pytest)"]
     D -- pass --> E[Merge]
     E --> F["CI on main: test again"]
-    F --> G["Back up live DB<br/>/home/data/padelscore-backup-<date>-gh.db"]
+    F --> G["Back up live DB<br/>/home/data/padelscore-backup-DATE-gh.db"]
     G --> H[Zip deploy via Kudu + restart]
     H --> I["Check /enter answers 200"]
 ```
