@@ -4,6 +4,9 @@ A website for local padel players: track participants, matches and scores.
 
 Built with Python, [FastAPI](https://fastapi.tiangolo.com/), Jinja2 templates and SQLite.
 
+How each part works (organizations, logins, tournaments, jornadas, sets, deploy), with
+diagrams: [docs/processes](docs/processes/README.md).
+
 ## Features
 
 Scoring follows the league rules in [`docs/REGLAMENTO.md`](docs/REGLAMENTO.md), also shown on the **Rules** page.
@@ -120,11 +123,16 @@ pytest
 ```
 app/
   main.py        # web routes
-  db.py          # SQLite connection and schema
+  auth.py        # logins and signed cookies
+  orgs.py        # organizations, super admins, password hashing (also a CLI)
+  db.py          # SQLite connection, schema and migrations
   scoring.py     # set validation, matchday placings, standings, court moves
+  rounds.py      # Americano / Mexicano round draws
   i18n.py        # UI texts in Spanish and English
   templates/     # HTML pages
   static/        # CSS
-docs/            # league rules (REGLAMENTO.md)
+docs/            # league rules (REGLAMENTO.md), processes/ (how each part works)
+.claude/skills/  # Claude Code skills: deploy, live admin, phone screenshots
+.github/         # CI: test and deploy on every push to main
 tests/           # pytest tests
 ```
