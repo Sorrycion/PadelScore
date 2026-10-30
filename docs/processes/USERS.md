@@ -26,15 +26,41 @@ flowchart LR
 
 ## Accounts and players
 
-A player row without `user_id` is a **guest player**: just a name. An account can claim
-one player per organization (`players.user_id`). Its sets and tournaments are then that
-account's. Admins link and unlink players on **🔑 Cuentas** (`/users`).
+**Players belong to an organization; accounts belong to the whole app.** A player row
+is a name inside one organization (its sets, tournaments and standings live there). An
+account is the person, and it unifies their players:
+
+- A player row without `user_id` is a **guest player**: just a name.
+- An account claims **one player per organization** (`players.user_id`). Claiming
+  applies everywhere that player appears: every set, tournament, ranking, stat and
+  medal of it is the account's.
+- Someone who plays in two organizations has two players (one in each) and one account.
+  `/me` adds them up under **🌐 Todo mi pádel** (sets, wins, win rate, tournaments,
+  organizations, medals) and lists each organization below.
+- **Duplicates in one organization are joined, not linked.** If the person was entered
+  twice (another name for the same person), the account's player absorbs the duplicate:
+  its sets, tournament lists and absences move over, and the duplicate is deleted
+  (`users.merge_players`). It's refused if the two played in the same set, because then
+  they're two people. The player can do it on `/welcome` (🧩 ¿También eres tú?) with a
+  tournament's password, and admins can do it on the account's page in 🔑 Cuentas.
+- The display name is the league name: it renames the account's players in every
+  organization (when the name is free there). **Rankings show "Display name
+  (username)"** for players with an account. Guests show just their name.
 
 ```mermaid
 erDiagram
     users ||--o{ players : "claims (one per organization)"
     organizations ||--o{ users : "org_admin of"
     organizations ||--o{ players : has
+```
+
+```mermaid
+flowchart LR
+    U["👤 account: ana"] --> P1["Nene: player 'Ana L'"]
+    U --> P2["Club B: player 'Ana L'"]
+    D["Nene: duplicate 'Anita'"] -- "🧩 join (merge_players)" --> P1
+    P1 --> M["/me: 🌐 Todo mi pádel = Nene + Club B"]
+    P2 --> M
 ```
 
 ## From guest to account

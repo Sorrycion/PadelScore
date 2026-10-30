@@ -24,6 +24,8 @@
 </head>
 <body>
   {% set path = request.url.path %}
+  {# The ☰ menu on phones: this checkbox opens it (no JavaScript); wide screens ignore it. #}
+  <input type="checkbox" id="menu-toggle" class="menu-toggle" hidden>
   <header class="topbar">
     <div class="brand-box">
       <a class="brand" href="/">🎾 PadelScore</a>
@@ -33,6 +35,20 @@
         {% if superadmin %}<a href="/orgs">⭐ {{ _("nav_orgs") }}</a>{% endif %}
       </div>{% endif %}
     </div>
+    <label for="menu-toggle" class="menu-button" title="{{ _('menu') }}" aria-label="{{ _('menu') }}"><span class="open">☰</span><span class="close">✕</span></label>
+    <label for="menu-toggle" class="menu-backdrop" aria-hidden="true"></label>
+    <div class="menu-panel">
+    {# Main sections: a row of pills on wide screens, a list in the ☰ menu on phones. #}
+    <nav class="tabbar">
+      {% for url, icon, key, active in [
+           ("/", "🏆", "nav_standings", path == "/"),
+           ("/tournaments", "📅", "nav_tournaments", path.startswith(("/tournaments", "/matchdays"))),
+           ("/matches", "🎾", "nav_sets", path.startswith("/matches")),
+           ("/players", "👥", "nav_players", path.startswith("/players")),
+           ("/rules", "📖", "nav_rules", path == "/rules")] %}
+      <a href="{{ url }}" {% if active %}class="active" aria-current="page"{% endif %}><span class="icon" aria-hidden="true">{{ icon }}</span>{{ _(key) }}</a>
+      {% endfor %}
+    </nav>
     <div class="top-actions">
       {% if editor %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
       {% if login_enabled %}
@@ -49,18 +65,8 @@
         {% endfor %}
       </span>
     </div>
+    </div>
   </header>
-  {# Main sections: a row of pills on wide screens, a bottom tab bar on phones. #}
-  <nav class="tabbar">
-    {% for url, icon, key, active in [
-         ("/", "🏆", "nav_standings", path == "/"),
-         ("/tournaments", "📅", "nav_tournaments", path.startswith(("/tournaments", "/matchdays"))),
-         ("/matches", "🎾", "nav_sets", path.startswith("/matches")),
-         ("/players", "👥", "nav_players", path.startswith("/players")),
-         ("/rules", "📖", "nav_rules", path == "/rules")] %}
-    <a href="{{ url }}" {% if active %}class="active" aria-current="page"{% endif %}><span class="icon" aria-hidden="true">{{ icon }}</span>{{ _(key) }}</a>
-    {% endfor %}
-  </nav>
   <main>
     {% block content %}{% endblock %}
   </main>

@@ -341,6 +341,7 @@ def home(request: Request, tournament: str | None = None):
             "standings": standings,
             "player_medals": tournament_medals(conn, latest["id"], standings, get_lang(request))
                              if latest else {},
+            "usernames": account_usernames(conn),
             "latest_matchday": results[-1] if results else None,
             "matches": set_rows(conn, tournament_id=latest["id"], limit=6) if latest else [],
         })
@@ -562,8 +563,11 @@ def welcome_page(request: Request, t: int, next: str = "/", error: str | None = 
 
 
 @app.post("/welcome/link")
-def welcome_link(request: Request, t: int = Form(...), player_id: int = Form(...)):
-    """A logged-in account claims a player of the tournament it has the password of."""
+def welcome_link(request: Request, t: int = Form(...), player_id: int = Form(...),
+                 merge: str = Form("")):
+    """A logged-in account claims a player of the tournament it has the password of.
+    With `merge`, an account that already has a player in this organization says this
+    one is also them: the two become one (see users.merge_players)."""
     user = auth.current_user(request)
     if user is None:
         raise LoginRequired(f"/welcome?t={t}")
@@ -573,10 +577,11 @@ def welcome_link(request: Request, t: int = Form(...), player_id: int = Form(...
         if player is None:
             return redirect(f"/welcome?t={t}&error=err_player_claimed")
         try:
-            users.link_player(conn, user["id"], player_id)
+            kept = users.link_player(conn, user["id"], player_id, merge=bool(merge))
         except users.UserError as e:
             return redirect(f"/welcome?t={t}&error={e}")
-        take_display_name(conn, player, user["display_name"])
+        if kept == player_id:
+            take_display_name(conn, player, user["display_name"])
     return redirect("/me")
 
 
@@ -657,7 +662,8 @@ def in_org(organization_id, work):
 
 
 def my_summary(conn, player):
-    """A player's tournaments (position, points), pending sets and latest sets."""
+    """A player's tournaments (position, points), pending sets, latest sets, totals
+    and medals."""
     def work():
         sets = set_rows(conn, player_id=player["id"])
         ids = {s["tournament_id"] for s in sets} | {r[0] for r in conn.execute(
@@ -668,10 +674,31 @@ def my_summary(conn, player):
                 _, standings = load_results(conn, t["id"])
                 me = next((r for r in standings if r["id"] == player["id"]), None)
                 tournaments.append({**t, "me": me})
+        played = [s for s in sets if is_played(s)]
         return {"player": player, "tournaments": tournaments,
                 "pending": [s for s in sets if s["team_a_games"] is None],
-                "recent": [s for s in sets if s["team_a_games"] is not None][:5]}
+                "recent": [s for s in sets if s["team_a_games"] is not None][:5],
+                "totals": stats.totals(played, player["id"]),
+                "medals": player_awards(conn, player["id"])}
     return in_org(player["organization_id"], work)
+
+
+def career(conn, summaries, lang):
+    """The account's numbers over all its players, in every organization: one person."""
+    totals = {k: sum(s["totals"][k] for s in summaries) for k in ("played", "won", "lost")}
+    totals["win_pct"] = round(100 * totals["won"] / totals["played"]) if totals["played"] else 0
+    totals["orgs"] = len(summaries)
+    totals["tournaments"] = sum(len(s["tournaments"]) for s in summaries)
+    won = {}
+    for s in summaries:
+        for code, m in s["medals"].items():
+            got = won.setdefault(code, {"count": 0, "tier": None})
+            got["count"] += m.get("count") or 1
+            if m.get("tier") and (got["tier"] or 0) < m["tier"]:
+                got["tier"] = m["tier"]
+    totals["medals"] = [{**m, **won[m["code"]]} for m in medal_types(conn, lang)
+                        if m["code"] in won]
+    return totals
 
 
 @app.get("/me", response_class=HTMLResponse)
@@ -683,8 +710,10 @@ def me_page(request: Request, error: str | None = None, saved: str | None = None
         raise LoginRequired("/me")
     with db.connect() as conn:
         summaries = [my_summary(conn, p) for p in my_players(conn, user["id"])]
+        totals = career(conn, summaries, get_lang(request))
     return templates.TemplateResponse(request, "me.html", {
-        "account": user, "summaries": summaries, "error": error, "saved": saved})
+        "account": user, "summaries": summaries, "career": totals,
+        "error": error, "saved": saved})
 
 
 @app.post("/me")
@@ -821,10 +850,13 @@ def set_user_role(request: Request, user_id: int, role: str = Form(""),
 
 
 @app.post("/users/{user_id}/link", dependencies=EDIT)
-def link_user_player(request: Request, user_id: int, player_id: int = Form(...)):
+def link_user_player(request: Request, user_id: int, player_id: int = Form(...),
+                     merge: str = Form("")):
+    """Link a free player to the account, or with `merge` fold a duplicate into the
+    account's player in this organization."""
     def change(conn, u):
         get_or_404(conn, "players", player_id)
-        users.link_player(conn, u["id"], player_id)
+        users.link_player(conn, u["id"], player_id, merge=bool(merge))
     return user_action(request, user_id, change)
 
 
@@ -914,6 +946,7 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
             "results": results,
             "standings": standings,
             "player_medals": tournament_medals(conn, tournament_id, standings, get_lang(request)),
+            "usernames": account_usernames(conn),
             "participants": tournament_players(conn, tournament_id),
             "players": all_players(conn),
             "today": date.today().isoformat(),
@@ -1539,6 +1572,14 @@ def player_awards(conn, player_id, cache=None):
     sets = set_rows(conn, player_id=player_id)
     played = [s for s in reversed(sets) if is_played(s)]
     return medals.awards(played, player_id, player_tournaments(conn, player_id, sets, cache))
+
+
+def account_usernames(conn):
+    """{player id: username} for this organization's players that have an account; the
+    standings show them as "Display name (username)"."""
+    return dict(conn.execute(
+        "SELECT p.id, u.username FROM players p JOIN users u ON u.id = p.user_id "
+        "WHERE p.organization_id = ?", (org_id(),)).fetchall())
 
 
 def tournament_medals(conn, tournament_id, standings, lang):

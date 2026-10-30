@@ -31,6 +31,17 @@
 <form method="post" action="/users/{{ account.id }}/unlink" class="inline">
   <button type="submit" class="secondary">{{ _("unlink_player") }}</button>
 </form>
+{% if free_players %}
+<h3>🧩 {{ _("merge_title") }}</h3>
+<form method="post" action="/users/{{ account.id }}/link" class="stack">
+  <input type="hidden" name="merge" value="1">
+  <select name="player_id" aria-label="{{ _('player') }}">
+    {% for p in free_players %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+  </select>
+  <label class="check"><input type="checkbox" required> {{ _("merge_confirm", name=player.name) }}</label>
+  <button type="submit" class="secondary">{{ _("merge_player") }}</button>
+</form>
+{% endif %}
 {% elif free_players %}
 <form method="post" action="/users/{{ account.id }}/link" class="inline">
   <select name="player_id" aria-label="{{ _('player') }}">

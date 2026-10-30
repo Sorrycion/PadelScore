@@ -1,5 +1,6 @@
 {# Tournament standings. Needs: standings, results (matchdays, for the per-matchday columns);
-   optionally player_medals (player id -> the medals won in this tournament). #}
+   optionally player_medals (player id -> the medals won in this tournament) and usernames
+   (player id -> account username, shown as "Display name (username)"). #}
 {% if standings %}
 <div class="scroll">
 <table class="standings">
@@ -11,7 +12,7 @@
   {% for r in standings %}
     <tr>
       <td><span class="pos pos-{{ r.position }}">{{ r.position }}</span></td>
-      <td><a class="plain" href="/players/{{ r.id }}">{{ r.name }}</a>
+      <td><a class="plain" href="/players/{{ r.id }}">{{ r.name }}{% set uname = (usernames or {}).get(r.id) %}{% if uname %} <span class="username">({{ uname }})</span>{% endif %}</a>
         {% set won = (player_medals or {}).get(r.id) %}
         {% if won %}<a class="mini-medals" href="/players/{{ r.id }}/medals">{% for m in won %}<img class="medal {% if m.tier %}tier-{{ m.tier }}{% endif %}" src="{{ m.image }}?v={{ css_version }}" alt="{{ m.name }}" title="{{ m.name }}{% if m.tier %} · {{ _(TIER_KEYS[m.tier]) }}{% elif m.count > 1 %} ×{{ m.count }}{% endif %}" width="20" height="23">{% endfor %}</a>{% endif %}</td>
       <td class="pts">{{ r.points }}</td>
