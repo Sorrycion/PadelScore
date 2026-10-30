@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import auth, charts, db, orgs, rounds, stats, users
+from . import auth, charts, db, medals, orgs, rounds, stats, users
 from .auth import LoginRequired, require_editor, require_super
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
 from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
@@ -75,10 +75,11 @@ templates.env.filters["pick_player"] = lambda p: {"id": p["id"], "name": p["name
 templates.env.globals.update(
     ROUND_MODES=ROUND_MODES, MANUAL=MANUAL,
     ROLE_KEYS={"super": "role_super", "org_admin": "role_org_admin", "player": "role_player"},
+    TIER_KEYS={1: "tier_bronze", 2: "tier_silver", 3: "tier_gold"},
     RULE_ICONS={"liga_amigos": "🏅", "americano": "🇺🇸", "mexicano": "🇲🇽", "manual": "✍️"},
     # Changes whenever the stylesheet does, so phones don't keep an old cached copy.
     css_version=hashlib.sha256(b"".join(
-        f.read_bytes() for f in sorted((BASE / "static").iterdir()))).hexdigest()[:10],
+        f.read_bytes() for f in sorted((BASE / "static").rglob("*")) if f.is_file())).hexdigest()[:10],
 )
 
 
@@ -335,6 +336,8 @@ def home(request: Request, tournament: str | None = None):
             "tournament": latest,
             "results": results,
             "standings": standings,
+            "player_medals": tournament_medals(conn, latest["id"], standings, get_lang(request))
+                             if latest else {},
             "latest_matchday": results[-1] if results else None,
             "matches": set_rows(conn, tournament_id=latest["id"], limit=6) if latest else [],
         })
@@ -900,6 +903,7 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
             "tournament": tournament,
             "results": results,
             "standings": standings,
+            "player_medals": tournament_medals(conn, tournament_id, standings, get_lang(request)),
             "participants": tournament_players(conn, tournament_id),
             "players": all_players(conn),
             "today": date.today().isoformat(),
@@ -1413,15 +1417,19 @@ def delete_player(player_id: int):
     return redirect("/players")
 
 
-def player_tournaments(conn, player_id, sets):
+def player_tournaments(conn, player_id, sets, cache=None):
     """The tournaments the player has sets in: position, totals, and their row on each
-    matchday (court, points...), in playing order."""
+    matchday (court, points...), in playing order. `cache` (a dict) keeps each
+    tournament's results for the next player."""
     tournament_ids = {s["tournament_id"] for s in sets}
     tournaments = []
-    for t in all_tournaments(conn):
+    cache = {} if cache is None else cache
+    for t in cache.get("tournaments") or cache.setdefault("tournaments", all_tournaments(conn)):
         if t["id"] not in tournament_ids:
             continue
-        results, standings = load_results(conn, t["id"])
+        if t["id"] not in cache:
+            cache[t["id"]] = load_results(conn, t["id"])
+        results, standings = cache[t["id"]]
         me = next((r for r in standings if r["id"] == player_id), None)
         history = []
         for md in results:
@@ -1432,7 +1440,9 @@ def player_tournaments(conn, player_id, sets):
                         history.append({**entry, "court": court, **r})
         tournaments.append({"id": t["id"], "name": t["name"], "rule_code": t["rule_code"],
                             "ended": t["ended"], "position": me and me["position"],
-                            "total": me, "players": len(standings), "history": history})
+                            "total": me, "players": len(standings), "matchdays": t["matchdays"],
+                            "last_position": max((r["position"] for r in standings), default=None),
+                            "history": history})
     return tournaments
 
 
@@ -1505,6 +1515,57 @@ def player_stats_page(request: Request, player_id: int):
             [(p["name"], p["won"]) for p in sorted(partners, key=lambda p: -p["won"]) if p["won"]],
             _("wins_with"), color="var(--up)"),
     })
+
+
+def medal_types(conn, lang):
+    """The medal catalog in the page's language, in display order."""
+    return [{"code": m["code"], "kind": m["kind"], "name": m[f"name_{lang}"],
+             "how": m[f"how_{lang}"], "image": f"/static/medals/{m['code']}.svg"}
+            for m in conn.execute("SELECT * FROM medal_types ORDER BY sort")]
+
+
+def player_awards(conn, player_id, cache=None):
+    """The player's medals: {code: {"count", "tier", "detail"}} (medals.py)."""
+    sets = set_rows(conn, player_id=player_id)
+    played = [s for s in reversed(sets) if is_played(s)]
+    return medals.awards(played, player_id, player_tournaments(conn, player_id, sets, cache))
+
+
+def tournament_medals(conn, tournament_id, standings, lang):
+    """Each player's medals won in this tournament only (its sets and matchdays), for
+    the standings table: {player id: [{medal..., "count", "tier", "value"}]}."""
+    catalog, cache, out = medal_types(conn, lang), {}, {}
+    for row in standings:
+        sets = set_rows(conn, tournament_id=tournament_id, player_id=row["id"])
+        played = [s for s in reversed(sets) if is_played(s)]
+        won = medals.awards(played, row["id"], player_tournaments(conn, row["id"], sets, cache))
+        out[row["id"]] = [{**m, **won[m["code"]]} for m in catalog if m["code"] in won]
+    return out
+
+
+@app.get("/players/{player_id}/medals", response_class=HTMLResponse)
+def player_medals_page(request: Request, player_id: int):
+    """The player's medals: the ones won first, then the ones still to win, greyed."""
+    with db.connect() as conn:
+        player = get_or_404(conn, "players", player_id)
+        catalog = medal_types(conn, get_lang(request))
+        won = player_awards(conn, player_id)
+    return templates.TemplateResponse(request, "player_medals.html", {
+        "player": player, "won": [dict(m, **won[m["code"]]) for m in catalog if m["code"] in won],
+        "missing": [m for m in catalog if m["code"] not in won]})
+
+
+@app.get("/medals", response_class=HTMLResponse)
+def medals_page(request: Request):
+    """Every medal, how to win it, and who in this organization has it."""
+    with db.connect() as conn:
+        catalog = medal_types(conn, get_lang(request))
+        cache, holders = {}, {}
+        for p in all_players(conn):
+            for code in player_awards(conn, p["id"], cache):
+                holders.setdefault(code, []).append(p)
+    return templates.TemplateResponse(request, "medals.html", {
+        "catalog": catalog, "holders": holders})
 
 
 @app.get("/matches", response_class=HTMLResponse)

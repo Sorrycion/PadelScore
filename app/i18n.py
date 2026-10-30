@@ -411,6 +411,27 @@ TEXT = {
     "faced": {"es": "Enfrentados", "en": "Faced"},
     "sets_per_month": {"es": "Sets por mes", "en": "Sets per month"},
 
+    # Medals
+    "tab_medals": {"es": "🏅 Medallas", "en": "🏅 Medals"},
+    "all_medals": {"es": "Todas las medallas", "en": "All medals"},
+    "medals_hint": {"es": "Se ganan jugando: se calculan con los sets, así que cambian si "
+                          "se corrige un resultado. Las de la vergüenza son de broma. 🤡",
+                    "en": "Won by playing: they're worked out from the sets, so they change "
+                          "if a result is corrected. The shame ones are a joke. 🤡"},
+    "n_medals": {"es": ("{n} medalla", "{n} medallas"), "en": ("{n} medal", "{n} medals")},
+    "no_medals_yet": {"es": "Todavía ninguna medalla. ¡A jugar!",
+                      "en": "No medals yet. Go play!"},
+    "medals_to_win": {"es": "Por ganar", "en": "Still to win"},
+    "medal": {"es": "Medalla", "en": "Medal"},
+    "how_to_win": {"es": "Cómo se gana", "en": "How to win it"},
+    "holders": {"es": "La tienen", "en": "Held by"},
+    "kind_glory": {"es": "🥇 Gloria", "en": "🥇 Glory"},
+    "kind_rival": {"es": "⚔️ Rivalidad", "en": "⚔️ Rivalry"},
+    "kind_shame": {"es": "🤡 Vergüenza (de broma)", "en": "🤡 Shame (just for fun)"},
+    "tier_bronze": {"es": "Bronce", "en": "Bronze"},
+    "tier_silver": {"es": "Plata", "en": "Silver"},
+    "tier_gold": {"es": "Oro", "en": "Gold"},
+
     # From guest to account, and the profile
     "welcome_title": {"es": "👋 ¡Bienvenido/a!", "en": "👋 Welcome!"},
     "welcome_hint": {"es": "Ya puedes registrar los resultados de este torneo. ¿Quieres "

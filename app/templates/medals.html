@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ _("all_medals") }} · PadelScore{% endblock %}
+{% block content %}
+<h1>🏅 {{ _("all_medals") }}</h1>
+<p class="muted">{{ _("medals_hint") }}</p>
+{% for kind, key in [("glory", "kind_glory"), ("rival", "kind_rival"), ("shame", "kind_shame")] %}
+<h2>{{ _(key) }}</h2>
+<div class="scroll">
+<table class="medal-table">
+  <thead><tr><th></th><th>{{ _("medal") }}</th><th>{{ _("how_to_win") }}</th><th>{{ _("holders") }}</th></tr></thead>
+  <tbody>
+  {% for m in catalog if m.kind == kind %}
+    {% set who = holders.get(m.code, []) %}
+    <tr>
+      <td><img class="medal" src="{{ m.image }}?v={{ css_version }}" alt="" width="48" height="56"></td>
+      <td><strong>{{ m.name }}</strong></td>
+      <td class="muted">{{ m.how }}</td>
+      <td>{% for p in who %}<a class="plain" href="/players/{{ p.id }}/medals">{{ p.name }}</a>{% if not loop.last %}, {% endif %}{% else %}<span class="muted">—</span>{% endfor %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endfor %}
+{% endblock %}
