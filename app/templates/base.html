@@ -29,6 +29,7 @@
       <a class="brand" href="/">🎾 PadelScore</a>
       {% if org or superadmin %}<div class="org-line">
         {% if org %}<a href="/enter" title="{{ _('change_org') }}">🏢 {{ org.name }}</a>{% endif %}
+        {% if editor %}<a href="/users">🔑 {{ _("nav_users") }}</a>{% endif %}
         {% if superadmin %}<a href="/orgs">⭐ {{ _("nav_orgs") }}</a>{% endif %}
       </div>{% endif %}
     </div>

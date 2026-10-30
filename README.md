@@ -47,20 +47,24 @@ The database is a file named `padelscore.db` created in the project folder. Set 
 Everything (players, tournaments, sets) belongs to an **organization**. Visitors first
 enter one by its name (🏢 in the top bar changes it) and can then see its tournaments.
 
-- **Organization admin**: logs in with the organization's admin user and password and
-  may change everything in it.
-- **Super admin**: logs in with their own user and password, sees every organization
-  (⭐ Organizaciones), creates organizations with their admin, resets admin passwords,
-  and is admin in every organization.
-- **Players**: leave the user empty and type their tournament's player password to
-  enter its results.
+Logins (`/login` has two sections):
 
-Passwords are stored hashed. Create organizations and super admins from the command
-line (it only needs the standard library, so it also works in Azure's Kudu console):
+- **👤 My account**: a username or email and password (table `users`). The role
+  decides what it may do:
+  - **Super admin**: sees every organization (⭐ Organizaciones), creates them with
+    their admin, sees and changes admin credentials, and is admin everywhere.
+  - **Organization admin**: may change everything in their organization, including its
+    accounts (🔑 Cuentas: details, passwords, linked player).
+  - **Player**: enters results in the tournaments of the player it's linked to.
+- **🎾 Players**: a tournament's player password logs in as a guest for that tournament.
+
+Passwords are stored hashed (organization admins' also readable, for super admins).
+Create organizations and super admins from the command line (it only needs the
+standard library, so it also works in Azure's Kudu console):
 
 ```
 python -m app.orgs create "Name" "admin user" "admin password"
-python -m app.orgs password "admin user" "new password"
+python -m app.orgs password "user" "new password"
 python -m app.orgs superadmin "user" "password"
 ```
 
@@ -79,6 +83,21 @@ The app runs on Azure App Service (Linux, Python 3.12) with these app settings:
 Startup command: `gunicorn -w 1 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 app.main:app`
 
 Keep the plan at one instance: SQLite must not be shared between servers.
+
+### Database changes (pre-deployment SQL)
+
+Schema changes are numbered SQL files in `sql/predeployment/` (`0001_users.sql`,
+`0002_...`). `app/migrate.py` runs the ones a database hasn't had yet, in order, each in
+a transaction, and records them in `schema_migrations`. The app does it on start, and
+the pipeline does it on the live database **before** deploying the new code, right
+after backing it up. Write changes that the running version tolerates (add tables and
+columns, don't drop or rename in the same release), and never edit a file that has
+already run: add a new one.
+
+```
+python -m app.migrate --status   # applied / PENDING files (read only)
+python -m app.migrate            # apply what's pending
+```
 
 ### Automatic deploy
 

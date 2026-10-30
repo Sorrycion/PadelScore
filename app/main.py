@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import auth, db, orgs, rounds
+from . import auth, db, orgs, rounds, users
 from .auth import LoginRequired, require_editor, require_super
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
 from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
@@ -74,6 +74,7 @@ MANUAL = "manual"  # rule type whose sets are all made by hand
 templates.env.filters["pick_player"] = lambda p: {"id": p["id"], "name": p["name"]}
 templates.env.globals.update(
     ROUND_MODES=ROUND_MODES, MANUAL=MANUAL,
+    ROLE_KEYS={"super": "role_super", "org_admin": "role_org_admin", "player": "role_player"},
     RULE_ICONS={"liga_amigos": "🏅", "americano": "🇺🇸", "mexicano": "🇲🇽", "manual": "✍️"},
     # Changes whenever the stylesheet does, so phones don't keep an old cached copy.
     css_version=hashlib.sha256(b"".join(
@@ -394,34 +395,38 @@ def login_page(request: Request, next: str = "/"):
 @app.post("/login")
 def login(request: Request, username: str = Form(""), password: str = Form(""),
           next: str = Form("/"), role: str = Form("")):
-    """The login page has a section per `role`: "super" (a super admin), "admin" (an
-    organization's admin, who enters it too) and "player": a tournament's player
-    password, which logs in its players (one cookie per tournament whose password it is)
-    in the organization being viewed, or in the one of that tournament if none is.
-    Without a role, a user means a super admin or an admin, and no user a player."""
+    """The login page has two sections (`role`):
+    - "account": a username or email and password. A super admin goes on to /orgs (or
+      `next`), an organization admin enters their organization, a player goes home.
+    - "player": a tournament's player password, which logs in its guest players (one
+      cookie per tournament whose password it is) in the organization being viewed, or
+      in the one of that tournament if none is.
+    Without a role (older forms), a username means an account and none a player."""
     cookie = cookie_options(request)
-    if role == "player":
-        username = ""
+    if role not in ("account", "player"):
+        role = "account" if username.strip() else "player"
     failed = templates.TemplateResponse(request, "login.html", {
-        "next": safe_next(next), "username": username, "error": "err_wrong_password",
-        "role": role or ("admin" if username.strip() else "player"),
+        "next": safe_next(next), "username": username if role == "account" else "",
+        "error": "err_wrong_password", "role": role,
     }, status_code=401)
     with db.connect() as conn:
-        if username.strip():
-            admin = password and role != "admin" and auth.super_login(conn, username, password)
-            if admin:
-                response = redirect(safe_next(next) if next not in ("", "/") else
-                                    "/" if auth.current_org(request) else "/orgs")
-                response.set_cookie(auth.SUPER_COOKIE, auth.super_cookie(admin), **cookie)
-                return response
-            org = password and role != "super" and auth.admin_login(conn, username, password)
-            if not org:
+        if role == "account":
+            user = password and users.login(conn, username, password)
+            if not user:
                 time.sleep(1)  # slow down password guessing
                 return failed
             current = auth.current_org(request)
-            response = enter_org(request, org, safe_next(next) if current
-                                 and current["id"] == org["id"] else "/")
-            response.set_cookie(auth.COOKIE, auth.editor_token(org), **cookie)
+            wanted = safe_next(next) if next not in ("", "/") else None
+            if user["role"] == "org_admin":
+                org = conn.execute("SELECT * FROM organizations WHERE id = ?",
+                                   (user["organization_id"],)).fetchone()
+                response = enter_org(request, org, wanted if current
+                                     and current["id"] == org["id"] and wanted else "/")
+            elif user["role"] == "super":
+                response = redirect(wanted or ("/" if current else "/orgs"))
+            else:
+                response = redirect(wanted or "/")
+            response.set_cookie(auth.USER_COOKIE, auth.user_cookie(user), **cookie)
             return response
         current = auth.current_org(request)
         matches = [t for t in conn.execute(
@@ -445,7 +450,7 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
 @app.post("/logout")
 def logout(request: Request):
     response = redirect("/")
-    for name in [auth.COOKIE, auth.SUPER_COOKIE, *auth.player_cookies(request)]:
+    for name in [auth.USER_COOKIE, *auth.OLD_COOKIES, *auth.player_cookies(request)]:
         response.delete_cookie(name)
     return response
 
@@ -456,10 +461,11 @@ def orgs_page(request: Request, error: str | None = None):
     one, change its admin or create a new one."""
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT o.id, o.name, o.admin_user, o.admin_password_plain, "
+            "SELECT o.id, o.name, u.username AS admin_user, u.password_plain AS admin_password_plain, "
             "(SELECT COUNT(*) FROM tournaments t WHERE t.organization_id = o.id) AS tournaments, "
             "(SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id) AS players "
-            "FROM organizations o ORDER BY o.name").fetchall()
+            "FROM organizations o LEFT JOIN users u ON u.id = (SELECT MIN(id) FROM users "
+            "WHERE role = 'org_admin' AND organization_id = o.id) ORDER BY o.name").fetchall()
     return templates.TemplateResponse(request, "orgs.html", {"orgs": rows, "error": error})
 
 
@@ -470,8 +476,7 @@ def add_org(name: str = Form(""), admin_user: str = Form(""), admin_password: st
             return redirect("/orgs?error=err_org_fields")
         if auth.find_org(conn, name):
             return redirect("/orgs?error=err_org_exists")
-        if conn.execute("SELECT 1 FROM organizations WHERE admin_user = ?",
-                        (admin_user.strip(),)).fetchone():
+        if users.find_login(conn, admin_user) or "@" in admin_user:
             return redirect("/orgs?error=err_admin_user_exists")
         orgs.create_org(conn, name, admin_user, admin_password)
     return redirect("/orgs")
@@ -499,6 +504,109 @@ def super_set_admin(org: int, admin_user: str = Form(""), admin_password: str = 
         except ValueError:
             return redirect("/orgs?error=err_admin_user_exists")
     return redirect("/orgs")
+
+
+# --- Accounts (admins) ------------------------------------------------------------
+
+def managed_users(conn, request):
+    """The accounts this admin may manage: all for a super admin; for an organization
+    admin, its organization's admins and the accounts of its players."""
+    if auth.is_super(request):
+        return conn.execute("SELECT * FROM users ORDER BY role, username").fetchall()
+    return conn.execute(
+        "SELECT * FROM users WHERE role != 'super' AND ((role = 'org_admin' AND "
+        "organization_id = ?) OR id IN (SELECT user_id FROM players WHERE organization_id = ?)) "
+        "ORDER BY role, username",
+        (org_id(), org_id())).fetchall()
+
+
+def managed_user(conn, request, user_id):
+    user = next((u for u in managed_users(conn, request) if u["id"] == user_id), None)
+    if user is None:
+        raise HTTPException(404, "Account not found")
+    return user
+
+
+def linked_player(conn, user_id):
+    """The account's player in this organization, or None."""
+    return conn.execute("SELECT * FROM players WHERE user_id = ? AND organization_id = ?",
+                        (user_id, org_id())).fetchone()
+
+
+@app.get("/users", response_class=HTMLResponse, dependencies=EDIT)
+def users_page(request: Request):
+    with db.connect() as conn:
+        rows = [{**u, "player": linked_player(conn, u["id"])}
+                for u in managed_users(conn, request)]
+    return templates.TemplateResponse(request, "users.html", {"accounts": rows})
+
+
+@app.get("/users/{user_id}", response_class=HTMLResponse, dependencies=EDIT)
+def user_page(request: Request, user_id: int, error: str | None = None):
+    with db.connect() as conn:
+        account = managed_user(conn, request, user_id)
+        return templates.TemplateResponse(request, "user_edit.html", {
+            "account": account, "player": linked_player(conn, user_id),
+            "free_players": conn.execute(
+                "SELECT * FROM players WHERE organization_id = ? AND user_id IS NULL "
+                "ORDER BY name", (org_id(),)).fetchall(),
+            "organizations": conn.execute("SELECT * FROM organizations ORDER BY name").fetchall(),
+            "error": error,
+        })
+
+
+def user_action(request, user_id, change):
+    """Run `change(conn, account)` on an account this admin manages and go back to its
+    page, with the error if it was refused."""
+    with db.connect() as conn:
+        account = managed_user(conn, request, user_id)
+        try:
+            change(conn, account)
+        except users.UserError as e:
+            return redirect(f"/users/{user_id}?error={e}")
+    return redirect(f"/users/{user_id}")
+
+
+@app.post("/users/{user_id}", dependencies=EDIT)
+def update_user(request: Request, user_id: int, username: str = Form(""),
+                email: str = Form(""), first_name: str = Form(""), last_name: str = Form(""),
+                display_name: str = Form("")):
+    return user_action(request, user_id, lambda conn, u: users.update_user(
+        conn, u["id"], username=username, email=email, first_name=first_name,
+        last_name=last_name, display_name=display_name))
+
+
+@app.post("/users/{user_id}/password", dependencies=EDIT)
+def reset_user_password(request: Request, user_id: int, password: str = Form("")):
+    return user_action(request, user_id,
+                       lambda conn, u: users.set_password(conn, u["id"], password))
+
+
+@app.post("/users/{user_id}/role", dependencies=SUPER)
+def set_user_role(request: Request, user_id: int, role: str = Form(""),
+                  organization_id: str = Form("")):
+    def change(conn, u):
+        if u["id"] == auth.current_user(request)["id"]:
+            raise users.UserError("err_own_role")  # don't lock yourself out
+        users.set_role(conn, u["id"], role, opt_int(organization_id))
+    return user_action(request, user_id, change)
+
+
+@app.post("/users/{user_id}/link", dependencies=EDIT)
+def link_user_player(request: Request, user_id: int, player_id: int = Form(...)):
+    def change(conn, u):
+        get_or_404(conn, "players", player_id)
+        users.link_player(conn, u["id"], player_id)
+    return user_action(request, user_id, change)
+
+
+@app.post("/users/{user_id}/unlink", dependencies=EDIT)
+def unlink_user_player(request: Request, user_id: int):
+    def change(conn, u):
+        player = linked_player(conn, u["id"])
+        if player:
+            users.unlink_player(conn, player["id"])
+    return user_action(request, user_id, change)
 
 
 @app.get("/rules", response_class=HTMLResponse)
@@ -1115,8 +1223,12 @@ def player_page(request: Request, player_id: int, error: str | None = None):
                 other = team[1] if ids[0] == player_id else team[0]
                 partners[(s[other + "_id"], s[other])] += 1
 
+    account = None
+    if player["user_id"] and auth.is_editor(request):
+        with db.connect() as conn:
+            account = users.get(conn, player["user_id"])
     return templates.TemplateResponse(request, "player.html", {
-        "player": player,
+        "player": player, "account": account,
         "tournaments": tournaments,
         "partners": [{"id": pid, "name": name, "count": n}
                      for (pid, name), n in partners.most_common()],

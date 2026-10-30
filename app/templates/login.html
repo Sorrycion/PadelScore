@@ -3,9 +3,8 @@
 {% block content %}
 <h1>{{ _("login_title") }}</h1>
 {% set sections = [
+  ("account", "login_account", "login_account_hint"),
   ("player", "login_player", "login_player_hint"),
-  ("admin", "login_admin", "login_admin_hint"),
-  ("super", "login_super", "login_super_hint"),
 ] %}
 <div class="login-sections">
   {% for code, title, hint in sections %}
@@ -17,14 +16,14 @@
       <input type="hidden" name="next" value="{{ next }}">
       <input type="hidden" name="role" value="{{ code }}">
       {% if code != "player" %}
-      <label>{{ _("username") }}
+      <label>{{ _("username_or_email") }}
         <input name="username" value="{{ username if role == code and username else '' }}" autocomplete="username" autocapitalize="off" required>
       </label>
       {% endif %}
       <label>{{ _("password") }}
         <input type="password" name="password" autocomplete="{{ 'off' if code == 'player' else 'current-password' }}" required>
       </label>
-      <button type="submit"{% if code != "player" %} class="secondary"{% endif %}>{{ _("login") }}</button>
+      <button type="submit"{% if code == "player" %} class="secondary"{% endif %}>{{ _("login") }}</button>
     </form>
   </section>
   {% endfor %}

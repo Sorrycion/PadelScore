@@ -4,16 +4,15 @@ Everything belongs to an organization (see orgs.py). Visitors first enter one by
 name; a cookie remembers it, signed with the organization's secret, and from then on
 they see its tournaments. Viewing needs nothing more.
 
-The organization's admin logs in with its admin user and password and may change
-everything in it. The admin cookie is an HMAC (with the organization's secret) of the
-stored password hash, so changing the password logs every admin out.
-
-A super admin (table superadmins, created with orgs.py) logs in the same way, with
-their own user and password. They may create organizations (with their admin user and
-password), enter any of them, and are admin in all of them.
+Accounts (users.py) log in with their username or email and password. The account
+cookie is an HMAC (with the account's secret) of the stored password hash, so
+changing the password logs the account out everywhere.
+- A super admin is admin in every organization and manages organizations (/orgs).
+- An organization admin may change everything in their organization.
+- A player account may enter results in the tournaments its players play in.
 
 A tournament also has a player password. It is stored as typed so the admin can look
-it up and share it. Players who log in with it may enter set results in that
+it up and share it. Guests who log in with it may enter set results in that
 tournament, and create sets in a manual one; nothing else. Their cookie, one per
 tournament, is an HMAC of that password, so a new password logs them out.
 """
@@ -22,14 +21,14 @@ import hmac
 
 from fastapi import Request
 
-from . import db, orgs
+from . import db, users
 from .db import default_player_password  # noqa: F401 (used by the app and tests)
 
 ORG_COOKIE = "org"
-COOKIE = "editor"
-SUPER_COOKIE = "super"
-COOKIE_MAX_AGE = 180 * 24 * 3600  # stay logged in for about 6 months
-PLAYER_COOKIE = "player_{}"       # per tournament id
+USER_COOKIE = "user"
+OLD_COOKIES = ("editor", "super")  # before accounts; logging out clears them
+COOKIE_MAX_AGE = 180 * 24 * 3600   # stay logged in for about 6 months
+PLAYER_COOKIE = "player_{}"        # per tournament id
 
 
 class LoginRequired(Exception):
@@ -39,8 +38,8 @@ class LoginRequired(Exception):
         self.next_url = next_url
 
 
-def _sign(org, message: str) -> str:
-    return hmac.new(org["secret"].encode(), message.encode(), hashlib.sha256).hexdigest()
+def _sign(row, message: str) -> str:
+    return hmac.new(row["secret"].encode(), message.encode(), hashlib.sha256).hexdigest()
 
 
 # --- The organization being viewed --------------------------------------------------
@@ -69,52 +68,38 @@ def find_org(conn, name: str):
                         (" ".join(name.split()),)).fetchone()
 
 
-# --- Admins ------------------------------------------------------------------------
+# --- Accounts --------------------------------------------------------------------------
 
-def editor_token(org) -> str:
-    return _sign(org, f"admin:{org['id']}:{org['admin_password']}")
+def user_cookie(user) -> str:
+    return f"{user['id']}.{_sign(user, 'user:%d:%s' % (user['id'], user['password']))}"
 
 
-def admin_login(conn, user: str, password: str):
-    """The organization whose admin this is, or None."""
-    org = conn.execute("SELECT * FROM organizations WHERE admin_user = ?",
-                       (user.strip(),)).fetchone()
-    return org if org and orgs.check_password(password, org["admin_password"]) else None
+def current_user(request: Request):
+    """The account logged in on this browser, or None (cached for the request)."""
+    cached = request.scope.setdefault("state", {})
+    if "user" not in cached:
+        user_id, _, token = request.cookies.get(USER_COOKIE, "").partition(".")
+        user = None
+        if user_id.isdigit():
+            with db.connect() as conn:
+                user = users.get(conn, int(user_id))
+        cached["user"] = user if user and hmac.compare_digest(
+            user_cookie(user), f"{user_id}.{token}") else None
+    return cached["user"]
+
+
+def is_super(request: Request) -> bool:
+    user = current_user(request)
+    return bool(user) and user["role"] == "super"
 
 
 def is_editor(request: Request) -> bool:
     """Admin of the organization being viewed: its own admin, or a super admin."""
-    org = current_org(request)
-    if org is None:
+    org, user = current_org(request), current_user(request)
+    if org is None or user is None:
         return False
-    return is_super(request) or hmac.compare_digest(request.cookies.get(COOKIE, ""),
-                                                    editor_token(org))
-
-
-# --- Super admins ----------------------------------------------------------------------
-
-def super_cookie(admin) -> str:
-    return f"{admin['id']}.{_sign(admin, 'super:%d:%s' % (admin['id'], admin['password']))}"
-
-
-def super_login(conn, user: str, password: str):
-    """The super admin with this user and password, or None."""
-    admin = conn.execute("SELECT * FROM superadmins WHERE username = ?",
-                         (user.strip(),)).fetchone()
-    return admin if admin and orgs.check_password(password, admin["password"]) else None
-
-
-def is_super(request: Request) -> bool:
-    cached = request.scope.setdefault("state", {})
-    if "super" not in cached:
-        admin_id, _, token = request.cookies.get(SUPER_COOKIE, "").partition(".")
-        admin = None
-        if admin_id.isdigit():
-            with db.connect() as conn:
-                admin = conn.execute("SELECT * FROM superadmins WHERE id = ?",
-                                     (int(admin_id),)).fetchone()
-        cached["super"] = bool(admin) and hmac.compare_digest(super_cookie(admin), f"{admin_id}.{token}")
-    return cached["super"]
+    return user["role"] == "super" or (
+        user["role"] == "org_admin" and user["organization_id"] == org["id"])
 
 
 def require_super(request: Request):
@@ -134,12 +119,31 @@ def player_token(tournament) -> str:
                     f"player:{tournament['id']}".encode(), hashlib.sha256).hexdigest()
 
 
-def is_player(request: Request, tournament) -> bool:
+def is_guest_player(request: Request, tournament) -> bool:
     """Logged in with this tournament's player password."""
     if not tournament["player_password"]:
         return False
     cookie = request.cookies.get(PLAYER_COOKIE.format(tournament["id"]), "")
     return hmac.compare_digest(cookie, player_token(tournament))
+
+
+def account_plays(user, tournament) -> bool:
+    """The account's player is in the tournament (its list or one of its sets)."""
+    with db.connect() as conn:
+        return conn.execute(
+            "SELECT 1 FROM players p WHERE p.user_id = ? AND p.organization_id = ? AND ("
+            " EXISTS (SELECT 1 FROM tournament_players tp WHERE tp.tournament_id = ? "
+            "         AND tp.player_id = p.id)"
+            " OR EXISTS (SELECT 1 FROM matches m JOIN matchdays d ON d.id = m.matchday_id "
+            "            WHERE d.tournament_id = ? AND p.id IN (m.a1, m.a2, m.b1, m.b2)))",
+            (user["id"], tournament["organization_id"], tournament["id"],
+             tournament["id"])).fetchone() is not None
+
+
+def is_player(request: Request, tournament) -> bool:
+    """A player of this tournament: a guest with its password, or an account of one."""
+    user = current_user(request)
+    return is_guest_player(request, tournament) or bool(user) and account_plays(user, tournament)
 
 
 def can_score(request: Request, tournament) -> bool:
@@ -169,8 +173,10 @@ def player_cookies(request: Request) -> list[str]:
 
 
 def auth_context(request: Request) -> dict:
-    """Jinja context processor: the organization, and whether this browser may edit."""
+    """Jinja context processor: the organization, the account, and whether this browser
+    may edit."""
+    user = current_user(request)
     editor, superadmin = is_editor(request), is_super(request)
     return {"editor": editor, "superadmin": superadmin, "org": current_org(request),
-            "login_enabled": True,
-            "logged_in": editor or superadmin or bool(player_cookies(request))}
+            "user": user, "login_enabled": True,
+            "logged_in": bool(user) or bool(player_cookies(request))}
