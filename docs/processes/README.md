@@ -20,6 +20,8 @@ The data model behind all of them:
 erDiagram
     organizations ||--o{ players : has
     organizations ||--o{ tournaments : has
+    organizations ||--o{ users : "org_admin of"
+    users ||--o{ players : "claims (one per organization)"
     rule_types ||--o{ tournaments : "scored with"
     tournaments ||--o{ tournament_players : lists
     players ||--o{ tournament_players : "plays in"
@@ -27,7 +29,22 @@ erDiagram
     matchdays ||--o{ matches : "has (sets, by court)"
     matchdays ||--o{ absences : marks
     players ||--o{ matches : "a1, a2, b1, b2"
-    superadmins }o--o{ organizations : "admin of all"
+    medal_types }o--o{ players : "awarded live"
+```
+
+## Keeping these pages current
+
+Every pull request documents itself (the rule is in `CLAUDE.md`, and the checklist is in
+`.github/pull_request_template.md`). The docs travel in the same branch as the code, so
+`main` never has a feature without its page.
+
+```mermaid
+flowchart LR
+    C[code + tests] --> D["docs/processes page<br/>+ its diagram"]
+    D --> A["ARCHITECTURE / README<br/>(if structure changed)"]
+    A --> S[".claude/skills<br/>(if a procedure changed)"]
+    S --> M["memory file<br/>+ MEMORY.md line"]
+    M --> P["PR with a<br/>Docs and memory section"]
 ```
 
 Rule types: 1 `liga_amigos` (Liga de amigos score), 2 `americano`, 3 `mexicano`,

@@ -45,6 +45,22 @@ It's live at https://padelscore-sorrycion.azurewebsites.net (repo `Sorrycion/Pad
 - **Every user-visible text** goes in `app/i18n.py` in both `es` and `en`. A test checks
   every `_("key")`.
 - The user often adds requests mid-task: fold them into the work in progress.
+- **Every PR documents itself** (the user's rule, 2026-10-30). Before opening any PR,
+  in the same branch:
+
+  - **Process docs:** the `docs/processes/` page of each area touched, with its Mermaid
+    diagram redrawn if the flow, the data or the screens changed. A new area gets a
+    new page, linked from `docs/processes/README.md`.
+  - **Architecture:** `docs/processes/ARCHITECTURE.md` if a module, route group,
+    table or the navigation changed. `README.md` if setup or the project layout changed.
+  - **Skills:** `.claude/skills/` updated if a procedure changed, or a new skill if
+    it's a task that will repeat. New skills go in the table in `CLAUDE.md`.
+  - **Memory:** the area's memory file (live state, decisions and why, open items)
+    and its line in `MEMORY.md`.
+  - **PR body:** a "Docs and memory" section that lists the above.
+
+  A PR with no behavior change (e.g. only docs) still checks the list. The template
+  `.github/pull_request_template.md` carries the same checklist.
 
 ## Commands
 
