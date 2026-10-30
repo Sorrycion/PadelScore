@@ -82,6 +82,25 @@ svg.chart .donut-center { fill: var(--text); font-size: 24px; font-weight: 700; 
 .highlight { display: flex; gap: 10px; align-items: flex-start; padding: 12px; }
 .highlight .icon { font-size: 1.6rem; }
 .highlight .name { font-weight: 700; font-size: 1.05rem; }
+/* --- Medals --- */
+.medal-grid { list-style: none; padding: 0; display: grid; gap: 10px;
+              grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.medal-card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+              padding: 14px 10px; display: grid; justify-items: center; text-align: center; gap: 4px; }
+.medal-card .detail { font-size: .8rem; color: var(--accent); }
+.medal-card.kind-shame { background: linear-gradient(180deg, var(--card), var(--accent-soft)); }
+.medal-card.missing { opacity: .55; }
+.medal-card.missing img { filter: grayscale(1); }
+.medal-card .muted { font-size: .8rem; }
+img.medal { display: block; }
+img.medal.tier-1 { filter: drop-shadow(0 0 6px #cd7f32); }
+img.medal.tier-2 { filter: drop-shadow(0 0 6px #c0c0c0); }
+img.medal.tier-3 { filter: drop-shadow(0 0 8px #ffd700); }
+.medal-table td { vertical-align: middle; }
+.mini-medals { display: inline-flex; flex-wrap: wrap; gap: 2px; vertical-align: middle;
+               margin-left: 4px; }
+.mini-medals img.medal { width: 20px; height: 23px; }
+.mini-medals img.medal.tier-3 { filter: drop-shadow(0 0 3px #ffd700); }
 .court-block h3 { font-size: 1rem; margin: 16px 0 8px; }
 button.go { background: none; color: var(--accent); padding: 0; font-weight: 600; font-size: inherit; text-align: left; }
 button.go.name { font-size: 1.1rem; color: var(--text); }

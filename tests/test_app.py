@@ -68,7 +68,9 @@ def row(players, a, b, court=1):
 
 
 def standing_points(html, name):
-    return int(re.search(rf">{name}</a></td>\s*<td class=\"pts\">(-?\d+)<", html).group(1))
+    """A player's points in a standings table (the name cell may also hold medals)."""
+    return int(re.search(rf">{name}</a>(?:(?!</td>).)*</td>\s*<td class=\"pts\">(-?\d+)<",
+                         html, re.S).group(1))
 
 
 @pytest.mark.parametrize("a,b,winner", [(6, 4, "A"), (7, 6, "A"), (4, 6, "B"),
@@ -1330,7 +1332,7 @@ def test_old_admins_become_accounts(tmp_path, monkeypatch):
     conn = sqlite3.connect(path)
     rows = conn.execute("SELECT role, username, organization_id FROM users ORDER BY id").fetchall()
     assert rows == [("super", "raiz", None), ("org_admin", "raiz_1", 1)]
-    assert conn.execute("SELECT version FROM schema_migrations").fetchall() == [("0001_users",)]
+    assert ("0001_users",) in conn.execute("SELECT version FROM schema_migrations").fetchall()
     with db.connect() as c:
         assert users.login(c, "raiz", "clave-raiz")["role"] == "super"
         assert users.login(c, "raiz_1", "clave-org")["role"] == "org_admin"
@@ -1596,3 +1598,68 @@ def test_player_statistics_page(league):
     assert "Most frequent partner" in r.text and "Win rate" in r.text
     assert "Statistics" in league.get("/players/1").text  # the tab on the summary
     assert "No sets played yet" in league.get("/players/8/stats").text
+
+
+# --- Medals --------------------------------------------------------------------------------
+
+def liga_set(*args, **kw):
+    return {**a_set(*args, **kw), "rule_code": "liga_amigos"}
+
+
+def day(md_id, court, sets_won, sets=3, place=None, absent=False):
+    return {"id": md_id, "court": court, "sets": sets, "sets_won": sets_won, "place": place,
+            "absent": absent}
+
+
+def test_medals_are_computed_from_sets_and_tournaments():
+    from app import medals
+    sets = [liga_set(1, 2, 3, 4, 6, 0), liga_set(1, 3, 2, 4, 7, 6), liga_set(1, 4, 2, 3, 6, 1),
+            liga_set(1, 2, 3, 4, 0, 6), {**a_set(1, 2, 3, 4, 21, 0), "rule_code": "americano"}]
+    tournaments = [
+        {"name": "Liga", "rule_code": "liga_amigos", "ended": 1, "position": 1,
+         "last_position": 6, "players": 8, "matchdays": 3,
+         "history": [day(1, 2, 3), day(2, 1, 3, place=1), day(3, 2, 0)]},
+        {"name": "Abierta", "rule_code": "liga_amigos", "ended": 0, "position": 8,
+         "last_position": 8, "players": 8, "matchdays": 2,
+         "history": [day(4, 1, 1), day(5, 1, 0, absent=True)]},
+        {"name": "Vieja", "rule_code": "manual", "ended": 1, "position": 6,
+         "last_position": 6, "players": 6, "matchdays": 1, "history": [day(6, 1, 0, sets=1)]},
+    ]
+    got = medals.awards(sets, 1, tournaments)
+    assert got["campeon"]["detail"] == ["Liga"]  # ended, 1st
+    assert "subcampeon" not in got and got["farolillo"]["detail"] == ["Vieja"]  # ended, last
+    assert got["asistencia"]["detail"] == ["Liga", "Vieja"]
+    assert got["perfecta"]["count"] == 2 and got["jornada_negra"]["count"] == 1
+    assert got["rey_pista"]["count"] == 1
+    assert got["rosco"]["count"] == 1 and got["comio_rosco"]["count"] == 1  # not the 21-0
+    assert got["infarto"]["count"] == 1 and got["muro"]["count"] == 2  # 6-0 and 6-1
+    assert got["racha"]["tier"] == 1 and got["racha"]["value"] == 3  # 3 in a row: bronze
+    assert "gafe" not in got and "veterano" not in got and "fantasma" not in got
+    assert "escalador" not in got  # up once (2 -> 1), not 3 times
+    assert medals.tier("veterano", 50) == 2 and medals.tier("gafe", 8) == 3
+
+
+def test_medal_pages(league):
+    for (a1, a2, b1, b2), ga, gb in ROTATION:
+        league.post("/matches", data=set_form((a1, a2, b1, b2), ga, gb))
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 0))
+    r = league.get("/players/1/medals")
+    assert r.status_code == 200 and "Baker" in r.text and "Still to win" in r.text
+    assert "/static/medals/rosco.svg" in r.text
+    assert league.get("/static/medals/rosco.svg").status_code == 200
+    r = league.get("/medals")
+    assert "How to win it" in r.text and "Shame" in r.text
+    assert r.text.count("medals/") >= 22  # every medal of the catalog, as an image
+    assert "Ana" in r.text.split("Baker")[1].split("</tr>")[0]  # Ana holds the Baker
+
+
+def test_tournament_page_shows_only_its_own_medals(league):
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 0))  # a 6-0 in tournament 1
+    league.post("/tournaments", data={"name": "Copa", "held_on": "2026-11-01"})
+    add_matchday(2, "2026-11-01")
+    league.post("/matches", data=set_form((1, 2, 3, 4), 4, 6, matchday_id=2))
+    one = league.get("/tournaments/1").text
+    assert 'alt="Baker"' in one and 'alt="Ate a bagel"' in one  # in the standings table
+    assert 'alt="Baker"' in league.get("/?tournament=1").text  # the home standings too
+    two = league.get("/tournaments/2").text
+    assert "Baker" not in two and "Ate a bagel" not in two

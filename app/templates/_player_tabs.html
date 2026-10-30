@@ -1,6 +1,6 @@
 {# Tabs of a player's pages. Needs: player, tab ("summary", "stats" or "medals"). #}
 <nav class="tabs player-tabs" aria-label="{{ player.name }}">
-  {% for code, url, key in [("summary", "", "tab_summary"), ("stats", "/stats", "tab_stats")] %}
+  {% for code, url, key in [("summary", "", "tab_summary"), ("stats", "/stats", "tab_stats"), ("medals", "/medals", "tab_medals")] %}
   <a href="/players/{{ player.id }}{{ url }}" {% if tab == code %}class="active" aria-current="page"{% endif %}>{{ _(key) }}</a>
   {% endfor %}
 </nav>

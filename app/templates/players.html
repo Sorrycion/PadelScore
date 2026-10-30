@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _("players") }} · PadelScore{% endblock %}
 {% block content %}
+<p class="inline"><a class="button secondary" href="/medals">🏅 {{ _("all_medals") }}</a></p>
 <h1>{{ _("players") }}</h1>
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if editor %}
