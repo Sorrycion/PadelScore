@@ -6,6 +6,22 @@
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if saved %}<p class="saved">✅ {{ _("saved") }}</p>{% endif %}
 
+{% if summaries %}
+<h2>🌐 {{ _("my_career") }}</h2>
+<p class="muted">{{ _("my_career_hint") }}</p>
+<div class="tiles">
+  <div class="tile"><strong>{{ career.played }}</strong><span>{{ _("sets") }}</span></div>
+  <div class="tile"><strong class="up">{{ career.won }}</strong><span>{{ _("won") }}</span></div>
+  <div class="tile"><strong>{{ career.win_pct }}%</strong><span>{{ _("win_pct") }}</span></div>
+  <div class="tile"><strong>{{ career.tournaments }}</strong><span>{{ _("nav_tournaments") }}</span></div>
+  <div class="tile"><strong>{{ career.orgs }}</strong><span>{{ _("nav_orgs") }}</span></div>
+  <div class="tile"><strong>{{ career.medals|length }}</strong><span>{{ _("tab_medals") }}</span></div>
+</div>
+{% if career.medals %}
+<p class="mini-medals career-medals">{% for m in career.medals %}<img class="medal {% if m.tier %}tier-{{ m.tier }}{% endif %}" src="{{ m.image }}?v={{ css_version }}" alt="{{ m.name }}" title="{{ m.name }}{% if m.tier %} · {{ _(TIER_KEYS[m.tier]) }}{% elif m.count > 1 %} ×{{ m.count }}{% endif %}" width="30" height="35">{% endfor %}</p>
+{% endif %}
+{% endif %}
+
 {% for s in summaries %}
 <section class="court-block court-{{ loop.cycle('a', 'b') }}">
   <div class="court-head">

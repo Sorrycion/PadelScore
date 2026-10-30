@@ -141,15 +141,45 @@ def set_role(conn, user_id, role, organization_id=None):
                  (role, organization_id if role == "org_admin" else None, user_id))
 
 
-def link_player(conn, user_id, player_id):
-    """Let the account claim a player that has none (one per organization)."""
+def link_player(conn, user_id, player_id, merge=False):
+    """Let the account claim a player that has none (one per organization). If the
+    account already has a player in that organization, `merge` folds this one into it
+    (the same person entered twice); otherwise that's refused. Returns the account's
+    player id in that organization."""
     player = conn.execute("SELECT * FROM players WHERE id = ?", (player_id,)).fetchone()
     if player is None or player["user_id"] not in (None, user_id):
         raise UserError("err_player_claimed")
-    if conn.execute("SELECT 1 FROM players WHERE user_id = ? AND organization_id = ? "
-                    "AND id != ?", (user_id, player["organization_id"], player_id)).fetchone():
-        raise UserError("err_already_linked")
+    mine = conn.execute("SELECT id FROM players WHERE user_id = ? AND organization_id = ? "
+                        "AND id != ?", (user_id, player["organization_id"], player_id)).fetchone()
+    if mine:
+        if not merge:
+            raise UserError("err_already_linked")
+        merge_players(conn, mine["id"], player_id)
+        return mine["id"]
     conn.execute("UPDATE players SET user_id = ? WHERE id = ?", (user_id, player_id))
+    return player_id
+
+
+def merge_players(conn, keep_id, drop_id):
+    """Fold a duplicate player into another of the same organization: its sets,
+    tournament lists and absences move to `keep_id`, and it is deleted."""
+    keep, drop = (conn.execute("SELECT * FROM players WHERE id = ?", (i,)).fetchone()
+                  for i in (keep_id, drop_id))
+    if keep is None or drop is None or keep_id == drop_id \
+            or keep["organization_id"] != drop["organization_id"]:
+        raise UserError("err_merge_invalid")
+    if drop["user_id"] not in (None, keep["user_id"]):
+        raise UserError("err_player_claimed")
+    if conn.execute("SELECT 1 FROM matches WHERE ? IN (a1, a2, b1, b2) "
+                    "AND ? IN (a1, a2, b1, b2)", (keep_id, drop_id)).fetchone():
+        raise UserError("err_merge_same_set")  # two different people, after all
+    for column in ("a1", "a2", "b1", "b2"):
+        conn.execute(f"UPDATE matches SET {column} = ? WHERE {column} = ?", (keep_id, drop_id))
+    for table, key in (("tournament_players", "tournament_id"), ("absences", "matchday_id")):
+        conn.execute(f"INSERT OR IGNORE INTO {table} ({key}, player_id) "
+                     f"SELECT {key}, ? FROM {table} WHERE player_id = ?", (keep_id, drop_id))
+        conn.execute(f"DELETE FROM {table} WHERE player_id = ?", (drop_id,))
+    conn.execute("DELETE FROM players WHERE id = ?", (drop_id,))
 
 
 def unlink_player(conn, player_id):

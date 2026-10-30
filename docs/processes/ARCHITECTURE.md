@@ -55,7 +55,11 @@ sequenceDiagram
 - **Calculated, not stored:** standings, statistics and medals are always worked out
   from the sets. Only sets, absences and the lists are stored.
 - **Pages that span organizations** run their queries per organization with
-  `in_org(org_id, work)`. That's `/me`, which lists an account's players everywhere.
+  `in_org(org_id, work)`. That's `/me`, which lists an account's players everywhere and
+  adds them up (`career`).
+- **Navigation:** on wide screens the sections are a row of pills under the header. On
+  phones (640 px or less) they fold, with the account links and the language, into a
+  ☰ menu. It's a hidden checkbox (`#menu-toggle`) and CSS, with no JavaScript.
 
 ## Data
 

@@ -539,6 +539,27 @@ TEXT = {
                            "en": "That player already has an account."},
     "err_already_linked": {"es": "Esta cuenta ya tiene un jugador en esta organización.",
                            "en": "This account already has a player in this organization."},
+    "menu": {"es": "Menú", "en": "Menu"},
+    "merge_title": {"es": "¿También eres tú?", "en": "Is this you too?"},
+    "merge_hint": {"es": "Tu cuenta ya es {name} en esta organización. Si alguien te apuntó "
+                         "otra vez con otro nombre, únelos: sus sets y torneos pasan a {name}.",
+                   "en": "Your account is already {name} in this organization. If someone "
+                         "entered you again under another name, join them: their sets and "
+                         "tournaments move to {name}."},
+    "merge_confirm": {"es": "Es la misma persona que {name}. Se unen en uno (no se puede "
+                            "deshacer).",
+                      "en": "It's the same person as {name}. They become one (this can't be "
+                            "undone)."},
+    "merge_player": {"es": "🧩 Unir jugadores", "en": "🧩 Join players"},
+    "err_merge_same_set": {"es": "Esos dos jugadores jugaron en el mismo set: son personas "
+                                 "distintas.",
+                           "en": "Those two players played in the same set: they're different "
+                                 "people."},
+    "err_merge_invalid": {"es": "Esos jugadores no se pueden unir.",
+                          "en": "Those players can't be joined."},
+    "my_career": {"es": "Todo mi pádel", "en": "All my padel"},
+    "my_career_hint": {"es": "Tus números en todas tus organizaciones.",
+                       "en": "Your numbers across all your organizations."},
     "no_orgs": {"es": "Todavía no hay organizaciones.", "en": "No organizations yet."},
     "err_org_fields": {"es": "Escribe el nombre, el usuario y la contraseña.",
                        "en": "Type the name, the user and the password."},

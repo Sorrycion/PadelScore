@@ -1547,6 +1547,84 @@ def test_the_profile_edits_details_and_password(with_players):
     assert str(r.url).endswith("/me")
 
 
+def test_an_account_joins_its_duplicate_player(with_players):
+    c = with_players
+    with db.connect() as conn:  # Elena (5) is Ana entered again, with a set of her own
+        conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, team_a_games, "
+                     "team_b_games, winner) VALUES (1, 2, 5, 6, 7, 8, 6, 2, 'A')")
+        conn.execute("INSERT INTO tournament_players (tournament_id, player_id) VALUES (1, 5)")
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # the account is Ana (1)
+    r = c.get("/welcome?t=1")
+    assert "Is this you too?" in r.text and "Elena" in r.text
+    # Bea played in a set with Ana: a different person.
+    r = c.post("/welcome/link", data={"t": 1, "player_id": 2, "merge": "1"})
+    assert "played in the same set" in r.text
+    r = c.post("/welcome/link", data={"t": 1, "player_id": 5, "merge": "1"})
+    assert str(r.url).endswith("/me")
+    with db.connect() as conn:
+        assert conn.execute("SELECT 1 FROM players WHERE id = 5").fetchone() is None
+        assert conn.execute("SELECT a1 FROM matches WHERE court = 2").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM tournament_players WHERE player_id = 1 "
+                            "AND tournament_id = 1").fetchone()[0] == 1
+    # Without asking to merge, a second player in the organization is refused.
+    r = c.post("/welcome/link", data={"t": 1, "player_id": 6})
+    assert "already has a player in this organization" in r.text
+
+
+def test_an_admin_joins_duplicate_players(client, league):
+    with db.connect() as conn:
+        uid = users.create_user(conn, "player", "anita", "clave-larga", email="a@example.com")
+        users.link_player(conn, uid, 1)
+    r = client.get(f"/users/{uid}")
+    assert "Is this you too?" in r.text
+    r = client.post(f"/users/{uid}/link", data={"player_id": 5, "merge": "1"})
+    with db.connect() as conn:
+        assert conn.execute("SELECT 1 FROM players WHERE id = 5").fetchone() is None
+        assert conn.execute("SELECT user_id FROM players WHERE id = 1").fetchone()[0] == uid
+
+
+def test_merging_needs_the_same_organization(client, league):
+    with db.connect() as conn:
+        other = orgs.create_org(conn, "Otra", "otra-admin", "secreto")
+        far = conn.execute("INSERT INTO players (organization_id, name) VALUES (?, 'Ana')",
+                           (other,)).lastrowid
+        with pytest.raises(users.UserError, match="err_merge_invalid"):
+            users.merge_players(conn, 1, far)
+        # One account, one player in each organization: no merge needed.
+        uid = users.create_user(conn, "player", "ana", "clave-larga", email="ana@example.com")
+        assert users.link_player(conn, uid, 1) == 1
+        assert users.link_player(conn, uid, far) == far
+
+
+def test_standings_show_display_name_and_username(with_players):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)
+    c.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"})
+    assert "Ana L <span class=\"username\">(analo)</span>" in c.get("/tournaments/1").text
+    assert "(analo)" in c.get("/").text
+    assert "(bea)" not in c.get("/").text  # guests show just their name
+
+
+def test_the_profile_adds_up_every_organization(with_players):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)
+    c.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"})
+    r = c.get("/me")
+    assert "All my padel" in r.text
+    career = r.text.split("All my padel")[1].split("</div>\n</div>")[0]
+    assert "<strong>1</strong><span>🎾 Sets</span>" in career
+    assert "<strong>100%</strong>" in career
+
+
+def test_phones_get_a_menu_button(client):
+    r = client.get("/")
+    assert 'id="menu-toggle"' in r.text and 'for="menu-toggle"' in r.text
+    assert r.text.index("menu-panel") < r.text.index('class="tabbar"')
+
+
 def test_the_profile_needs_an_account(client):
     client.cookies.delete("user")
     assert client.get("/me", follow_redirects=False).headers["location"].startswith("/login")

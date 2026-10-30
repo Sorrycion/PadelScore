@@ -23,6 +23,24 @@
     </form>
     {% else %}<p class="empty">{{ _("no_free_players") }}</p>{% endif %}
   </section>
+  {% elif user and mine %}
+  <section class="card login-section">
+    <h2>🧩 {{ _("merge_title") }}</h2>
+    <p class="muted">{{ _("merge_hint", name=mine.name) }}</p>
+    {% if free %}
+    <form method="post" action="/welcome/link" class="stack">
+      <input type="hidden" name="t" value="{{ tournament.id }}">
+      <input type="hidden" name="merge" value="1">
+      <label>{{ _("who_are_you") }}
+        <select name="player_id" required>
+          {% for p in free %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" required> {{ _("merge_confirm", name=mine.name) }}</label>
+      <button type="submit">{{ _("merge_player") }}</button>
+    </form>
+    {% else %}<p class="empty">{{ _("no_free_players") }}</p>{% endif %}
+  </section>
   {% elif not user %}
   <section class="card login-section">
     <h2>✨ {{ _("create_account") }}</h2>
