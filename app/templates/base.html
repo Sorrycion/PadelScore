@@ -36,7 +36,8 @@
     <div class="top-actions">
       {% if editor %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
       {% if login_enabled %}
-        {% if not editor %}<a href="/login?next={{ path|urlencode }}">{{ _("login") }}</a>{% endif %}
+        {% if user %}<a href="/me" title="{{ _('my_profile') }}">👤 {{ user.display_name or user.username }}</a>
+        {% elif not editor %}<a href="/login?next={{ path|urlencode }}">{{ _("login") }}</a>{% endif %}
         {% if logged_in %}
           <form method="post" action="/logout" class="nav-form"><button type="submit" class="link plain-link">{{ _("logout") }}</button></form>
         {% endif %}

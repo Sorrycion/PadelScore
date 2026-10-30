@@ -37,7 +37,7 @@ app = FastAPI(title="PadelScore", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 # Pages that work before entering an organization.
-OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs")
+OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me")
 
 
 class OrganizationGate:
@@ -425,7 +425,7 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
             elif user["role"] == "super":
                 response = redirect(wanted or ("/" if current else "/orgs"))
             else:
-                response = redirect(wanted or "/")
+                response = redirect(wanted or "/me")
             response.set_cookie(auth.USER_COOKIE, auth.user_cookie(user), **cookie)
             return response
         current = auth.current_org(request)
@@ -440,8 +440,11 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
         org = current or conn.execute("SELECT * FROM organizations WHERE id = ?",
                                       (matches[0]["organization_id"],)).fetchone()
     matches = [t for t in matches if t["organization_id"] == org["id"]]
-    response = enter_org(request, org, safe_next(next) if current and next not in ("", "/")
-                         else f"/tournaments/{matches[0]['id']}")
+    target = (safe_next(next) if current and next not in ("", "/")
+              else f"/tournaments/{matches[0]['id']}")
+    if not auth.current_user(request):  # offer to make an account, or carry on as a guest
+        target = f"/welcome?t={matches[0]['id']}&next={quote(target, safe='/')}"
+    response = enter_org(request, org, target)
     for t in matches:
         response.set_cookie(auth.PLAYER_COOKIE.format(t["id"]), auth.player_token(t), **cookie)
     return response
@@ -504,6 +507,225 @@ def super_set_admin(org: int, admin_user: str = Form(""), admin_password: str = 
         except ValueError:
             return redirect("/orgs?error=err_admin_user_exists")
     return redirect("/orgs")
+
+
+# --- From guest to account, and the profile -----------------------------------------
+
+def tournament_people(conn, tournament_id):
+    """Everyone who plays in a tournament: its list and the players of its sets."""
+    return conn.execute(
+        "SELECT p.* FROM players p WHERE p.id IN (SELECT player_id FROM tournament_players "
+        "WHERE tournament_id = ?) OR EXISTS (SELECT 1 FROM matches m JOIN matchdays d "
+        "ON d.id = m.matchday_id WHERE d.tournament_id = ? AND p.id IN (m.a1, m.a2, m.b1, m.b2)) "
+        "ORDER BY p.name", (tournament_id, tournament_id)).fetchall()
+
+
+def guest_tournament(request, conn, tournament_id):
+    """The tournament whose password this browser logged in with, or LoginRequired:
+    only its players may claim one of its players."""
+    tournament = get_tournament(conn, tournament_id)
+    if not auth.is_guest_player(request, tournament):
+        raise LoginRequired(here(request) if request.method == "GET" else "/")
+    return tournament
+
+
+def free_people(conn, tournament_id):
+    """The tournament's players that no account has claimed yet."""
+    return [p for p in tournament_people(conn, tournament_id) if p["user_id"] is None]
+
+
+def take_display_name(conn, player, name):
+    """Give a claimed player the account's display name, if no one else has it."""
+    name = clean_name(name or "")
+    if name and name != player["name"] and not find_player(conn, name, exclude=player["id"]):
+        conn.execute("UPDATE players SET name = ? WHERE id = ?", (name, player["id"]))
+
+
+@app.get("/welcome", response_class=HTMLResponse)
+def welcome_page(request: Request, t: int, next: str = "/", error: str | None = None):
+    """After a tournament's player password: carry on as a guest, make an account
+    (claiming one of its players), or link an account already made."""
+    user = auth.current_user(request)
+    with db.connect() as conn:
+        tournament = guest_tournament(request, conn, t)
+        return templates.TemplateResponse(request, "welcome.html", {
+            "tournament": tournament, "next": safe_next(next), "error": error,
+            "free": free_people(conn, t),
+            "mine": linked_player(conn, user["id"]) if user else None,
+        })
+
+
+@app.post("/welcome/link")
+def welcome_link(request: Request, t: int = Form(...), player_id: int = Form(...)):
+    """A logged-in account claims a player of the tournament it has the password of."""
+    user = auth.current_user(request)
+    if user is None:
+        raise LoginRequired(f"/welcome?t={t}")
+    with db.connect() as conn:
+        guest_tournament(request, conn, t)
+        player = next((p for p in free_people(conn, t) if p["id"] == player_id), None)
+        if player is None:
+            return redirect(f"/welcome?t={t}&error=err_player_claimed")
+        try:
+            users.link_player(conn, user["id"], player_id)
+        except users.UserError as e:
+            return redirect(f"/welcome?t={t}&error={e}")
+        take_display_name(conn, player, user["display_name"])
+    return redirect("/me")
+
+
+def signup_form(request, conn, tournament, form=None, error=None, status_code=200):
+    return templates.TemplateResponse(request, "signup.html", {
+        "tournament": tournament, "free": free_people(conn, tournament["id"]),
+        "form": form or {}, "error": error}, status_code=status_code)
+
+
+@app.get("/signup", response_class=HTMLResponse)
+def signup_page(request: Request, t: int):
+    with db.connect() as conn:
+        return signup_form(request, conn, guest_tournament(request, conn, t))
+
+
+@app.post("/signup")
+def signup(request: Request, t: int = Form(...), who: str = Form(""),
+           first_name: str = Form(""), last_name: str = Form(""),
+           display_name: str = Form(""), username: str = Form(""), email: str = Form(""),
+           password: str = Form(""), password2: str = Form("")):
+    """Make a player account and claim one of the tournament's players with it, or a
+    new player ("new") who joins the tournament. The display name becomes the player's
+    name, so the tables show it."""
+    form = {"who": who, "first_name": first_name, "last_name": last_name,
+            "display_name": display_name, "username": username, "email": email}
+    with db.connect() as conn:
+        tournament = guest_tournament(request, conn, t)
+        claimed = next((p for p in free_people(conn, t) if str(p["id"]) == who), None)
+        display = clean_name(display_name)
+        error = None
+        if who != "new" and claimed is None:
+            error = "err_choose_player"
+        elif not display:
+            error = "err_display_required"
+        elif find_player(conn, display, exclude=claimed["id"] if claimed else None):
+            error = "err_player_exists"
+        elif len(password) < users.MIN_PASSWORD:
+            error = "err_password_short"
+        elif password != password2:
+            error = "err_passwords_differ"
+        if error is None:
+            try:
+                user_id = users.create_user(conn, "player", username, password, email=email,
+                                            first_name=first_name, last_name=last_name,
+                                            display_name=display)
+            except users.UserError as e:
+                error = str(e)
+        if error:
+            return signup_form(request, conn, tournament, form, error, 400)
+        if claimed:
+            take_display_name(conn, claimed, display)
+            pid = claimed["id"]
+        else:
+            pid = player_id(conn, display)
+            conn.execute("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
+                         "VALUES (?, ?)", (t, pid))
+        users.link_player(conn, user_id, pid)
+        user = users.get(conn, user_id)
+    response = redirect("/me")
+    response.set_cookie(auth.USER_COOKIE, auth.user_cookie(user), **cookie_options(request))
+    return response
+
+
+def my_players(conn, user_id):
+    """The account's players, one per organization, with their organization."""
+    return conn.execute(
+        "SELECT p.*, o.name AS org_name FROM players p JOIN organizations o "
+        "ON o.id = p.organization_id WHERE p.user_id = ? ORDER BY o.name", (user_id,)).fetchall()
+
+
+def in_org(organization_id, work):
+    """Run `work()` with this organization's queries (db.ORG), whatever the browser's."""
+    token = db.ORG.set(organization_id)
+    try:
+        return work()
+    finally:
+        db.ORG.reset(token)
+
+
+def my_summary(conn, player):
+    """A player's tournaments (position, points), pending sets and latest sets."""
+    def work():
+        sets = set_rows(conn, player_id=player["id"])
+        ids = {s["tournament_id"] for s in sets} | {r[0] for r in conn.execute(
+            "SELECT tournament_id FROM tournament_players WHERE player_id = ?", (player["id"],))}
+        tournaments = []
+        for t in all_tournaments(conn):
+            if t["id"] in ids:
+                _, standings = load_results(conn, t["id"])
+                me = next((r for r in standings if r["id"] == player["id"]), None)
+                tournaments.append({**t, "me": me})
+        return {"player": player, "tournaments": tournaments,
+                "pending": [s for s in sets if s["team_a_games"] is None],
+                "recent": [s for s in sets if s["team_a_games"] is not None][:5]}
+    return in_org(player["organization_id"], work)
+
+
+@app.get("/me", response_class=HTMLResponse)
+def me_page(request: Request, error: str | None = None, saved: str | None = None):
+    """The logged-in account's profile: its details, and for each of its players the
+    tournaments, the sets still to play and the latest ones."""
+    user = auth.current_user(request)
+    if user is None:
+        raise LoginRequired("/me")
+    with db.connect() as conn:
+        summaries = [my_summary(conn, p) for p in my_players(conn, user["id"])]
+    return templates.TemplateResponse(request, "me.html", {
+        "account": user, "summaries": summaries, "error": error, "saved": saved})
+
+
+@app.post("/me")
+def update_me(request: Request, username: str = Form(""), email: str = Form(""),
+              first_name: str = Form(""), last_name: str = Form(""),
+              display_name: str = Form("")):
+    """Change your own details. A new display name renames your players too (if no one
+    else in their organization has it)."""
+    user = auth.current_user(request)
+    if user is None:
+        raise LoginRequired("/me")
+    display = clean_name(display_name)
+    with db.connect() as conn:
+        mine = my_players(conn, user["id"])
+        if display and any(in_org(p["organization_id"],
+                                  lambda: find_player(conn, display, exclude=p["id"]))
+                           for p in mine):
+            return redirect("/me?error=err_player_exists")
+        try:
+            users.update_user(conn, user["id"], username=username, email=email,
+                              first_name=first_name, last_name=last_name, display_name=display)
+        except users.UserError as e:
+            return redirect(f"/me?error={e}")
+        for p in mine:
+            in_org(p["organization_id"], lambda: take_display_name(conn, p, display))
+    return redirect("/me?saved=1")
+
+
+@app.post("/me/password")
+def change_my_password(request: Request, current: str = Form(""), password: str = Form(""),
+                       password2: str = Form("")):
+    user = auth.current_user(request)
+    if user is None:
+        raise LoginRequired("/me")
+    if not users.check_password(current, user["password"]):
+        time.sleep(1)
+        return redirect("/me?error=err_wrong_password#password")
+    if len(password) < users.MIN_PASSWORD:
+        return redirect("/me?error=err_password_short#password")
+    if password != password2:
+        return redirect("/me?error=err_passwords_differ#password")
+    with db.connect() as conn:
+        users.set_password(conn, user["id"], password)
+        user = users.get(conn, user["id"])
+    response = redirect("/me?saved=1")  # the new password changes this browser's cookie too
+    response.set_cookie(auth.USER_COOKIE, auth.user_cookie(user), **cookie_options(request))
+    return response
 
 
 # --- Accounts (admins) ------------------------------------------------------------

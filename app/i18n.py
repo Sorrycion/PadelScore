@@ -380,6 +380,67 @@ TEXT = {
     "keep_password": {"es": "Vacío = no cambiarla", "en": "Empty = keep it"},
     "password_unknown": {"es": "No se conoce (se guardó antes); cámbiala para verla.",
                          "en": "Unknown (saved earlier); change it to see it."},
+    # From guest to account, and the profile
+    "welcome_title": {"es": "👋 ¡Bienvenido/a!", "en": "👋 Welcome!"},
+    "welcome_hint": {"es": "Ya puedes registrar los resultados de este torneo. ¿Quieres "
+                           "una cuenta? Con ella tienes tu perfil, tus torneos y tus sets en "
+                           "un solo lugar, sin la contraseña del torneo.",
+                     "en": "You can now enter this tournament's results. Want an account? "
+                           "It gives you your profile, your tournaments and your sets in one "
+                           "place, without the tournament password."},
+    "create_account": {"es": "Crear cuenta", "en": "Create account"},
+    "create_account_hint": {"es": "Elige cuál de los jugadores eres (o si eres nuevo/a) y "
+                                  "crea tu usuario.",
+                            "en": "Pick which of the players you are (or that you're new) "
+                                  "and create your user."},
+    "have_account": {"es": "Ya tengo cuenta", "en": "I have an account"},
+    "have_account_hint": {"es": "Entra con tu usuario o email para vincular tu jugador de "
+                                "este torneo.",
+                          "en": "Log in with your username or email to link your player in "
+                                "this tournament."},
+    "continue_guest": {"es": "Seguir como invitado", "en": "Continue as a guest"},
+    "continue_guest_hint": {"es": "Sin cuenta: solo registras los resultados de este torneo.",
+                            "en": "No account: you just enter this tournament's results."},
+    "welcome_link": {"es": "Vincula tu jugador", "en": "Link your player"},
+    "welcome_link_hint": {"es": "Estás dentro como {name}. ¿Cuál de los jugadores de este "
+                                "torneo eres?",
+                          "en": "You're logged in as {name}. Which of this tournament's "
+                                "players are you?"},
+    "who_are_you": {"es": "🎾 ¿Quién eres?", "en": "🎾 Who are you?"},
+    "who_hint": {"es": "Tus sets y puntos de antes pasan a tu cuenta. Si no estás en la "
+                       "lista, elige «Soy nuevo/a».",
+                 "en": "Your earlier sets and points become your account's. If you're not "
+                       "in the list, choose \"I'm new\"."},
+    "i_am_new": {"es": "Soy nuevo/a", "en": "I'm new"},
+    "no_free_players": {"es": "Todos los jugadores de este torneo ya tienen cuenta.",
+                        "en": "Every player of this tournament already has an account."},
+    "signup_hint": {"es": "Luego entras con tu usuario o tu email y tu contraseña.",
+                    "en": "Then you log in with your username or email and your password."},
+    "display_name_hint": {"es": "Es tu nombre en las clasificaciones y los sets.",
+                          "en": "It's your name in the standings and sets."},
+    "password_again": {"es": "🔑 Repite la contraseña", "en": "🔑 Password again"},
+    "change_password": {"es": "Cambiar contraseña", "en": "Change password"},
+    "saved": {"es": "Guardado.", "en": "Saved."},
+    "my_profile": {"es": "Mi perfil", "en": "My profile"},
+    "my_summary": {"es": "Mi resumen", "en": "My summary"},
+    "my_tournaments": {"es": "Mis torneos", "en": "My tournaments"},
+    "no_my_tournaments": {"es": "Todavía no juegas ningún torneo.",
+                          "en": "You're not in any tournament yet."},
+    "my_pending_sets": {"es": "Mis sets por jugar", "en": "My sets to play"},
+    "no_pending_sets": {"es": "No tienes sets pendientes.", "en": "No sets to play."},
+    "my_recent_sets": {"es": "Mis últimos sets", "en": "My latest sets"},
+    "no_my_players": {"es": "Tu cuenta aún no tiene jugador. Entra con la contraseña de "
+                            "un torneo para vincularlo.",
+                      "en": "Your account has no player yet. Log in with a tournament's "
+                            "password to link one."},
+    "err_choose_player": {"es": "Elige quién eres.", "en": "Choose who you are."},
+    "err_display_required": {"es": "Escribe tu nombre para mostrar.",
+                             "en": "Type your display name."},
+    "err_password_short": {"es": "La contraseña necesita al menos 8 caracteres.",
+                           "en": "The password needs at least 8 characters."},
+    "err_passwords_differ": {"es": "Las contraseñas no coinciden.",
+                             "en": "The passwords don't match."},
+
     # Accounts
     "account": {"es": "Cuenta", "en": "Account"},
     "guest_player": {"es": "👻 Jugador invitado: no tiene cuenta.",
