@@ -142,6 +142,28 @@ TEXT = {
         "es": "🔑 Entraste como jugador: con ✏️ Editar registras o corriges un resultado.",
         "en": "🔑 Logged in as a player: use ✏️ Edit to enter or correct a result."},
     "nav_home": {"es": "Inicio", "en": "Home"},
+    "login_player_signup_hint": {
+        "es": "¿No tienes cuenta? Créala. Ya adentro, escribe la contraseña de tu torneo "
+              "para unirte a él.",
+        "en": "No account? Make one. Once inside, type your tournament's password to "
+              "join it."},
+    "guest_login": {"es": "Solo anotar resultados, sin cuenta",
+                    "en": "Just enter results, without an account"},
+    "tournament_password": {"es": "🔑 Contraseña del torneo", "en": "🔑 Tournament password"},
+    "signup_join_later": {"es": "Ya adentro, en Inicio, te unes a tus torneos con su contraseña.",
+                          "en": "Then, on Home, you join your tournaments with their "
+                                "password."},
+    "join_title": {"es": "Unirme a un torneo", "en": "Join a tournament"},
+    "join_hint": {"es": "¿Te invitaron? Escribe la contraseña del torneo.",
+                  "en": "Were you invited? Type the tournament's password."},
+    "join_tournament": {"es": "Unirme", "en": "Join"},
+    "join_as": {"es": "Unirte como {name}", "en": "Join as {name}"},
+    "join_as_hint": {"es": "Ya eres {name} en esta organización: entras a la lista del torneo "
+                           "con tus sets y medallas de siempre.",
+                     "en": "You're already {name} in this organization: you join the "
+                           "tournament's list with your usual sets and medals."},
+    "already_playing": {"es": "Ya juegas este torneo como {name}",
+                        "en": "You already play this tournament as {name}"},
     "enter_result": {"es": "Resultado", "en": "Result"},
     "choose_org": {"es": "Elegir organización", "en": "Choose an organization"},
     "hello_name": {"es": "Hola, {name}", "en": "Hi, {name}"},

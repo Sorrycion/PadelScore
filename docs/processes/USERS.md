@@ -79,6 +79,31 @@ flowchart LR
     P2 --> M
 ```
 
+## Account first: joining tournaments with their password
+
+Players are asked to **make an account first** (the user's decision, 2026-10-30). The
+login's 🎾 Jugadores section says "¿No tienes cuenta? Créala" and links to `/signup`,
+which then asks for no tournament. Once inside, the home page has **🎟️ Unirme a un
+torneo**: the tournament's player password works as its invitation (`POST /join`).
+
+```mermaid
+flowchart TD
+    L["/ login: 🎾 Jugadores"] --> S["✨ Crear cuenta → /signup<br/>(no tournament)"]
+    S --> H["/ home"]
+    H -- "🎟️ Unirme a un torneo: its password" --> J["/join: player cookie + enters its organization"]
+    J --> W{"/welcome: who are you in it?"}
+    W -- "already my player here" --> A["🎟️ Unirte como {name}:<br/>added to the tournament's list"]
+    W -- "no player here yet" --> F["pick a free player (claims it)<br/>or ✨ Soy nuevo/a (new player = display name)"]
+    W -- "already plays it" --> T["✅ just a link to the tournament"]
+    A --> H
+    F --> H
+```
+
+- A wrong password waits 1 second and shows the error on the home page's card.
+- **Guests still work:** under 🎾 Jugadores, "👻 Solo anotar resultados, sin cuenta"
+  folds out the old tournament-password form. That's for someone who only enters a
+  result.
+
 ## From guest to account
 
 After a tournament's player password, a browser without an account lands on
@@ -95,6 +120,9 @@ flowchart TD
     L --> M["/me"]
     N --> M
 ```
+
+An account that is already logged in gets the account-first `/welcome` instead (see
+above). A guest's tournament password still offers the three choices.
 
 - **Who can claim:** only a browser that has the tournament's password can claim one of
   its players, and only players nobody has claimed yet.

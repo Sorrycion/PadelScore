@@ -39,6 +39,12 @@ header.topbar { display: flex; flex-wrap: wrap; align-items: center; justify-con
 .career-medals img.medal { width: 32px; height: 32px; }
 ul.upcoming .vs { display: flex; flex-wrap: wrap; gap: 6px; font-weight: 600; margin: 4px 0 8px; }
 .roles { display: flex; gap: 6px; flex-wrap: wrap; }
+.join-card { padding: 14px 18px; margin: 12px 0 4px; }
+.join-card h2 { margin: 0 0 4px; }
+.join-card form.inline { margin: 8px 0 0; }
+.guest-login { margin-top: 14px; }
+.guest-login > summary { cursor: pointer; color: var(--muted); }
+.guest-login form.stack { margin-bottom: 0; }
 label.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
 label.check input { width: auto; margin-top: 3px; }
 .brand { font-weight: 800; font-size: 1.15rem; color: var(--text); text-decoration: none; }

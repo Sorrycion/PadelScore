@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ _("create_account") }} · PadelScore{% endblock %}
 {% block content %}
-<p class="eyebrow"><a class="plain" href="/welcome?t={{ tournament.id }}">{{ tournament.name }}</a></p>
+{% if tournament %}<p class="eyebrow"><a class="plain" href="/welcome?t={{ tournament.id }}">{{ tournament.name }}</a></p>{% endif %}
 <h1>✨ {{ _("create_account") }}</h1>
-<p class="muted">{{ _("signup_hint") }}</p>
+<p class="muted">{{ _("signup_hint") }}{% if not tournament %} {{ _("signup_join_later") }}{% endif %}</p>
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 <form method="post" action="/signup" class="stack card">
+  {% if tournament %}
   <input type="hidden" name="t" value="{{ tournament.id }}">
   <label>{{ _("who_are_you") }}
     <select name="who" required>
@@ -15,6 +16,7 @@
     </select>
   </label>
   <p class="muted">{{ _("who_hint") }}</p>
+  {% endif %}
   <label>{{ _("first_name") }} <input name="first_name" value="{{ form.first_name or '' }}" autocomplete="given-name"></label>
   <label>{{ _("last_name") }} <input name="last_name" value="{{ form.last_name or '' }}" autocomplete="family-name"></label>
   <label>{{ _("display_name") }} <input name="display_name" value="{{ form.display_name or '' }}" autocomplete="nickname" required></label>

@@ -7,23 +7,38 @@
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 
 <div class="login-sections">
+  {% if user and mine and playing %}
+  <section class="card login-section">
+    <h2>✅ {{ _("already_playing", name=mine.name) }}</h2>
+    <a class="button" href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a>
+  </section>
+  {% elif user and mine %}
+  <section class="card login-section">
+    <h2>🎟️ {{ _("join_as", name=mine.name) }}</h2>
+    <p class="muted">{{ _("join_as_hint", name=mine.name) }}</p>
+    <form method="post" action="/welcome/link" class="stack">
+      <input type="hidden" name="t" value="{{ tournament.id }}">
+      <input type="hidden" name="player_id" value="{{ mine.id }}">
+      <button type="submit">🎟️ {{ _("join_tournament") }}</button>
+    </form>
+  </section>
+  {% endif %}
   {% if user and not mine %}
   <section class="card login-section">
     <h2>🔗 {{ _("welcome_link") }}</h2>
     <p class="muted">{{ _("welcome_link_hint", name=user.display_name or user.username) }}</p>
-    {% if free %}
     <form method="post" action="/welcome/link" class="stack">
       <input type="hidden" name="t" value="{{ tournament.id }}">
       <label>{{ _("who_are_you") }}
         <select name="player_id" required>
           {% for p in free %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+          <option value="new">✨ {{ _("i_am_new") }} ({{ user.display_name or user.username }})</option>
         </select>
       </label>
       <button type="submit">{{ _("link_player") }}</button>
     </form>
-    {% else %}<p class="empty">{{ _("no_free_players") }}</p>{% endif %}
   </section>
-  {% elif user and mine %}
+  {% elif user and mine and free %}
   <section class="card login-section">
     <h2>🧩 {{ _("merge_title") }}</h2>
     <p class="muted">{{ _("merge_hint", name=mine.name) }}</p>
@@ -53,10 +68,12 @@
     <a class="button secondary" href="/login?next={{ ('/welcome?t=%d'|format(tournament.id))|urlencode }}">{{ _("login") }}</a>
   </section>
   {% endif %}
+  {% if not user %}
   <section class="card login-section">
     <h2>👻 {{ _("continue_guest") }}</h2>
     <p class="muted">{{ _("continue_guest_hint") }}</p>
     <a class="button secondary" href="{{ next }}">{{ _("continue_guest") }}</a>
   </section>
+  {% endif %}
 </div>
 {% endblock %}
