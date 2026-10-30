@@ -26,15 +26,20 @@ flowchart LR
 
 1. **Tests:** all must pass (`.venv/Scripts/python.exe -m pytest -q`, after
    `pip install -r requirements-dev.txt`).
-2. **Branch and commit.** Branch from an up-to-date `main`. Commit messages end with
+2. **Document first.** The branch must already carry its docs, diagrams, skills and
+   memory updates (the checklist in `CLAUDE.md` and in
+   `.github/pull_request_template.md`). Don't open a PR without them.
+3. **Branch and commit.** Branch from an up-to-date `main`. Commit messages end with
    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-3. **Push.** Git authenticates as **Sorrycion** through a repo-local credential helper
+4. **Push.** Git authenticates as **Sorrycion** through a repo-local credential helper
    (`gh auth token --user Sorrycion`), whichever gh account is active.
-4. **Open the PR:**
+5. **Open the PR:**
    `GH_TOKEN=$(gh auth token --user Sorrycion) gh pr create -R Sorrycion/PadelScore --base main --head <branch> --title ... --body ...`.
-   The body ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+   The body follows `.github/pull_request_template.md`, including its **Docs and
+   memory** section, and ends with
+   `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
    With stacked PRs, write "merge #N first".
-5. **The user merges.** "PR merged" means: watch the run and check the live site. The
+6. **The user merges.** "PR merged" means: watch the run and check the live site. The
    run (`.github/workflows/deploy.yml`):
    - tests again;
    - backs up the database to `/home/data/padelscore-backup-<date>-gh.db`;
@@ -42,7 +47,7 @@ flowchart LR
      uploaded to a temporary Kudu folder: `--status`, then apply);
    - zip deploys, with `app/VERSION` holding the commit, and restarts;
    - waits until `/health` reports that commit (the old instance answers for a while).
-6. **Watch it:**
+7. **Watch it:**
    ```bash
    export GH_TOKEN=$(gh auth token --user Sorrycion)
    gh run list -R Sorrycion/PadelScore -L 3

@@ -304,6 +304,22 @@ def test_language_switch_only_redirects_within_the_site(client, next_url):
     assert r.headers["location"] == "/"
 
 
+def test_knowledge_base_is_linked():
+    """Every process page is in the index, and every skill is in CLAUDE.md (see the
+    "Every PR documents itself" rule)."""
+    root = Path(__file__).resolve().parent.parent
+    index = (root / "docs/processes/README.md").read_text(encoding="utf-8")
+    pages = [p.name for p in (root / "docs/processes").glob("*.md") if p.name != "README.md"]
+    assert pages and all(f"({name})" in index for name in pages), pages
+    guide = (root / "CLAUDE.md").read_text(encoding="utf-8")
+    skills = [p.name for p in (root / ".claude/skills").iterdir() if p.is_dir()]
+    assert skills and all(f"`{name}`" in guide for name in skills), skills
+    for name in skills:
+        assert (root / ".claude/skills" / name / "SKILL.md").exists(), name
+    assert "Docs and memory" in (root / ".github/pull_request_template.md").read_text(
+        encoding="utf-8")
+
+
 def test_every_text_has_both_languages_and_every_key_exists():
     for key, entry in TEXT.items():
         assert set(entry) == set(LANGS), key
