@@ -18,7 +18,7 @@
   <div class="tile"><strong>{{ career.medals|length }}</strong><span>{{ _("tab_medals") }}</span></div>
 </div>
 {% if career.medals %}
-<p class="mini-medals career-medals">{% for m in career.medals %}<img class="medal {% if m.tier %}tier-{{ m.tier }}{% endif %}" src="{{ m.image }}?v={{ css_version }}" alt="{{ m.name }}" title="{{ m.name }}{% if m.tier %} · {{ _(TIER_KEYS[m.tier]) }}{% elif m.count > 1 %} ×{{ m.count }}{% endif %}" width="30" height="35">{% endfor %}</p>
+<p class="mini-medals career-medals">{% for m in career.medals %}<img class="medal {% if m.tier %}tier-{{ m.tier }}{% endif %}" src="{{ m.image }}?v={{ css_version }}" alt="{{ m.name }}" title="{{ m.name }}{% if m.tier %} · {{ _(TIER_KEYS[m.tier]) }}{% elif m.count > 1 %} ×{{ m.count }}{% endif %}" width="32" height="32">{% endfor %}</p>
 {% endif %}
 {% endif %}
 

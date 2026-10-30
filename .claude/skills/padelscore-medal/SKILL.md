@@ -9,7 +9,7 @@ Background: `docs/processes/MEDALS.md`.
 
 ```mermaid
 flowchart LR
-    SQL["new sql/predeployment file:<br/>INSERT INTO medal_types"] --> IMG["scripts/make_medals.py:<br/>MEDALS[code] = (kind, glyph) → run"]
+    SQL["new sql/predeployment file:<br/>INSERT INTO medal_types"] --> IMG["scripts/make_medals.py:<br/>MEDALS[code] = emoji → run"]
     IMG --> RULE["app/medals.py awards():<br/>give(code, n, what)"]
     RULE --> TEST["tests: test_medals_are_computed…"]
 ```
@@ -20,9 +20,12 @@ flowchart LR
    - to change: `UPDATE`;
    - `kind` is `glory`, `rival` or `shame` (a joke);
    - `sort`: glory goes 1-19, rival 20-29, shame 30 and up.
-2. **Image.** Add `"code": (kind, glyph)` to `MEDALS` in `scripts/make_medals.py`, run
-   it, and commit the new `app/static/medals/<code>.svg`. The style is shared: ribbon
-   and medal, with colors set by the kind.
+2. **Image.** Add `"code": "<emoji>"` to `MEDALS` in `scripts/make_medals.py`, run it,
+   and commit the new `app/static/medals/<code>.svg`. Each image is only the icon of
+   the situation: no medal, ribbon or ring (the user's decision). Check that the
+   emoji isn't cut off at 72 px (shoes and boots sit low).
+   **Names in Spanish are Mexican** (zapato, salado, sotanero, "es su papá"), never
+   Spain's (rosco, gafe, farolillo, pastelero).
 3. **Rule.** Add it in `medals.awards(sets, pid, tournaments)`:
    - `sets`: the player's played sets, oldest first. Each has `rule_code`, the games, and
      `stats.games(s, pid)` gives the player's (for, against).

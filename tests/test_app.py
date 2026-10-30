@@ -1786,13 +1786,26 @@ def test_medal_pages(league):
         league.post("/matches", data=set_form((a1, a2, b1, b2), ga, gb))
     league.post("/matches", data=set_form((1, 2, 3, 4), 6, 0))
     r = league.get("/players/1/medals")
-    assert r.status_code == 200 and "Baker" in r.text and "Still to win" in r.text
+    assert r.status_code == 200 and "Shutout" in r.text and "Still to win" in r.text
     assert "/static/medals/rosco.svg" in r.text
     assert league.get("/static/medals/rosco.svg").status_code == 200
     r = league.get("/medals")
     assert "How to win it" in r.text and "Shame" in r.text
     assert r.text.count("medals/") >= 22  # every medal of the catalog, as an image
-    assert "Ana" in r.text.split("Baker")[1].split("</tr>")[0]  # Ana holds the Baker
+    assert "Ana" in r.text.split("Shutout")[1].split("</tr>")[0]  # Ana holds the Shutout
+
+
+def test_medal_names_are_mexican_spanish(client):
+    client.get("/lang/es")
+    page = client.get("/medals").text
+    for name in ("Zapatero", "Le pusieron zapato", "Salado", "Sotanero", "Ya tiene papá",
+                 "Es su papá", "El Clásico", "Rey de la cancha", "Colmilludo"):
+        assert name in page, name
+    for spain in ("Pastelero", "Gafe", "Farolillo", "Comió rosco", "Tiene dueño", "Rey de la pista"):
+        assert spain not in page, spain
+    icon = (Path(__file__).resolve().parent.parent / "app/static/medals/rosco.svg").read_text(
+        encoding="utf-8")
+    assert "<circle" not in icon and "<path" not in icon  # just the icon, no medal shape
 
 
 def test_tournament_page_shows_only_its_own_medals(league):
@@ -1801,10 +1814,10 @@ def test_tournament_page_shows_only_its_own_medals(league):
     add_matchday(2, "2026-11-01")
     league.post("/matches", data=set_form((1, 2, 3, 4), 4, 6, matchday_id=2))
     one = league.get("/tournaments/1").text
-    assert 'alt="Baker"' in one and 'alt="Ate a bagel"' in one  # in the standings table
-    assert 'alt="Baker"' in league.get("/standings?tournament=1").text  # the home standings too
+    assert 'alt="Shutout"' in one and 'alt="Got shut out"' in one  # in the standings table
+    assert 'alt="Shutout"' in league.get("/standings?tournament=1").text  # the home standings too
     two = league.get("/tournaments/2").text
-    assert "Baker" not in two and "Ate a bagel" not in two
+    assert "Shutout" not in two and "Got shut out" not in two
 
 
 def test_health_reports_the_version_and_migrations(client):
