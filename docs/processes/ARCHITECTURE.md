@@ -52,7 +52,8 @@ sequenceDiagram
 
 - **Open paths** (no organization needed): `/` (the login, or an account's home across
   organizations), `/enter`, `/login`, `/logout`, `/static`, `/lang`, `/rules`, `/orgs`,
-  `/me`, `/health`. The standings of an organization are at `/standings`.
+  `/me`, `/health`, `/signup` (an account with no tournament), `/join` (a tournament's
+  password, from the home page). The standings of an organization are at `/standings`.
 - **Calculated, not stored:** standings, statistics and medals are always worked out
   from the sets. Only sets, absences and the lists are stored.
 - **Pages that span organizations** run their queries per organization with

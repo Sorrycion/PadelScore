@@ -39,7 +39,7 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 # Pages that work before entering an organization (and "/" itself: the login, or the
 # account's tournaments in every organization).
 OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me",
-              "/health")
+              "/health", "/signup", "/join")
 # The commit being served: the deploy pipeline writes it to app/VERSION ("dev" locally).
 VERSION = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "dev"
 
@@ -323,7 +323,7 @@ def load_results(conn, tournament_id):
 # --- Pages -------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request):
+def home(request: Request, error: str | None = None):
     """The start page. Logged in (an account, or a guest with tournament passwords):
     every tournament they play or run, and the sets still to play, by date. Otherwise
     the login."""
@@ -334,7 +334,7 @@ def home(request: Request):
     if not user and not tournaments:
         return templates.TemplateResponse(request, "login.html", {"next": "/", "home": True})
     return templates.TemplateResponse(request, "home.html", {
-        "tournaments": tournaments, "upcoming": upcoming, "account": user})
+        "tournaments": tournaments, "upcoming": upcoming, "account": user, "error": error})
 
 
 def home_tournament(t, org, role, me=None):
@@ -626,8 +626,9 @@ def take_display_name(conn, player, name):
 
 @app.get("/welcome", response_class=HTMLResponse)
 def welcome_page(request: Request, t: int, next: str = "/", error: str | None = None):
-    """After a tournament's player password: carry on as a guest, make an account
-    (claiming one of its players), or link an account already made."""
+    """After a tournament's player password (its invitation). An account picks who it is
+    in the tournament: its player of this organization, one of the tournament's free
+    players, or a new one. Without an account: make one, or carry on as a guest."""
     user = auth.current_user(request)
     with db.connect() as conn:
         tournament = guest_tournament(request, conn, t)
@@ -635,20 +636,39 @@ def welcome_page(request: Request, t: int, next: str = "/", error: str | None = 
             "tournament": tournament, "next": safe_next(next), "error": error,
             "free": free_people(conn, t),
             "mine": linked_player(conn, user["id"]) if user else None,
+            "playing": bool(user) and auth.account_plays(user, tournament),
         })
 
 
 @app.post("/welcome/link")
-def welcome_link(request: Request, t: int = Form(...), player_id: int = Form(...),
+def welcome_link(request: Request, t: int = Form(...), player_id: str = Form(""),
                  merge: str = Form("")):
-    """A logged-in account claims a player of the tournament it has the password of.
-    With `merge`, an account that already has a player in this organization says this
-    one is also them: the two become one (see users.merge_players)."""
+    """A logged-in account joins a tournament it has the password of, as:
+    - its own player of this organization (`player_id` is that player): added to the
+      tournament's list;
+    - one of the tournament's free players: claimed (with `merge`, folded into the
+      account's player instead; see users.merge_players);
+    - "new": a new player named after the account's display name, added to the list."""
     user = auth.current_user(request)
     if user is None:
         raise LoginRequired(f"/welcome?t={t}")
     with db.connect() as conn:
         guest_tournament(request, conn, t)
+        mine = linked_player(conn, user["id"])
+        add = "INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) VALUES (?, ?)"
+        if player_id == "new" and not mine:
+            name = clean_name(user["display_name"] or user["username"])
+            if find_player(conn, name):
+                return redirect(f"/welcome?t={t}&error=err_player_exists")
+            new_id = conn.execute("INSERT INTO players (organization_id, name) VALUES (?, ?)",
+                                  (org_id(), name)).lastrowid
+            conn.execute(add, (t, new_id))
+            users.link_player(conn, user["id"], new_id)
+            return redirect("/")
+        if mine and player_id == str(mine["id"]) and not merge:
+            conn.execute(add, (t, mine["id"]))
+            return redirect("/")
+        player_id = opt_int(player_id)
         player = next((p for p in free_people(conn, t) if p["id"] == player_id), None)
         if player is None:
             return redirect(f"/welcome?t={t}&error=err_player_claimed")
@@ -658,41 +678,74 @@ def welcome_link(request: Request, t: int = Form(...), player_id: int = Form(...
             return redirect(f"/welcome?t={t}&error={e}")
         if kept == player_id:
             take_display_name(conn, player, user["display_name"])
-    return redirect("/me")
+    return redirect("/")
+
+
+@app.post("/join")
+def join_tournament(request: Request, password: str = Form("")):
+    """An account types a tournament's player password (its invitation) from the home
+    page: the browser gets that tournament's player cookie and enters its organization,
+    and /welcome asks who the account is in it."""
+    user = auth.current_user(request)
+    if user is None:
+        raise LoginRequired("/")
+    with db.connect() as conn:
+        found = [t for t in conn.execute(
+            "SELECT * FROM tournaments WHERE player_password IS NOT NULL "
+            "AND organization_id IS NOT NULL ORDER BY id DESC")
+            if auth.player_password_matches(password, t)]
+        if not password or not found:
+            time.sleep(1)  # slow down guessing
+            return redirect("/?error=err_wrong_password#join")
+        tournament = found[0]
+        org = conn.execute("SELECT * FROM organizations WHERE id = ?",
+                           (tournament["organization_id"],)).fetchone()
+    response = enter_org(request, org,
+                         f"/welcome?t={tournament['id']}&next=/tournaments/{tournament['id']}")
+    response.set_cookie(auth.PLAYER_COOKIE.format(tournament["id"]),
+                        auth.player_token(tournament), **cookie_options(request))
+    return response
 
 
 def signup_form(request, conn, tournament, form=None, error=None, status_code=200):
     return templates.TemplateResponse(request, "signup.html", {
-        "tournament": tournament, "free": free_people(conn, tournament["id"]),
+        "tournament": tournament,
+        "free": free_people(conn, tournament["id"]) if tournament else [],
         "form": form or {}, "error": error}, status_code=status_code)
 
 
 @app.get("/signup", response_class=HTMLResponse)
-def signup_page(request: Request, t: int):
+def signup_page(request: Request, t: int | None = None):
+    """Make an account. From a tournament (`t`, after its password) it also claims who
+    you are in it; on its own, you join tournaments later from the home page."""
     with db.connect() as conn:
-        return signup_form(request, conn, guest_tournament(request, conn, t))
+        return signup_form(request, conn, guest_tournament(request, conn, t) if t else None)
 
 
 @app.post("/signup")
-def signup(request: Request, t: int = Form(...), who: str = Form(""),
+def signup(request: Request, t: str = Form(""), who: str = Form(""),
            first_name: str = Form(""), last_name: str = Form(""),
            display_name: str = Form(""), username: str = Form(""), email: str = Form(""),
            password: str = Form(""), password2: str = Form("")):
-    """Make a player account and claim one of the tournament's players with it, or a
-    new player ("new") who joins the tournament. The display name becomes the player's
-    name, so the tables show it."""
+    """Make a player account. From a tournament (`t`), also claim one of its players, or
+    a new player ("new") who joins it; the display name becomes the player's name, so
+    the tables show it. Without `t`, just the account: it joins tournaments later with
+    their passwords (/join)."""
     form = {"who": who, "first_name": first_name, "last_name": last_name,
             "display_name": display_name, "username": username, "email": email}
+    t = opt_int(t)
     with db.connect() as conn:
-        tournament = guest_tournament(request, conn, t)
-        claimed = next((p for p in free_people(conn, t) if str(p["id"]) == who), None)
+        tournament = guest_tournament(request, conn, t) if t else None
+        claimed = next((p for p in free_people(conn, t) if str(p["id"]) == who),
+                       None) if tournament else None
         display = clean_name(display_name)
         error = None
-        if who != "new" and claimed is None:
+        if tournament and who != "new" and claimed is None:
             error = "err_choose_player"
         elif not display:
             error = "err_display_required"
-        elif find_player(conn, display, exclude=claimed["id"] if claimed else None):
+        elif tournament and find_player(conn, display,
+                                        exclude=claimed["id"] if claimed else None):
             error = "err_player_exists"
         elif len(password) < users.MIN_PASSWORD:
             error = "err_password_short"
@@ -707,16 +760,19 @@ def signup(request: Request, t: int = Form(...), who: str = Form(""),
                 error = str(e)
         if error:
             return signup_form(request, conn, tournament, form, error, 400)
-        if claimed:
+        if not tournament:
+            pid = None
+        elif claimed:
             take_display_name(conn, claimed, display)
             pid = claimed["id"]
         else:
             pid = player_id(conn, display)
             conn.execute("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
                          "VALUES (?, ?)", (t, pid))
-        users.link_player(conn, user_id, pid)
+        if pid:
+            users.link_player(conn, user_id, pid)
         user = users.get(conn, user_id)
-    response = redirect("/me")
+    response = redirect("/me" if tournament else "/")
     response.set_cookie(auth.USER_COOKIE, auth.user_cookie(user), **cookie_options(request))
     return response
 
