@@ -36,7 +36,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="PadelScore", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
-# Pages that work before entering an organization.
+# Pages that work before entering an organization (and "/" itself: the login, or the
+# account's tournaments in every organization).
 OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me",
               "/health")
 # The commit being served: the deploy pipeline writes it to app/VERSION ("dev" locally).
@@ -57,7 +58,7 @@ class OrganizationGate:
         request = Request(scope)
         org = auth.org_from_cookie(request)
         scope.setdefault("state", {})["org"] = org
-        if org is None and not scope["path"].startswith(OPEN_PATHS):
+        if org is None and scope["path"] != "/" and not scope["path"].startswith(OPEN_PATHS):
             target = "/orgs" if auth.is_super(request) else \
                 "/enter" + (f"?next={quote(here(request), safe='/')}" if scope["method"] == "GET" else "")
             return await redirect(target)(scope, receive, send)
@@ -322,7 +323,83 @@ def load_results(conn, tournament_id):
 # --- Pages -------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, tournament: str | None = None):
+def home(request: Request):
+    """The start page. Logged in (an account, or a guest with tournament passwords):
+    every tournament they play or run, and the sets still to play, by date. Otherwise
+    the login."""
+    user = auth.current_user(request)
+    with db.connect() as conn:
+        tournaments, upcoming = (account_home(conn, user) if user
+                                 else guest_home(request, conn))
+    if not user and not tournaments:
+        return templates.TemplateResponse(request, "login.html", {"next": "/", "home": True})
+    return templates.TemplateResponse(request, "home.html", {
+        "tournaments": tournaments, "upcoming": upcoming, "account": user})
+
+
+def home_tournament(t, org, role, me=None):
+    return {**t, "org_id": org["id"], "org_name": org["name"], "roles": {role}, "me": me}
+
+
+def by_date(tournaments, upcoming):
+    """Tournaments still going first (newest first), then ended; sets oldest date first."""
+    tournaments = sorted(tournaments, key=lambda t: (t["held_on"], t["id"]), reverse=True)
+    tournaments.sort(key=lambda t: bool(t["ended"]))
+    upcoming.sort(key=lambda s: (s["played_on"], s["tournament"], s["matchday"], s["court"]))
+    return tournaments, upcoming
+
+
+def account_home(conn, user):
+    """(tournaments, sets to play) of an account, across organizations: the tournaments
+    its players play (with position and points) and, for admins, those they run."""
+    found, upcoming = {}, []
+    if user["role"] == "super":
+        admin_of = conn.execute("SELECT * FROM organizations ORDER BY name").fetchall()
+    elif user["role"] == "org_admin":
+        admin_of = conn.execute("SELECT * FROM organizations WHERE id = ?",
+                                (user["organization_id"],)).fetchall()
+    else:
+        admin_of = []
+    for org in admin_of:
+        for t in in_org(org["id"], lambda: all_tournaments(conn)):
+            found[t["id"]] = home_tournament(t, org, "admin")
+    for player in my_players(conn, user["id"]):
+        org = {"id": player["organization_id"], "name": player["org_name"]}
+        summary = my_summary(conn, player)
+        for t in summary["tournaments"]:
+            if t["id"] in found:
+                found[t["id"]]["roles"].add("player")
+                found[t["id"]]["me"] = t["me"]
+            else:
+                found[t["id"]] = home_tournament(t, org, "player", t["me"])
+        upcoming += [{**s, "org_name": org["name"]} for s in summary["pending"]]
+    return by_date(list(found.values()), upcoming)
+
+
+def guest_home(request, conn):
+    """(tournaments, sets to play) of a guest: the tournaments whose player password this
+    browser logged in with, and all their sets still to play."""
+    ids = [int(name.split("_", 1)[1]) for name in auth.player_cookies(request)
+           if name.split("_", 1)[1].isdigit()]
+    tournaments, upcoming = [], []
+    for t in conn.execute(
+            f"SELECT t.*, o.name AS org_name FROM tournaments t JOIN organizations o "
+            f"ON o.id = t.organization_id WHERE t.id IN ({', '.join('?' * len(ids))})", ids):
+        if not auth.is_guest_player(request, t):
+            continue
+        org = {"id": t["organization_id"], "name": t["org_name"]}
+        def work(t=t):
+            row = next(r for r in all_tournaments(conn) if r["id"] == t["id"])
+            return row, [s for s in set_rows(conn, tournament_id=t["id"])
+                         if s["team_a_games"] is None]
+        row, pending = in_org(org["id"], work)
+        tournaments.append(home_tournament(row, org, "guest"))
+        upcoming += [{**s, "org_name": org["name"]} for s in pending]
+    return by_date(tournaments, upcoming)
+
+
+@app.get("/standings", response_class=HTMLResponse)
+def standings_page(request: Request, tournament: str | None = None):
     """Standings of one tournament (the latest unless chosen), with a tournament picker."""
     with db.connect() as conn:
         everyone = all_tournaments(conn)
@@ -403,8 +480,9 @@ def login_page(request: Request, next: str = "/"):
 def login(request: Request, username: str = Form(""), password: str = Form(""),
           next: str = Form("/"), role: str = Form("")):
     """The login page has two sections (`role`):
-    - "account": a username or email and password. A super admin goes on to /orgs (or
-      `next`), an organization admin enters their organization, a player goes home.
+    - "account": a username or email and password. Everyone lands on the home page (their
+      tournaments and sets to play), or `next`; an organization admin also enters their
+      organization.
     - "player": a tournament's player password, which logs in its guest players (one
       cookie per tournament whose password it is) in the organization being viewed, or
       in the one of that tournament if none is.
@@ -429,10 +507,8 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
                                    (user["organization_id"],)).fetchone()
                 response = enter_org(request, org, wanted if current
                                      and current["id"] == org["id"] and wanted else "/")
-            elif user["role"] == "super":
-                response = redirect(wanted or ("/" if current else "/orgs"))
             else:
-                response = redirect(wanted or "/me")
+                response = redirect(wanted or "/")
             response.set_cookie(auth.USER_COOKIE, auth.user_cookie(user), **cookie)
             return response
         current = auth.current_org(request)
@@ -1115,7 +1191,7 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
             # Only the latest matchday offers to start the next one, a week later.
             "next_number": results[-1]["number"] + 1 if results[-1]["id"] == matchday_id else None,
             "next_date": (date.fromisoformat(matchday["played_on"]) + timedelta(days=7)).isoformat(),
-            "score_inline": True,  # pending sets get their games entered right here
+            "in_matchday": True,
             "scorer": auth.can_score(request, tournament),
         })
 
@@ -1760,12 +1836,23 @@ def add_match(request: Request, form: dict = Depends(match_form_data)):
 
 
 @app.get("/matches/{match_id}/edit", response_class=HTMLResponse)
-def edit_match_page(request: Request, match_id: int):
+def edit_match_page(request: Request, match_id: int, error: str | None = None):
+    """Every set is changed here. Editors (and players of Manual tournaments) get the
+    whole set; the other players of its tournament, just its games."""
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
-        require_set_maker(request, conn, match["matchday_id"])
-        return render_match_form(request, conn, {c: match[c] for c in MATCH_COLUMNS},
-                                 match_id=match_id)
+        if auth.is_editor(request) or match["matchday_id"] in {
+                d["id"] for d in set_matchdays(request, conn)}:
+            return render_match_form(request, conn, {c: match[c] for c in MATCH_COLUMNS},
+                                     match_id=match_id,
+                                     error=translator(get_lang(request))(error) if error else None)
+        tournament = tournament_of(conn, match["matchday_id"])
+        if not auth.can_score(request, tournament):
+            raise LoginRequired(here(request))
+        row = next(s for s in set_rows(conn, matchday_id=match["matchday_id"])
+                   if s["id"] == match_id)
+        return templates.TemplateResponse(request, "match_score.html", {
+            "m": row, "tournament": tournament, "error": error})
 
 
 @app.post("/matches/{match_id}")
@@ -1797,19 +1884,20 @@ def delete_match(match_id: int):
 @app.post("/matches/{match_id}/score")
 def save_score(request: Request, match_id: int, team_a_games: str = Form(""),
                team_b_games: str = Form("")):
-    """Enter (or clear) the games of a set from the matchday page: editors and the
+    """Enter (or clear) the games of a set, from its Edit page: editors and the
     tournament's players."""
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
         auth.require_scorer(request, tournament_of(conn, match["matchday_id"]))
         back = f"/matchdays/{match['matchday_id']}"
+        edit = f"/matches/{match_id}/edit"
         try:
             a, b = opt_games(team_a_games), opt_games(team_b_games)
             if (a is None) != (b is None):
-                return redirect(f"{back}?error=err_both_games")
+                return redirect(f"{edit}?error=err_both_games")
             winner = check_set(a, b) if a is not None else None
         except (ValueError, ScoreError):
-            return redirect(f"{back}?error=err_set")
+            return redirect(f"{edit}?error=err_set")
         conn.execute("UPDATE matches SET team_a_games = ?, team_b_games = ?, winner = ? "
                      "WHERE id = ?", (a, b, winner, match_id))
     return redirect(f"{back}#set-{match_id}")

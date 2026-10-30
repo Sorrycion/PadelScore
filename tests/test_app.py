@@ -194,7 +194,7 @@ def test_full_matchday_flow(league):
     assert standing_points(standings, "Carlos") == 11
     assert standing_points(standings, "Diego") == 3
 
-    home = league.get("/").text
+    home = league.get("/standings").text
     assert "Liga Amigos" in home and home.index("Carlos") < home.index("Diego")
 
     # Edit the third set so Ana & Diego win it 6-3 instead of losing 3-6: Ana wins all 3.
@@ -281,7 +281,7 @@ def test_missing_pages_return_404(league):
 
 def test_spanish_is_the_default_language(league):
     league.cookies.delete("lang")
-    home = league.get("/").text
+    home = league.get("/standings").text
     assert '<html lang="es">' in home and "Clasificación" in home and "Jornada 1" in home
     r = league.post("/matches", data=set_form((1, 1, 3, 4), 6, 4))
     assert "Elige cuatro jugadores diferentes." in r.text
@@ -517,7 +517,8 @@ def test_new_matchday_with_bad_courts_is_not_saved(league):
 def test_assigning_courts_creates_three_pending_sets_each(league):
     r = league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 8)))
     assert r.status_code == 200 and str(r.url).endswith("/matchdays/1")
-    assert pending_count() == 6 and r.text.count('class="score-form"') == 6
+    assert pending_count() == 6 and r.text.count('/edit">✏️') == 6  # each set: its Edit page
+    assert 'class="score-form"' not in r.text  # no scoring inside the cards
     with db.connect() as conn:
         rows = conn.execute("SELECT a1, a2, b1, b2 FROM matches WHERE court = 1 ORDER BY id").fetchall()
     assert [((r[0], r[1]), (r[2], r[3])) for r in rows] == court_rotation((1, 2, 3, 4))
@@ -533,6 +534,7 @@ def test_assigning_courts_creates_three_pending_sets_each(league):
 def test_score_needs_both_teams(league):
     league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4)))
     r = league.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": ""})
+    assert str(r.url).endswith("/matches/1/edit?error=err_both_games")
     assert "Enter both teams" in r.text and pending_count() == 3
     r = league.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "-1"})
     assert "can't be negative" in r.text and pending_count() == 3
@@ -980,10 +982,13 @@ def test_player_password_lets_players_enter_results_only(with_players):
     assert "player_1" in c.cookies
 
     page = c.get("/matchdays/1").text
-    assert page.count('class="score-form"') == 2 and "Logged in as a player" in page
-    assert "Delete" not in page and "Assign courts" not in page
+    assert page.count('/edit">✏️') == 2 and "Logged in as a player" in page
+    assert "Delete" not in page and "Assign courts" not in page and "score-form" not in page
+    edit = c.get("/matches/1/edit").text  # a player's Edit page: just the games
+    assert 'action="/matches/1/score"' in edit and 'name="a1"' not in edit
     r = c.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"})
-    assert 'value="6"' in r.text  # entered, and still editable to correct it
+    assert str(r.url).endswith("/matchdays/1#set-1") and "6-4" in r.text
+    assert 'value="6"' in c.get("/matches/1/edit").text  # still editable to correct it
     c.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "2"})
     with db.connect() as conn:
         assert tuple(conn.execute("SELECT team_a_games, team_b_games FROM matches WHERE id = 1")
@@ -993,7 +998,6 @@ def test_player_password_lets_players_enter_results_only(with_players):
     for method, url, data in [("post", "/matches/1/delete", {"x": "1"}),
                               ("get", "/matches/new", None),
                               ("post", "/matches", set_form((5, 6, 7, 8), 6, 4)),
-                              ("get", "/matches/1/edit", None),
                               ("get", "/matchdays/1/courts", None),
                               ("post", "/tournaments/1/players/1/remove", {"x": "1"}),
                               ("post", "/tournaments/1/player-password", {"password": ""}),
@@ -1093,12 +1097,12 @@ def test_only_admins_see_the_player_password(with_players):
 def test_standings_page_by_tournament(league):
     league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4))       # Liga Amigos
     new_tournament(league, 4, players=(5, 6, 7, 8), name="Otra copa")  # newer, no sets
-    home = league.get("/").text
+    home = league.get("/standings").text
     assert "Standings: <a" in home and "Otra copa</a></h1>" in home   # latest by default
-    assert 'href="/?tournament=1"' in home and 'href="/?tournament=2"' in home
-    page = league.get("/?tournament=1").text
+    assert 'href="/standings?tournament=1"' in home and 'href="/standings?tournament=2"' in home
+    page = league.get("/standings?tournament=1").text
     assert "Liga Amigos</a></h1>" in page and standing_points(page, "Ana") == 10
-    assert "Otra copa</a></h1>" in league.get("/?tournament=99").text  # unknown: the latest
+    assert "Otra copa</a></h1>" in league.get("/standings?tournament=99").text  # unknown: the latest
 
 
 def test_new_players_can_be_created_while_choosing_them(league):
@@ -1170,9 +1174,9 @@ def test_ended_tournaments_go_to_the_past_tab(league):
     past = league.get("/tournaments?past=1").text
     assert "Liga Amigos" in past and "Copa" not in past
     assert "Reopen tournament" in league.get("/tournaments/1").text
-    home = league.get("/").text
-    assert "Copa" in home and "/?tournament=1" not in home
-    assert "Liga Amigos" in league.get("/?tournament=1").text  # still reachable
+    home = league.get("/standings").text
+    assert "Copa" in home and "/standings?tournament=1" not in home
+    assert "Liga Amigos" in league.get("/standings?tournament=1").text  # still reachable
     league.post("/tournaments/1/ended", data={"ended": "0"})
     assert "Liga Amigos" in league.get("/tournaments").text
 
@@ -1209,7 +1213,7 @@ def test_visitors_enter_an_organization_first(league):
     # A forged cookie is ignored.
     league.cookies.delete("org")
     league.cookies.set("org", "1.forged")
-    assert league.get("/", follow_redirects=False).headers["location"].startswith("/enter")
+    assert league.get("/standings", follow_redirects=False).headers["location"].startswith("/enter")
 
 
 def test_organizations_only_see_their_own_data(league):
@@ -1260,7 +1264,7 @@ def test_super_admin_creates_and_enters_organizations(locked):
         assert conn.execute("SELECT COUNT(*) FROM organizations").fetchone()[0] == 1
     locked.cookies.delete("org")
     r = locked.post("/login", data={"username": "julio", "password": "super"})
-    assert str(r.url).endswith("/orgs") and "Club" in r.text
+    assert str(r.url).endswith("/") and "🏢 Club" in r.text  # home: every tournament
     r = locked.post("/orgs", data={"name": "Nene", "admin_user": "nene", "admin_password": "pa"})
     assert "Nene" in r.text
     assert "already" in locked.post("/orgs", data={"name": "nene", "admin_user": "y",
@@ -1544,7 +1548,7 @@ def test_the_profile_edits_details_and_password(with_players):
     assert "Saved" in r.text  # still logged in, with the new cookie
     c.post("/logout")
     r = c.post("/login", data={"username": "analo", "password": "nueva-clave", "role": "account"})
-    assert str(r.url).endswith("/me")
+    assert str(r.url).endswith("/") and "My next sets" in r.text
 
 
 def test_an_account_joins_its_duplicate_player(with_players):
@@ -1603,8 +1607,8 @@ def test_standings_show_display_name_and_username(with_players):
     signup(c)
     c.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"})
     assert "Ana L <span class=\"username\">(analo)</span>" in c.get("/tournaments/1").text
-    assert "(analo)" in c.get("/").text
-    assert "(bea)" not in c.get("/").text  # guests show just their name
+    assert "(analo)" in c.get("/standings").text
+    assert "(bea)" not in c.get("/standings").text  # guests show just their name
 
 
 def test_the_profile_adds_up_every_organization(with_players):
@@ -1623,6 +1627,50 @@ def test_phones_get_a_menu_button(client):
     r = client.get("/")
     assert 'id="menu-toggle"' in r.text and 'for="menu-toggle"' in r.text
     assert r.text.index("menu-panel") < r.text.index('class="tabbar"')
+
+
+def test_home_is_the_login_until_someone_logs_in(locked):
+    locked.cookies.delete("org")
+    r = locked.get("/", follow_redirects=False)
+    assert r.status_code == 200 and 'name="role" value="account"' in r.text
+    assert "Just looking" in r.text and "/enter?next=/standings" in r.text
+    locked.post("/enter", data={"name": "Club", "next": "/"})
+    r = locked.get("/")
+    assert "Just looking" in r.text and 'href="/standings"' in r.text  # standings: one tap
+    assert "Standings" in locked.get("/standings").text
+
+
+def test_home_lists_the_accounts_tournaments_and_next_sets_by_date(with_players):
+    c = with_players
+    with db.connect() as conn:  # a later jornada, and a set of it, entered first
+        conn.execute("INSERT INTO matchdays (tournament_id, number, played_on) "
+                     "VALUES (1, 2, '2026-11-06')")
+        conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
+                     "VALUES (2, 1, 1, 4, 2, 3)")
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 1, winner = 'A' "
+                     "WHERE id = 2")
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # the account is Ana (1)
+    c.post("/logout")
+    r = c.post("/login", data={"username": "analo", "password": "clave-larga",
+                               "role": "account"})
+    assert str(r.url).endswith("/")
+    page = r.text
+    assert "Liga Amigos" in page and "🎾 Player" in page
+    upcoming = page.split("My next sets")[1].split("My tournaments")[0]
+    assert upcoming.index("2026-10-23") < upcoming.index("2026-11-06")  # by date
+    assert "/matches/1/edit" in upcoming and "/matches/2/edit" not in upcoming  # played
+
+
+def test_home_of_an_admin_and_of_a_guest(with_players):
+    c = with_players
+    c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
+    page = c.get("/").text
+    assert "Liga Amigos" in page and "🛠️ Admin" in page
+    c.post("/logout")
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    page = c.get("/").text
+    assert "Liga Amigos" in page and "👻 Guest" in page and "/matches/1/edit" in page
 
 
 def test_the_profile_needs_an_account(client):
@@ -1738,7 +1786,7 @@ def test_tournament_page_shows_only_its_own_medals(league):
     league.post("/matches", data=set_form((1, 2, 3, 4), 4, 6, matchday_id=2))
     one = league.get("/tournaments/1").text
     assert 'alt="Baker"' in one and 'alt="Ate a bagel"' in one  # in the standings table
-    assert 'alt="Baker"' in league.get("/?tournament=1").text  # the home standings too
+    assert 'alt="Baker"' in league.get("/standings?tournament=1").text  # the home standings too
     two = league.get("/tournaments/2").text
     assert "Baker" not in two and "Ate a bagel" not in two
 

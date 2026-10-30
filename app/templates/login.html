@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ _("login") }} · PadelScore{% endblock %}
 {% block content %}
-<h1>{{ _("login_title") }}</h1>
+<h1>{{ _("home_login_title") if home else _("login_title") }}</h1>
+{% if home %}<p class="muted">{{ _("home_login_hint") }}</p>{% endif %}
 {% set sections = [
   ("account", "login_account", "login_account_hint"),
   ("player", "login_player", "login_player_hint"),
@@ -27,5 +28,17 @@
     </form>
   </section>
   {% endfor %}
+  {% if home %}
+  <section class="card login-section" id="login-visitor">
+    <h2>👀 {{ _("just_looking") }}</h2>
+    {% if org %}
+    <p class="muted">{{ _("just_looking_org", name=org.name) }}</p>
+    <a class="button secondary" href="/standings">🏆 {{ _("nav_standings") }}</a>
+    {% else %}
+    <p class="muted">{{ _("just_looking_hint") }}</p>
+    <a class="button secondary" href="/enter?next=/standings">🏢 {{ _("choose_org") }}</a>
+    {% endif %}
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

@@ -15,14 +15,30 @@ logs in with its **username or email** and password. Players can also come in as
 
 ```mermaid
 flowchart LR
-    L["/login"] --> A[👤 Mi cuenta]
-    L --> P[🎾 Jugadores]
-    A -- username/email + password --> U{role}
-    U -- super --> S["/orgs (or where they were going)"]
-    U -- org_admin --> O[enters their organization]
-    U -- player --> H[home]
-    P -- tournament password --> G["cookie player_{tid} per tournament<br/>(+ enters its organization)"]
+    R["/ (not logged in)"] --> L["login: 👤 Mi cuenta · 🎾 Jugadores · 👀 Solo mirar"]
+    L -- username/email + password --> U{role}
+    U -- org_admin --> O["enters their organization"] --> H
+    U -- "super / player" --> H["/ home: ⏳ Mis próximos sets (by date)<br/>+ 🏆 Mis torneos (every organization)"]
+    L -- tournament password --> G["cookie player_{tid}<br/>(+ enters its organization)"] --> W["/welcome: account or guest"]
+    L -- "👀 Solo mirar" --> V["/standings of the organization"]
 ```
+
+## The home page (`/`)
+
+- **Nobody logged in:** `/` is the login, with a third section, 👀 **Solo mirar**,
+  that goes to the organization's standings (`/standings`) or to choosing one.
+- **Logged in:** `/` lists:
+  - **⏳ Mis próximos sets:** the pending sets of the account's players, in every
+    organization, oldest date first. Each has a link to enter its result (the set's
+    Edit page, see [SETS.md](SETS.md)).
+  - **🏆 Mis torneos:** every tournament the account plays (🎾, with position and points)
+    or runs (🛠️ Admin: all of their organization's for an org admin, every
+    organization's for a super admin). Tournaments still going come first.
+  - A **guest** sees the tournaments whose password the browser has, with all their
+    pending sets.
+- Links into another organization go through `/enter`, which switches the browser to
+  that organization first. The code is `home`, `account_home` and `guest_home` in
+  `app/main.py`.
 
 ## Accounts and players
 
