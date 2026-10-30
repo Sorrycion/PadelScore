@@ -11,6 +11,7 @@ How the app works, one page per area, each with a diagram (Mermaid: GitHub draws
 | [Sets](SETS.md) | Entering and editing results, scoring per rule type |
 | [Player statistics](STATS.md) | The dashboard: tiles, charts, partners and rivals |
 | [Medals](MEDALS.md) | Medals players earn (glory, rivalry, shame), their images and rules |
+| [Architecture](ARCHITECTURE.md) | Modules, a request's path, the data model, where things run |
 | [Deploy](DEPLOY.md) | Pull request → tests → automatic deploy to Azure |
 
 The data model behind all of them:
