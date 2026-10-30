@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import auth, db, orgs, rounds, users
+from . import auth, charts, db, orgs, rounds, stats, users
 from .auth import LoginRequired, require_editor, require_super
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
 from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
@@ -1413,29 +1413,35 @@ def delete_player(player_id: int):
     return redirect("/players")
 
 
+def player_tournaments(conn, player_id, sets):
+    """The tournaments the player has sets in: position, totals, and their row on each
+    matchday (court, points...), in playing order."""
+    tournament_ids = {s["tournament_id"] for s in sets}
+    tournaments = []
+    for t in all_tournaments(conn):
+        if t["id"] not in tournament_ids:
+            continue
+        results, standings = load_results(conn, t["id"])
+        me = next((r for r in standings if r["id"] == player_id), None)
+        history = []
+        for md in results:
+            entry = {"id": md["id"], "number": md["number"], "played_on": md["played_on"]}
+            for court, rows in md["courts"].items():
+                for r in rows:
+                    if r["id"] == player_id and r["sets"]:
+                        history.append({**entry, "court": court, **r})
+        tournaments.append({"id": t["id"], "name": t["name"], "rule_code": t["rule_code"],
+                            "ended": t["ended"], "position": me and me["position"],
+                            "total": me, "players": len(standings), "history": history})
+    return tournaments
+
+
 @app.get("/players/{player_id}", response_class=HTMLResponse)
 def player_page(request: Request, player_id: int, error: str | None = None):
     with db.connect() as conn:
         player = get_or_404(conn, "players", player_id)
         sets = set_rows(conn, player_id=player_id)
-        tournament_ids = {s["tournament_id"] for s in sets}
-        tournaments = []
-        for t in all_tournaments(conn):
-            if t["id"] not in tournament_ids:
-                continue
-            results, standings = load_results(conn, t["id"])
-            me = next((r for r in standings if r["id"] == player_id), None)
-            history = []
-            for md in results:
-                entry = {"id": md["id"], "number": md["number"],
-                         "played_on": md["played_on"]}
-                for court, rows in md["courts"].items():
-                    for r in rows:
-                        if r["id"] == player_id and r["sets"]:
-                            history.append({**entry, "court": court, **r})
-            tournaments.append({"id": t["id"], "name": t["name"],
-                                "position": me and me["position"], "total": me,
-                                "history": history})
+        tournaments = player_tournaments(conn, player_id, sets)
 
     partners = Counter()
     for s in filter(is_played, sets):
@@ -1456,6 +1462,48 @@ def player_page(request: Request, player_id: int, error: str | None = None):
                      for (pid, name), n in partners.most_common()],
         "matches": sets,
         "error": error,
+    })
+
+
+@app.get("/players/{player_id}/stats", response_class=HTMLResponse)
+def player_stats_page(request: Request, player_id: int):
+    """The player's dashboard: totals, form, streaks, partners and rivals, with charts."""
+    _ = translator(get_lang(request))
+    with db.connect() as conn:
+        player = get_or_404(conn, "players", player_id)
+        sets = set_rows(conn, player_id=player_id)
+        tournaments = player_tournaments(conn, player_id, sets)
+    played = [s for s in reversed(sets) if is_played(s)]  # oldest first
+    board = stats.dashboard(played, player_id)
+    t = board["totals"]
+    results = {"W": str(_("won")), "L": str(_("lost")), "T": str(_("tied"))}
+    points_charts = []
+    for tour in tournaments:
+        total, values = 0, []
+        for h in tour["history"]:
+            total += h["points"]
+            values.append(total)
+        if len(values) > 1:
+            points_charts.append({"tournament": tour, "chart": charts.line_chart(
+                values, f"{tour['name']}: {_('cumulative_points')}",
+                labels=[str(_("matchday_short", n=h["number"])) for h in tour["history"]])})
+    partners = [p for p in board["partners"] if p["played"]][:8]
+    return templates.TemplateResponse(request, "player_stats.html", {
+        "player": player, "board": board, "tournaments": tournaments,
+        "points_charts": points_charts,
+        "donut": charts.donut([(results["W"], t["won"], charts.COLORS["W"]),
+                               (results["L"], t["lost"], charts.COLORS["L"]),
+                               (results["T"], t["tied"], charts.COLORS["T"])],
+                              _("sets_won_lost"), center=f"{t['win_pct']}%"),
+        "strip": charts.streak_strip(board["form"], _("form"), results),
+        "rolling": charts.line_chart(board["rolling"], _("rolling_win_pct"), suffix="%", top=100,
+                                     labels=[str(i + 1) for i in range(len(board["rolling"]))]),
+        "months": charts.bar_chart([(m, n) for m, n in board["months"]][-12:], _("sets_per_month")),
+        "partner_bars": charts.bar_chart([(p["name"], p["played"]) for p in partners],
+                                         _("partners")),
+        "partner_wins": charts.bar_chart(
+            [(p["name"], p["won"]) for p in sorted(partners, key=lambda p: -p["won"]) if p["won"]],
+            _("wins_with"), color="var(--up)"),
     })
 
 

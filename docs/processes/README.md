@@ -9,6 +9,7 @@ How the app works, one page per area, each with a diagram (Mermaid: GitHub draws
 | [Tournaments](TOURNAMENTS.md) | Creating, rule types, players, replacing, ending, deleting |
 | [Jornadas](JORNADAS.md) | Matchdays and rounds: courts, sets, absences, court changes |
 | [Sets](SETS.md) | Entering and editing results, scoring per rule type |
+| [Player statistics](STATS.md) | The dashboard: tiles, charts, partners and rivals |
 | [Deploy](DEPLOY.md) | Pull request → tests → automatic deploy to Azure |
 
 The data model behind all of them:

@@ -1548,3 +1548,51 @@ def test_the_profile_edits_details_and_password(with_players):
 def test_the_profile_needs_an_account(client):
     client.cookies.delete("user")
     assert client.get("/me", follow_redirects=False).headers["location"].startswith("/login")
+
+
+# --- Player statistics -------------------------------------------------------------------
+
+def a_set(a1, a2, b1, b2, ga, gb, played_on="2026-10-01"):
+    names = {i: f"P{i}" for i in range(1, 9)}
+    return {"a1_id": a1, "a1": names[a1], "a2_id": a2, "a2": names[a2],
+            "b1_id": b1, "b1": names[b1], "b2_id": b2, "b2": names[b2],
+            "team_a_games": ga, "team_b_games": gb, "played_on": played_on,
+            "winner": "A" if ga > gb else "B" if gb > ga else None}
+
+
+def test_stats_streaks_partners_and_rivals():
+    from app import stats
+    sets = [a_set(1, 2, 3, 4, 6, 3), a_set(1, 2, 3, 4, 6, 4), a_set(1, 2, 5, 6, 6, 2),
+            a_set(1, 3, 2, 4, 2, 6), a_set(4, 1, 2, 3, 1, 6), a_set(1, 2, 3, 4, 5, 5, "2026-11-02")]
+    t = stats.totals(sets, 1)
+    assert (t["played"], t["won"], t["lost"], t["tied"], t["win_pct"]) == (6, 3, 2, 1, 50)
+    assert (t["games_for"], t["games_against"], t["diff"]) == (26, 26, 0)
+    st = stats.streaks(sets, 1)
+    assert (st["best_win"], st["worst_loss"], st["current"], st["current_len"]) == (3, 2, "T", 1)
+    hl = stats.highlights(sets, 1)
+    assert hl["most_partner"]["name"] == "P2" and hl["most_partner"]["played"] == 4
+    assert hl["best_partner"]["name"] == "P2" and hl["best_partner"]["won"] == 3
+    assert hl["worst_partner"] is None  # nobody with 3+ sets together and a loss
+    assert hl["rival"]["name"] in ("P3", "P4") and hl["rival"]["faced"] == 4
+    assert hl["nemesis"]["name"] in ("P2", "P3", "P4") and hl["nemesis"]["beat_me"] == 2
+    assert stats.rolling_win_pct(sets, 1, window=2) == [100, 100, 100, 50, 0, 0]
+    assert stats.by_month(sets) == [("2026-10", 5), ("2026-11", 1)]
+
+
+def test_charts_escape_their_labels():
+    from app import charts
+    svg = charts.bar_chart([("<b>Ana</b>", 3)], "x")
+    assert "<b>" not in svg and "&lt;b&gt;Ana&lt;/b&gt;" in svg
+    assert "<svg" in charts.line_chart([1, 3, 2], "<i>", labels=["a", "b", "c"])
+    assert charts.donut([("W", 0, "red")], "empty") == ""
+
+
+def test_player_statistics_page(league):
+    for sets in ROTATION:
+        (a1, a2, b1, b2), ga, gb = sets
+        league.post("/matches", data=set_form((a1, a2, b1, b2), ga, gb))
+    r = league.get("/players/1/stats")
+    assert r.status_code == 200 and "Statistics" in r.text and "<svg" in r.text
+    assert "Most frequent partner" in r.text and "Win rate" in r.text
+    assert "Statistics" in league.get("/players/1").text  # the tab on the summary
+    assert "No sets played yet" in league.get("/players/8/stats").text

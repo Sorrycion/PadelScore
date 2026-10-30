@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ _("tab_stats") }} · {{ player.name }} · PadelScore{% endblock %}
+{% block content %}
+<h1>{{ player.name }}</h1>
+{% set tab = "stats" %}{% include "_player_tabs.html" %}
+{% set t = board.totals %}
+{% if not t.played %}
+<p class="empty">{{ _("no_stats") }}</p>
+{% else %}
+<div class="tiles">
+  <div class="tile"><strong>{{ t.played }}</strong><span>{{ _("sets") }}</span></div>
+  <div class="tile"><strong class="up">{{ t.won }}</strong><span>{{ _("won") }}</span></div>
+  <div class="tile"><strong class="down">{{ t.lost }}</strong><span>{{ _("lost") }}</span></div>
+  <div class="tile"><strong>{{ t.win_pct }}%</strong><span>{{ _("win_pct") }}</span></div>
+  <div class="tile"><strong class="{% if t.diff > 0 %}up{% elif t.diff < 0 %}down{% endif %}">{{ "%+d"|format(t.diff) if t.diff else 0 }}</strong><span>{{ _("games_diff") }}</span></div>
+  {% set st = board.streaks %}
+  <div class="tile"><strong>{% if st.current == "W" %}🔥{% elif st.current == "L" %}🥶{% else %}➖{% endif %} {{ st.current_len }}</strong><span>{{ _("current_streak") }}</span></div>
+</div>
+
+<section class="card chart-card">
+  <h2>{{ _("form") }}</h2>
+  <div class="donut-row">
+    {{ donut }}
+    <div>
+      <p class="muted">{{ _("last_n_sets", n=board.form|length) }}</p>
+      <div class="strip">{{ strip }}</div>
+      <p class="muted">{{ _("best_streak") }}: <strong>{{ board.streaks.best_win }}</strong> 🔥 · {{ _("worst_streak") }}: <strong>{{ board.streaks.worst_loss }}</strong> 🥶</p>
+    </div>
+  </div>
+</section>
+
+{% if board.rolling|length > 1 %}
+<section class="card chart-card">
+  <h2>{{ _("rolling_win_pct") }}</h2>
+  {{ rolling }}
+</section>
+{% endif %}
+
+{% for pc in points_charts %}
+<section class="card chart-card">
+  <h2>{{ _("cumulative_points") }} · <a class="plain" href="/tournaments/{{ pc.tournament.id }}">{{ pc.tournament.name }}</a></h2>
+  {% if pc.tournament.position %}<p class="muted">{{ _("position_n", n=pc.tournament.position) }} · {{ _("n_points", n=pc.tournament.total.points) }}</p>{% endif %}
+  {{ pc.chart }}
+</section>
+{% endfor %}
+
+{% set hl = board.highlights %}
+<h2>{{ _("highlights") }}</h2>
+<ul class="cards highlight-cards">
+  {% for key, icon, row, value in [
+       ("hl_most_partner", "🤝", hl.most_partner, hl.most_partner and _("n_sets", n=hl.most_partner.played)),
+       ("hl_best_partner", "🏆", hl.best_partner, hl.best_partner and _("n_wins", n=hl.best_partner.won)),
+       ("hl_worst_partner", "💔", hl.worst_partner, hl.worst_partner and _("n_losses", n=hl.worst_partner.lost)),
+       ("hl_rival", "⚔️", hl.rival, hl.rival and _("n_sets", n=hl.rival.faced)),
+       ("hl_nemesis", "😈", hl.nemesis, hl.nemesis and _("n_losses", n=hl.nemesis.beat_me)),
+       ("hl_victim", "🎯", hl.victim, hl.victim and _("n_wins", n=hl.victim.i_beat))] %}
+  {% if row %}
+  <li class="card highlight">
+    <span class="icon" aria-hidden="true">{{ icon }}</span>
+    <div><div class="muted">{{ _(key) }}</div>
+      <a class="plain name" href="/players/{{ row.id }}/stats">{{ row.name }}</a>
+      <div class="muted">{{ value }}</div></div>
+  </li>
+  {% endif %}
+  {% endfor %}
+</ul>
+
+{% if partner_bars %}
+<section class="card chart-card">
+  <h2>🤝 {{ _("partners") }}</h2>
+  {{ partner_bars }}
+  {% if partner_wins %}<h3>{{ _("wins_with") }}</h3>{{ partner_wins }}{% endif %}
+</section>
+{% endif %}
+
+{% if board.opponents %}
+<h2>⚔️ {{ _("opponents") }}</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>👤 {{ _("player") }}</th><th>{{ _("faced") }}</th><th>{{ _("won") }}</th><th>{{ _("lost") }}</th></tr></thead>
+  <tbody>
+  {% for o in board.opponents[:10] %}
+    <tr><td><a class="plain" href="/players/{{ o.id }}/stats">{{ o.name }}</a></td><td>{{ o.faced }}</td>
+      <td class="up">{{ o.i_beat }}</td><td class="down">{{ o.beat_me }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if board.months|length > 1 %}
+<section class="card chart-card">
+  <h2>📅 {{ _("sets_per_month") }}</h2>
+  {{ months }}
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}
