@@ -158,6 +158,23 @@ TEXT = {
                   "en": "Were you invited? Type the tournament's password."},
     "join_tournament": {"es": "Unirme", "en": "Join"},
     "join_as": {"es": "Unirte como {name}", "en": "Join as {name}"},
+    "who_in_tournament": {"es": "¿Quién eres en {name}?", "en": "Who are you in {name}?"},
+    "pick_player_hint": {"es": "Si el admin ya te apuntó, elige tu nombre: sus sets y puntos "
+                               "pasan a tu cuenta. Si no, entra como tú.",
+                         "en": "If the admin already put you on the list, pick your name: "
+                               "its sets and points become yours. If not, join as yourself."},
+    "existing_players": {"es": "Jugadores del torneo", "en": "The tournament's players"},
+    "or_join_as_me": {"es": "O entrar como yo", "en": "Or join as me"},
+    "create_new_for_me": {"es": "Crear un jugador nuevo para mí ({name})",
+                          "en": "Create a new player for me ({name})"},
+    "confirm_merge_title": {"es": "¿{name} eres tú?", "en": "Are you {name}?"},
+    "confirm_merge_hint": {"es": "Tu cuenta ya es {mine} en esta organización. Si {name} "
+                                 "también eres tú, se unen en uno: sus sets y torneos pasan a "
+                                 "{mine}. No se puede deshacer.",
+                           "en": "Your account is already {mine} in this organization. If "
+                                 "{name} is you too, they become one: their sets and "
+                                 "tournaments move to {mine}. This can't be undone."},
+    "confirm_merge_yes": {"es": "Sí, soy yo: unir", "en": "Yes, it's me: join them"},
     "join_as_hint": {"es": "Ya eres {name} en esta organización: entras a la lista del torneo "
                            "con tus sets y medallas de siempre.",
                      "en": "You're already {name} in this organization: you join the "

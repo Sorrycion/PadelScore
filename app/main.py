@@ -625,7 +625,8 @@ def take_display_name(conn, player, name):
 
 
 @app.get("/welcome", response_class=HTMLResponse)
-def welcome_page(request: Request, t: int, next: str = "/", error: str | None = None):
+def welcome_page(request: Request, t: int, next: str = "/", error: str | None = None,
+                 confirm: int | None = None):
     """After a tournament's player password (its invitation). An account picks who it is
     in the tournament: its player of this organization, one of the tournament's free
     players, or a new one. Without an account: make one, or carry on as a guest."""
@@ -637,6 +638,8 @@ def welcome_page(request: Request, t: int, next: str = "/", error: str | None = 
             "free": free_people(conn, t),
             "mine": linked_player(conn, user["id"]) if user else None,
             "playing": bool(user) and auth.account_plays(user, tournament),
+            # a free player the account picked while having its own here: confirm joining
+            "confirm": {p["id"]: p for p in free_people(conn, t)}.get(confirm),
         })
 
 
@@ -646,8 +649,9 @@ def welcome_link(request: Request, t: int = Form(...), player_id: str = Form("")
     """A logged-in account joins a tournament it has the password of, as:
     - its own player of this organization (`player_id` is that player): added to the
       tournament's list;
-    - one of the tournament's free players: claimed (with `merge`, folded into the
-      account's player instead; see users.merge_players);
+    - one of the tournament's free players: claimed. If the account already has a player
+      here, that asks to confirm first, then (`merge`) folds it into the account's
+      player (see users.merge_players);
     - "new": a new player named after the account's display name, added to the list."""
     user = auth.current_user(request)
     if user is None:
@@ -672,6 +676,8 @@ def welcome_link(request: Request, t: int = Form(...), player_id: str = Form("")
         player = next((p for p in free_people(conn, t) if p["id"] == player_id), None)
         if player is None:
             return redirect(f"/welcome?t={t}&error=err_player_claimed")
+        if mine and not merge:  # that player and the account's become one: ask first
+            return redirect(f"/welcome?t={t}&confirm={player_id}")
         try:
             kept = users.link_player(conn, user["id"], player_id, merge=bool(merge))
         except users.UserError as e:

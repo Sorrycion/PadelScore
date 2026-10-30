@@ -9,6 +9,8 @@ The app must be running on DB (e.g. a copy of padelscore.db; never the real one)
   admin   that organization's admin
   player  a player account (one called "demo" is created in DB if there is none)
   guest   a guest with the tournament password of {t}
+  invited the player account, also holding the tournament password of {t} (as after
+          joining with it from the home page: /welcome?t={t})
 `{t}` in a URL is that organization's newest tournament. Pages are written to
 OUTDIR/page0.html, page1.html..., with links to the server's stylesheet, for:
 
@@ -55,8 +57,10 @@ def main(dbfile, outdir, *args):
             cookie += f"; user={auth.user_cookie(admin)}"
         elif who == "player":
             cookie += f"; user={auth.user_cookie(player)}"
-        elif who == "guest":
+        elif who in ("guest", "invited"):
             cookie += f"; player_{t['id']}={auth.player_token(t)}"
+            if who == "invited":
+                cookie += f"; user={auth.user_cookie(player)}"
         req = urllib.request.Request(SERVER + url, headers={"Cookie": cookie})
         html = urllib.request.urlopen(req).read().decode()
         html = html.replace('="/static/', f'="{SERVER}/static/')

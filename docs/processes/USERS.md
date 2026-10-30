@@ -91,13 +91,27 @@ flowchart TD
     L["/ login: 🎾 Jugadores"] --> S["✨ Crear cuenta → /signup<br/>(no tournament)"]
     S --> H["/ home"]
     H -- "🎟️ Unirme a un torneo: its password" --> J["/join: player cookie + enters its organization"]
-    J --> W{"/welcome: who are you in it?"}
-    W -- "already my player here" --> A["🎟️ Unirte como {name}:<br/>added to the tournament's list"]
-    W -- "no player here yet" --> F["pick a free player (claims it)<br/>or ✨ Soy nuevo/a (new player = display name)"]
+    J --> W{"/welcome: ¿Quién eres en {torneo}?<br/>(one list)"}
+    W -- "one of the tournament's players" --> E{"my account has a<br/>player here already?"}
+    E -- no --> C["claims it: its sets and points are mine"]
+    E -- yes --> K["🧩 ¿{name} eres tú? → Sí, soy yo: unir<br/>(merge_players into mine)"]
+    W -- "🎟️ Unirte como {mine}" --> A["my player, added to the tournament's list"]
+    W -- "✨ Crear un jugador nuevo para mí" --> N["new player = display name,<br/>added to the list (no player here yet)"]
     W -- "already plays it" --> T["✅ just a link to the tournament"]
+    C --> H
+    K --> H
     A --> H
-    F --> H
+    N --> H
 ```
+
+- **One question, one list** (the user's request, 2026-10-30): when the account isn't in
+  the tournament, `/welcome` asks "¿Quién eres en {torneo}?". The list has the
+  tournament's players nobody has claimed (the admin may have put the person on it
+  already) and, under "O entrar como yo", either **Unirte como {my player}** or
+  **Crear un jugador nuevo para mí**.
+- **Picking someone on the list when the account already has a player in that
+  organization** would make them one, so it asks first (`/welcome?t=&confirm=<id>`:
+  "¿{name} eres tú?" → "Sí, soy yo: unir" or Cancelar).
 
 - A wrong password waits 1 second and shows the error on the home page's card.
 - **Guests still work:** under 🎾 Jugadores, "👻 Solo anotar resultados, sin cuenta"
