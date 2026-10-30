@@ -1537,7 +1537,7 @@ def test_an_existing_account_links_its_player(with_players):
     c.post("/login", data={"username": "bea@example.com", "password": "clave-larga",
                            "role": "account"})
     r = c.get("/welcome?t=1")
-    assert "Link your player" in r.text
+    assert "Who are you in Liga Amigos?" in r.text
     r = c.post("/welcome/link", data={"t": 1, "player_id": 2})
     assert str(r.url).endswith("/") and "Liga Amigos" in r.text
     with db.connect() as conn:
@@ -1588,8 +1588,8 @@ def test_an_account_joins_its_duplicate_player(with_players):
         assert conn.execute("SELECT COUNT(*) FROM tournament_players WHERE player_id = 1 "
                             "AND tournament_id = 1").fetchone()[0] == 1
     # Without asking to merge, a second player in the organization is refused.
-    r = c.post("/welcome/link", data={"t": 1, "player_id": 6})
-    assert "already has a player in this organization" in r.text
+    r = c.post("/welcome/link", data={"t": 1, "player_id": 6})  # asks before joining them
+    assert "/welcome?t=1&confirm=6" in str(r.url) and "Are you Fer?" in r.text
 
 
 def test_an_admin_joins_duplicate_players(client, league):
@@ -1716,8 +1716,10 @@ def test_an_account_joins_a_tournament_with_its_password(with_players):
     r = c.post("/join", data={"password": "nope"})
     assert "Wrong password" in r.text or "wrong" in r.text.lower()
     r = c.post("/join", data={"password": "jugamos"})
-    assert "/welcome?t=1" in str(r.url) and "I'm new (Zoe)" in r.text and "Ana" in r.text
+    assert "/welcome?t=1" in str(r.url) and "Create a new player for me (Zoe)" in r.text and "Ana" in r.text
     assert "Continue as a guest" not in r.text  # an account doesn't need it
+    # Without a player of its own, there's nothing to join a picked player with.
+    assert "Are you" not in c.get("/welcome?t=1&confirm=2").text
     r = c.post("/welcome/link", data={"t": 1, "player_id": "new"})
     assert str(r.url).endswith("/") and "Liga Amigos" in r.text and "🎾 Player" in r.text
     with db.connect() as conn:
@@ -1741,6 +1743,28 @@ def test_an_account_joins_a_new_tournament_as_its_player(with_players):
     r = c.post("/welcome/link", data={"t": 2, "player_id": "1"})
     assert str(r.url).endswith("/") and "Copa" in r.text
     with db.connect() as conn:
+        assert conn.execute("SELECT 1 FROM tournament_players WHERE tournament_id = 2 "
+                            "AND player_id = 1").fetchone()
+
+
+def test_joining_a_tournament_picks_an_existing_player_or_me(with_players):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # the account is Ana (1), in tournament 1
+    with db.connect() as conn:  # Copa: the admin already listed "Elena" (5), who is Ana
+        conn.execute("INSERT INTO tournaments (organization_id, name, held_on, rule_type_id, "
+                     "player_password) VALUES (1, 'Copa', '2026-11-01', 1, 'copa-clave')")
+        conn.execute("INSERT INTO tournament_players (tournament_id, player_id) VALUES (2, 5)")
+    r = c.post("/join", data={"password": "copa-clave"})
+    assert "Who are you in Copa?" in r.text
+    form = r.text.split("Who are you in Copa?")[1].split("</form>")[0]
+    assert "Elena" in form and "Join as Ana L" in form  # an existing player, or me
+    r = c.post("/welcome/link", data={"t": 2, "player_id": "5"})
+    assert "Are you Elena?" in r.text and "Yes, it's me" in r.text
+    r = c.post("/welcome/link", data={"t": 2, "player_id": "5", "merge": "1"})
+    assert str(r.url).endswith("/") and "Copa" in r.text
+    with db.connect() as conn:
+        assert conn.execute("SELECT 1 FROM players WHERE id = 5").fetchone() is None
         assert conn.execute("SELECT 1 FROM tournament_players WHERE tournament_id = 2 "
                             "AND player_id = 1").fetchone()
 

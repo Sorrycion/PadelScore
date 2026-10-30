@@ -3,46 +3,33 @@
 {% block content %}
 <p class="eyebrow">{{ tournament.name }}</p>
 <h1>{{ _("welcome_title") }}</h1>
-<p class="muted">{{ _("welcome_hint") }}</p>
+{% if not user %}<p class="muted">{{ _("welcome_hint") }}</p>{% endif %}
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 
 <div class="login-sections">
-  {% if user and mine and playing %}
+  {% if user and mine and confirm %}
+  {# Picking a player of the tournament when the account already has one here: they
+     become one, so ask first. #}
+  <section class="card login-section">
+    <h2>🧩 {{ _("confirm_merge_title", name=confirm.name) }}</h2>
+    <p class="muted">{{ _("confirm_merge_hint", name=confirm.name, mine=mine.name) }}</p>
+    <form method="post" action="/welcome/link" class="stack">
+      <input type="hidden" name="t" value="{{ tournament.id }}">
+      <input type="hidden" name="player_id" value="{{ confirm.id }}">
+      <input type="hidden" name="merge" value="1">
+      <button type="submit">🧩 {{ _("confirm_merge_yes") }}</button>
+    </form>
+    <a class="button secondary" href="/welcome?t={{ tournament.id }}">{{ _("cancel") }}</a>
+  </section>
+  {% elif user and playing %}
   <section class="card login-section">
     <h2>✅ {{ _("already_playing", name=mine.name) }}</h2>
     <a class="button" href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a>
   </section>
-  {% elif user and mine %}
-  <section class="card login-section">
-    <h2>🎟️ {{ _("join_as", name=mine.name) }}</h2>
-    <p class="muted">{{ _("join_as_hint", name=mine.name) }}</p>
-    <form method="post" action="/welcome/link" class="stack">
-      <input type="hidden" name="t" value="{{ tournament.id }}">
-      <input type="hidden" name="player_id" value="{{ mine.id }}">
-      <button type="submit">🎟️ {{ _("join_tournament") }}</button>
-    </form>
-  </section>
-  {% endif %}
-  {% if user and not mine %}
-  <section class="card login-section">
-    <h2>🔗 {{ _("welcome_link") }}</h2>
-    <p class="muted">{{ _("welcome_link_hint", name=user.display_name or user.username) }}</p>
-    <form method="post" action="/welcome/link" class="stack">
-      <input type="hidden" name="t" value="{{ tournament.id }}">
-      <label>{{ _("who_are_you") }}
-        <select name="player_id" required>
-          {% for p in free %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
-          <option value="new">✨ {{ _("i_am_new") }} ({{ user.display_name or user.username }})</option>
-        </select>
-      </label>
-      <button type="submit">{{ _("link_player") }}</button>
-    </form>
-  </section>
-  {% elif user and mine and free %}
+  {% if free %}
   <section class="card login-section">
     <h2>🧩 {{ _("merge_title") }}</h2>
     <p class="muted">{{ _("merge_hint", name=mine.name) }}</p>
-    {% if free %}
     <form method="post" action="/welcome/link" class="stack">
       <input type="hidden" name="t" value="{{ tournament.id }}">
       <input type="hidden" name="merge" value="1">
@@ -54,7 +41,30 @@
       <label class="check"><input type="checkbox" required> {{ _("merge_confirm", name=mine.name) }}</label>
       <button type="submit">{{ _("merge_player") }}</button>
     </form>
-    {% else %}<p class="empty">{{ _("no_free_players") }}</p>{% endif %}
+  </section>
+  {% endif %}
+  {% elif user %}
+  {# The account isn't in this tournament yet: it's one of its players (already put on
+     the list by the admin), or it joins as itself (its player here, or a new one). #}
+  <section class="card login-section">
+    <h2>🔗 {{ _("who_in_tournament", name=tournament.name) }}</h2>
+    <p class="muted">{{ _("pick_player_hint") }}</p>
+    <form method="post" action="/welcome/link" class="stack">
+      <input type="hidden" name="t" value="{{ tournament.id }}">
+      <label>{{ _("who_are_you") }}
+        <select name="player_id" required>
+          {% if not mine %}<option value="" disabled selected>{{ _("choose") }}</option>{% endif %}
+          {% if free %}<optgroup label="{{ _('existing_players') }}">
+            {% for p in free %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+          </optgroup>{% endif %}
+          <optgroup label="{{ _('or_join_as_me') }}">
+          {% if mine %}<option value="{{ mine.id }}" selected>🎟️ {{ _("join_as", name=mine.name) }}</option>
+          {% else %}<option value="new">✨ {{ _("create_new_for_me", name=user.display_name or user.username) }}</option>{% endif %}
+          </optgroup>
+        </select>
+      </label>
+      <button type="submit">🎟️ {{ _("join_tournament") }}</button>
+    </form>
   </section>
   {% elif not user %}
   <section class="card login-section">

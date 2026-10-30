@@ -40,6 +40,9 @@ Notes:
   - `admin`: its admin;
   - `player`: a player account; the script creates `demo` in the copy if needed;
   - `guest`: someone who logged in with the newest tournament's password.
+  - `invited`: the player account that also holds that password, as after joining
+    from the home page (for `/welcome?t={t}` as an account). To see the "pick who you
+    are" list, first add a new tournament with a password and a list to the copy.
 - **The copy migrates when the server starts.** That's also a quick check that new
   `sql/predeployment` files work on real data.
 - **For `/enter`, `/login` and `/rules`,** which need no cookies, you can use an iframe
