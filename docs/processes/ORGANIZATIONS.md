@@ -4,11 +4,14 @@ An organization is a club or group of friends. Everything belongs to one: player
 tournaments, and through them jornadas, sets and absences. Nobody sees anything until
 they have entered an organization.
 
-- **Fields:** name (unique, case-insensitive), admin user (unique across organizations),
-  admin password, and a random `secret` that signs its cookies.
-- **Admin password:** stored twice. A PBKDF2 hash is used for logging in. A readable
-  copy (`admin_password_plain`) is shown to super admins on `/orgs`. Passwords saved
-  before that copy existed show "unknown" until someone changes them.
+- **Fields:** name (unique, case-insensitive) and a random `secret` that signs the
+  `org` cookie.
+- **Its admin** is an account (a `users` row with role `org_admin` and the organization;
+  see [USERS.md](USERS.md)). The username is unique among all accounts. The admin's
+  password is a PBKDF2 hash plus a readable copy (`password_plain`) that super admins
+  see on `/orgs`. Passwords saved before that copy existed show "unknown" until someone
+  changes them. The old `organizations.admin_*` columns are deprecated, but kept in sync
+  so the previous app version still works.
 - **Player names** are unique per organization, ignoring case, accents and spacing.
   Two organizations may each have a "Julio".
 - **Adoption:** the first organization ever created adopts every player and tournament

@@ -14,7 +14,7 @@ flowchart LR
     F --> G["Back up live DB<br/>/home/data/padelscore-backup-DATE-gh.db"]
     G --> P["Pre-deployment SQL:<br/>pending files of sql/predeployment"]
     P --> H[Zip deploy via Kudu + restart]
-    H --> I["Check /enter answers 200"]
+    H --> I["Wait until /health reports this commit"]
 ```
 
 - **Azure login:** the service principal `padelscore-github` logs in through OpenID
@@ -22,6 +22,10 @@ flowchart LR
   only. GitHub sends the subject
   `repo:Sorrycion@28118944/PadelScore@1432403444:environment:production`, which must
   match the federated credential `github-production-ids`.
+- **Knowing the new version is live:** the pipeline writes the commit to `app/VERSION`
+  inside the zip, and `/health` returns it, with the applied SQL files. After the
+  restart the old instance keeps answering for a little while, so the last step waits
+  until `/health` shows the new commit.
 - **Repository secrets:** `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
 - **The live database** is SQLite in `/home/data/padelscore.db`.
 - **Pre-deployment SQL:** the pipeline uploads `app/db.py`, `app/migrate.py` and

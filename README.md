@@ -141,17 +141,25 @@ pytest
 
 ```
 app/
-  main.py        # web routes
-  auth.py        # logins and signed cookies
-  orgs.py        # organizations, super admins, password hashing (also a CLI)
-  db.py          # SQLite connection, schema and migrations
+  main.py        # web routes and queries
+  auth.py        # cookies, roles, who may score
+  users.py       # accounts and password hashing (standard library only)
+  orgs.py        # organizations (also a CLI, standard library only)
+  db.py          # SQLite connection, starting schema, older migrations
+  migrate.py     # runs sql/predeployment files once each
   scoring.py     # set validation, matchday placings, standings, court moves
   rounds.py      # Americano / Mexicano round draws
+  stats.py       # player statistics
+  medals.py      # who has which medal
+  charts.py      # inline SVG charts
   i18n.py        # UI texts in Spanish and English
   templates/     # HTML pages
-  static/        # CSS
-docs/            # league rules (REGLAMENTO.md), processes/ (how each part works)
-.claude/skills/  # Claude Code skills: deploy, live admin, phone screenshots
-.github/         # CI: test and deploy on every push to main
+  static/        # CSS, picker.js, medals/*.svg
+sql/predeployment/  # numbered database changes, run before each deploy
+scripts/         # make_medals.py (medal images), render_pages.py (screenshots)
+docs/            # league rules (REGLAMENTO.md), processes/ (how each part works, diagrams)
+CLAUDE.md        # context Claude Code loads in every session
+.claude/skills/  # Claude Code skills: feature, db-change, deploy, live admin, screenshot, medal
+.github/         # CI: tests on PRs; on main: test, backup, SQL, deploy, version check
 tests/           # pytest tests
 ```

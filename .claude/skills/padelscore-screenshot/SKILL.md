@@ -1,38 +1,48 @@
 ---
 name: padelscore-screenshot
-description: See a PadelScore page as a phone shows it (402 px wide, the width of an iPhone 18 Pro), in light or dark mode, by running the app locally and taking a headless Chrome screenshot. Use after UI or CSS changes, or when the user sends a phone screenshot of a problem.
+description: See PadelScore pages as a phone shows them, in light and dark mode and as any visitor (admin, player account, guest, anonymous). It runs the app on a copy of the database and takes headless Chrome screenshots. Use it after UI or CSS changes, or when the user sends a phone screenshot of a problem.
 ---
 
-# Phone screenshots of PadelScore
+# Phone screenshots
 
-1. **Run a local server on a throwaway copy of the database.** Never use
-   `padelscore.db` for this. Before starting, stop anything already on the port, because
-   an old server keeps serving stale code:
-   ```powershell
-   Get-NetTCPConnection -LocalPort 8765 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }
-   $env:PADELSCORE_DB = "<scratchpad>\view.db"   # a copy: Copy-Item padelscore.db <scratchpad>\view.db
-   Start-Process .venv\Scripts\python.exe -ArgumentList "-m","uvicorn","app.main:app","--port","8765" -WindowStyle Hidden
-   ```
-2. **Pages that need an organization** (almost all of them) redirect to `/enter`
-   without the `org` cookie. Fetch the HTML with that cookie and point it at the
-   server's static files:
-   ```python
-   # run with PYTHONPATH=<project>
-   import sqlite3, urllib.request
-   from app import auth
-   c = sqlite3.connect(DB); c.row_factory = sqlite3.Row
-   org = c.execute("SELECT * FROM organizations ORDER BY id LIMIT 1").fetchone()
-   req = urllib.request.Request(URL, headers={"Cookie": f"org={auth.org_cookie(org)}; lang=es"})
-   html = urllib.request.urlopen(req).read().decode().replace('="/static/', '="http://127.0.0.1:8765/static/')
-   ```
-   Pages open without an organization (`/enter`, `/login`, `/rules`) can go through an
-   iframe page at 402 px instead.
-3. **Screenshot** with a fresh profile each time, so no cookies or cache carry over:
-   ```powershell
-   & $chrome --headless=new --disable-gpu "--user-data-dir=<scratchpad>\chrome-<guid>" --window-size=402,1700 "--screenshot=<scratchpad>\shot.png" "file:///<page>.html"
-   ```
-   For dark mode, add `--force-dark-mode --blink-settings=preferredColorScheme=0`.
-4. **Look at the PNG** with the Read tool, then stop the server.
+Run this from **PowerShell**: Git Bash turns arguments like `/me` into Windows paths.
+`$S` is the scratchpad.
 
-`style.css?v=` is a hash of the static files, so phones get new CSS by themselves. No
-version needs bumping by hand.
+```powershell
+# 1. A copy of the database (never padelscore.db itself), and a fresh server: an old one
+#    keeps serving stale code.
+Copy-Item padelscore.db "$S\view.db" -Force
+Get-NetTCPConnection -LocalPort 8765 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }
+$env:PADELSCORE_DB = "$S\view.db"
+Start-Process .venv\Scripts\python.exe -ArgumentList "-m","uvicorn","app.main:app","--port","8765" -WindowStyle Hidden
+Start-Sleep 5
+
+# 2. Save the pages as a given visitor. {t} = the newest tournament.
+& .venv\Scripts\python.exe -X utf8 scripts\render_pages.py "$S\view.db" $S `
+    "as=admin" "/users" "as=player" "/me" "as=guest" "/welcome?t={t}" "as=none" "/tournaments/{t}"
+
+# 3. Screenshot each page with a fresh Chrome profile. Headless Chrome won't render
+#    narrower than about 500 px; narrower windows just crop the right side.
+$chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+foreach ($i in 0..3) { foreach ($mode in "light","dark") {
+  $extra = @(); if ($mode -eq "dark") { $extra = "--force-dark-mode","--blink-settings=preferredColorScheme=0" }
+  & $chrome --headless=new --disable-gpu "--user-data-dir=$S\chrome-$([guid]::NewGuid())" --window-size=500,1600 @extra "--screenshot=$S\page$i-$mode.png" "file:///$($S -replace '\\','/')/page$i.html"
+} }
+```
+
+4. Look at the PNGs with the Read tool, fix what's off, and stop the server when you're
+   done.
+
+Notes:
+
+- **Visitors (`as=`):**
+  - `none`: a visitor who entered the first organization;
+  - `admin`: its admin;
+  - `player`: a player account; the script creates `demo` in the copy if needed;
+  - `guest`: someone who logged in with the newest tournament's password.
+- **The copy migrates when the server starts.** That's also a quick check that new
+  `sql/predeployment` files work on real data.
+- **For `/enter`, `/login` and `/rules`,** which need no cookies, you can use an iframe
+  page at 402 px.
+- **New CSS reaches phones by itself:** `style.css?v=` is a hash of every file under
+  `app/static`.

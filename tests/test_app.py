@@ -1663,3 +1663,10 @@ def test_tournament_page_shows_only_its_own_medals(league):
     assert 'alt="Baker"' in league.get("/?tournament=1").text  # the home standings too
     two = league.get("/tournaments/2").text
     assert "Baker" not in two and "Ate a bagel" not in two
+
+
+def test_health_reports_the_version_and_migrations(client):
+    client.cookies.delete("org")  # works before entering an organization
+    r = client.get("/health")
+    assert r.status_code == 200 and r.json()["version"] == "dev"
+    assert {"0001_users", "0002_medals"} <= set(r.json()["migrations"])

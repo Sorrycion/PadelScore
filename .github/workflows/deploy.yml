@@ -94,6 +94,8 @@ jobs:
       - name: Deploy
         run: |
           git archive --format=zip -o deploy.zip HEAD
+          echo "$GITHUB_SHA" > app/VERSION  # served at /health, to know when it's live
+          zip -q deploy.zip app/VERSION
           token=$(az account get-access-token --resource https://management.azure.com/ --query accessToken -o tsv)
           echo "::add-mask::$token"
           curl -sf --max-time 900 -X POST -H "Authorization: Bearer $token" \
@@ -101,12 +103,14 @@ jobs:
           # Without a restart the old version keeps running.
           az webapp restart -g "$RESOURCE_GROUP" -n "$APP_NAME" -o none
 
-      - name: Check the site answers
+      # The old instance keeps answering for a while after the restart: wait until
+      # /health reports this commit.
+      - name: Check the new version is live
         run: |
-          for i in $(seq 1 20); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$SITE/enter" || true)
-            echo "try $i: $code"
-            [ "$code" = 200 ] && exit 0
+          for i in $(seq 1 30); do
+            live=$(curl -s --max-time 60 "$SITE/health" | jq -r .version 2>/dev/null || true)
+            echo "try $i: live version ${live:-none}"
+            [ "$live" = "$GITHUB_SHA" ] && curl -s "$SITE/health" && exit 0
             sleep 15
           done
           exit 1

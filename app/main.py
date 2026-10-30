@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import auth, charts, db, medals, orgs, rounds, stats, users
+from . import auth, charts, db, medals, migrate, orgs, rounds, stats, users
 from .auth import LoginRequired, require_editor, require_super
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
 from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
@@ -37,7 +37,10 @@ app = FastAPI(title="PadelScore", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 # Pages that work before entering an organization.
-OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me")
+OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me",
+              "/health")
+# The commit being served: the deploy pipeline writes it to app/VERSION ("dev" locally).
+VERSION = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "dev"
 
 
 class OrganizationGate:
@@ -832,6 +835,13 @@ def unlink_user_player(request: Request, user_id: int):
         if player:
             users.unlink_player(conn, player["id"])
     return user_action(request, user_id, change)
+
+
+@app.get("/health")
+def health():
+    """For the deploy pipeline: which commit is live, and the database changes applied."""
+    with db.connect() as conn:
+        return {"version": VERSION, "migrations": sorted(migrate.applied(conn))}
 
 
 @app.get("/rules", response_class=HTMLResponse)
