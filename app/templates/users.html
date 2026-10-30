@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ _("nav_users") }} · PadelScore{% endblock %}
+{% block content %}
+<h1>🔑 {{ _("nav_users") }}</h1>
+<p class="muted">{{ _("users_hint") }}</p>
+{% if accounts %}
+<ul class="cards">
+  {% for u in accounts %}
+  <li class="card org-card">
+    <div class="name"><a class="plain" href="/users/{{ u.id }}">{{ u.display_name or u.username }}</a>
+      <span class="tag">{{ _(ROLE_KEYS[u.role]) }}</span></div>
+    <dl class="creds">
+      <dt>{{ _("username") }}</dt><dd><code>{{ u.username }}</code></dd>
+      {% if u.email %}<dt>{{ _("email") }}</dt><dd>{{ u.email }}</dd>{% endif %}
+      {% if u.first_name or u.last_name %}<dt>{{ _("full_name") }}</dt><dd>{{ u.first_name or "" }} {{ u.last_name or "" }}</dd>{% endif %}
+      {% if u.player %}<dt>{{ _("player") }}</dt><dd><a class="plain" href="/players/{{ u.player.id }}">{{ u.player.name }}</a></dd>{% endif %}
+    </dl>
+    <div><a class="button secondary" href="/users/{{ u.id }}">{{ _("edit") }}</a></div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty">{{ _("no_users") }}</p>
+{% endif %}
+{% endblock %}

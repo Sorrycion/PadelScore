@@ -66,6 +66,31 @@ jobs:
           test "$(echo "$result" | jq .ExitCode)" = 0
           echo "Backed up to $backup"
 
+      # The SQL files of sql/predeployment that haven't run on the live database yet
+      # (app/migrate.py, standard library only) run before the new code goes live.
+      # The changes are additive, so the version still running keeps working.
+      - name: Run pre-deployment SQL on the live database
+        run: |
+          token=$(az account get-access-token --resource https://management.azure.com/ --query accessToken -o tsv)
+          echo "::add-mask::$token"
+          dir="padelscore-predeploy-${{ github.run_id }}"
+          cleanup() { curl -s -o /dev/null -X DELETE -H "Authorization: Bearer $token" -H "If-Match: *" \
+                        "$KUDU/api/vfs/$dir/?recursive=true" || true; }
+          trap cleanup EXIT
+          for f in app/__init__.py app/db.py app/migrate.py sql/predeployment/*.sql; do
+            curl -sf -X PUT -H "Authorization: Bearer $token" -H "If-Match: *" \
+              --data-binary @"$f" "$KUDU/api/vfs/$dir/$f" > /dev/null
+          done
+          kudu() {  # run one command (no shell) in the uploaded folder; fail on a non-zero exit
+            result=$(curl -sf --max-time 300 -X POST -H "Authorization: Bearer $token" \
+              -H "Content-Type: application/json" "$KUDU/api/command" \
+              -d "$(jq -n --arg c "$1" --arg d "/home/$dir" '{command: $c, dir: $d}')")
+            echo "$result" | jq -r '.Output, .Error'
+            test "$(echo "$result" | jq .ExitCode)" = 0
+          }
+          kudu "env PADELSCORE_DB=/home/data/padelscore.db python3 -m app.migrate --status"
+          kudu "env PADELSCORE_DB=/home/data/padelscore.db python3 -m app.migrate"
+
       - name: Deploy
         run: |
           git archive --format=zip -o deploy.zip HEAD

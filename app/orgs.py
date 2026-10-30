@@ -1,57 +1,40 @@
-"""Organizations and super admins: create them and change their passwords.
+"""Organizations: create them, with their admin account (users.py).
 
 Everything (players, tournaments and what hangs from them) belongs to an organization.
-Its admin logs in with the organization's admin user and password. The password is
-checked against a salted PBKDF2 hash, and also kept as typed so super admins can see it
-on /orgs. `secret` signs the organization's cookies (auth.py).
+Its admin is a users row with role org_admin. `secret` signs the cookie of browsers
+that entered the organization (auth.py).
 
 This module only needs the standard library, so it also runs where the app's
 dependencies aren't installed (e.g. Azure's Kudu console):
 
     python -m app.orgs create "Name" "admin user" "admin password"
-    python -m app.orgs password "admin user" "new password"
-    python -m app.orgs superadmin "user" "password"   (creates one, or changes its password)
+    python -m app.orgs password "user" "new password"     (any account)
+    python -m app.orgs superadmin "user" "password"       (creates one, or changes its password)
 
 The first organization created adopts every player and tournament that has none
 (those from before organizations existed).
 """
-import hashlib
-import hmac
 import secrets
 import sys
 
-from . import db
-
-ITERATIONS = 200_000
-
-
-def hash_password(password):
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), ITERATIONS)
-    return f"pbkdf2_sha256${ITERATIONS}${salt}${digest.hex()}"
-
-
-def check_password(password, stored):
-    try:
-        _, iterations, salt, digest = stored.split("$")
-        given = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt),
-                                    int(iterations))
-    except (ValueError, AttributeError):
-        return False
-    return hmac.compare_digest(given.hex(), digest)
+from . import db, users
+from .users import check_password, hash_password  # noqa: F401 (used by older callers)
 
 
 def create_org(conn, name, admin_user, password):
-    """Add an organization and return its id. The first one adopts the players and
-    tournaments that have no organization yet."""
+    """Add an organization with its admin account and return its id. The first one
+    adopts the players and tournaments that have no organization yet."""
     name, admin_user = " ".join(name.split()), admin_user.strip()
     if not name or not admin_user or not password:
         raise ValueError("Name, admin user and password are required.")
+    users.check_fields(conn, users.clean({"username": admin_user}))
     first = conn.execute("SELECT COUNT(*) FROM organizations").fetchone()[0] == 0
     org_id = conn.execute(
         "INSERT INTO organizations (name, admin_user, admin_password, admin_password_plain, "
         "secret) VALUES (?, ?, ?, ?, ?)",
         (name, admin_user, hash_password(password), password, secrets.token_hex(32))).lastrowid
+    user_id = users.create_user(conn, "org_admin", admin_user, password, organization_id=org_id)
+    users.sync_org(conn, user_id)
     if first:
         for table in ("players", "tournaments"):
             conn.execute(f"UPDATE {table} SET organization_id = ? WHERE organization_id IS NULL",
@@ -59,41 +42,32 @@ def create_org(conn, name, admin_user, password):
     return org_id
 
 
-def set_password(conn, admin_user, password):
-    """Change an organization's admin password (its admins must log in again)."""
-    if not password:
-        raise ValueError("The password can't be empty.")
-    changed = conn.execute("UPDATE organizations SET admin_password = ?, admin_password_plain = ? "
-                           "WHERE admin_user = ?",
-                           (hash_password(password), password, admin_user.strip())).rowcount
-    if not changed:
-        raise ValueError(f"No organization has the admin user {admin_user!r}.")
+def set_password(conn, username, password):
+    """Change an account's password (it must log in again)."""
+    user = users.find_login(conn, username)
+    if user is None:
+        raise ValueError(f"No account has the user {username!r}.")
+    users.set_password(conn, user["id"], password)
 
 
 def update_admin(conn, org_id, admin_user, password=""):
     """Change an organization's admin user, and its password unless `password` is empty.
-    Raises ValueError if the user is empty or another organization has it."""
-    admin_user = admin_user.strip()
-    if not admin_user:
-        raise ValueError("The admin user can't be empty.")
-    if conn.execute("SELECT 1 FROM organizations WHERE admin_user = ? AND id != ?",
-                    (admin_user, org_id)).fetchone():
-        raise ValueError(f"Another organization has the admin user {admin_user!r}.")
-    conn.execute("UPDATE organizations SET admin_user = ? WHERE id = ?", (admin_user, org_id))
+    Raises ValueError (users.UserError) if the user is empty or taken."""
+    admin = users.org_admin(conn, org_id)
+    users.update_user(conn, admin["id"], username=admin_user)
     if password:
-        set_password(conn, admin_user, password)
+        users.set_password(conn, admin["id"], password)
 
 
 def set_superadmin(conn, username, password):
     """Add a super admin, or change the password of an existing one."""
-    username = username.strip()
-    if not username or not password:
-        raise ValueError("User and password are required.")
-    if conn.execute("UPDATE superadmins SET password = ? WHERE username = ?",
-                    (hash_password(password), username)).rowcount:
-        return
-    conn.execute("INSERT INTO superadmins (username, password, secret) VALUES (?, ?, ?)",
-                 (username, hash_password(password), secrets.token_hex(32)))
+    user = users.find_login(conn, username)
+    if user is None:
+        users.create_user(conn, "super", username, password)
+    elif user["role"] != "super":
+        raise ValueError(f"{username!r} is an account that isn't a super admin.")
+    else:
+        users.set_password(conn, user["id"], password)
 
 
 def main(args):

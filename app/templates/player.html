@@ -45,6 +45,7 @@
 {% endif %}
 
 {% if editor %}
+<p class="muted">{% if account %}🔑 {{ _("account") }}: <a href="/users/{{ account.id }}">{{ account.username }}</a>{% else %}{{ _("guest_player") }}{% endif %}</p>
 <form method="post" action="/players/{{ player.id }}" class="inline danger-zone">
   <input name="name" value="{{ player.name }}" aria-label="{{ _('player_name') }}" required>
   <button type="submit">{{ _("rename") }}</button>

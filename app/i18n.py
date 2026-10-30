@@ -343,14 +343,12 @@ TEXT = {
     "login_player_hint": {"es": "Escribe la contraseña de jugadores de tu torneo para "
                                 "registrar sus resultados.",
                           "en": "Type your tournament's player password to enter its results."},
-    "login_admin": {"es": "🏢 Administrador de la organización", "en": "🏢 Organization admin"},
-    "login_admin_hint": {"es": "El usuario y la contraseña de tu organización: puedes cambiar "
-                               "todo en ella.",
-                         "en": "Your organization's user and password: you can change everything "
-                               "in it."},
-    "login_super": {"es": "⭐ Super administrador", "en": "⭐ Super admin"},
-    "login_super_hint": {"es": "Crea organizaciones y administra todas.",
-                         "en": "Creates organizations and manages all of them."},
+    "login_account": {"es": "👤 Mi cuenta", "en": "👤 My account"},
+    "login_account_hint": {"es": "Tu usuario o email y tu contraseña: administradores y "
+                                 "jugadores con cuenta.",
+                           "en": "Your username or email and your password: admins and "
+                                 "players with an account."},
+    "username_or_email": {"es": "👤 Usuario o email", "en": "👤 Username or email"},
 
     # Organizations
     "enter_title": {"es": "🏢 Entrar a una organización", "en": "🏢 Enter an organization"},
@@ -382,6 +380,52 @@ TEXT = {
     "keep_password": {"es": "Vacío = no cambiarla", "en": "Empty = keep it"},
     "password_unknown": {"es": "No se conoce (se guardó antes); cámbiala para verla.",
                          "en": "Unknown (saved earlier); change it to see it."},
+    # Accounts
+    "account": {"es": "Cuenta", "en": "Account"},
+    "guest_player": {"es": "👻 Jugador invitado: no tiene cuenta.",
+                     "en": "👻 Guest player: no account."},
+    "nav_users": {"es": "Cuentas", "en": "Accounts"},
+    "users_hint": {"es": "Las cuentas de los administradores y de los jugadores de la "
+                         "organización. Puedes cambiar sus datos y su contraseña cuando quieras.",
+                   "en": "The accounts of the organization's admins and players. You can change "
+                         "their details and password any time."},
+    "no_users": {"es": "Todavía no hay cuentas.", "en": "No accounts yet."},
+    "role": {"es": "Rol", "en": "Role"},
+    "role_super": {"es": "⭐ Super administrador", "en": "⭐ Super admin"},
+    "role_org_admin": {"es": "🏢 Administrador", "en": "🏢 Admin"},
+    "role_player": {"es": "🎾 Jugador", "en": "🎾 Player"},
+    "role_hint": {"es": "Un administrador necesita su organización.",
+                  "en": "An admin needs their organization."},
+    "account_details": {"es": "Datos de la cuenta", "en": "Account details"},
+    "email": {"es": "📧 Email", "en": "📧 Email"},
+    "first_name": {"es": "Nombre", "en": "First name"},
+    "last_name": {"es": "Apellido", "en": "Last name"},
+    "display_name": {"es": "Nombre para mostrar", "en": "Display name"},
+    "full_name": {"es": "Nombre", "en": "Name"},
+    "reset_password_hint": {"es": "La cuenta tendrá que volver a entrar con la nueva contraseña.",
+                            "en": "The account will have to log in again with the new password."},
+    "link_player": {"es": "🔗 Vincular jugador", "en": "🔗 Link player"},
+    "unlink_player": {"es": "Desvincular jugador", "en": "Unlink player"},
+    "link_player_hint": {"es": "El jugador de esta organización que es esta cuenta: sus sets "
+                               "y torneos aparecen en su perfil.",
+                         "en": "This account's player in this organization: their sets and "
+                               "tournaments show on the profile."},
+    "err_username_invalid": {"es": "Escribe un usuario sin espacios ni «@».",
+                             "en": "Type a username without spaces or \"@\"."},
+    "err_username_taken": {"es": "Ese usuario ya existe.", "en": "That username is taken."},
+    "err_email_invalid": {"es": "Ese email no es válido.", "en": "That email isn't valid."},
+    "err_email_taken": {"es": "Ya hay una cuenta con ese email.",
+                        "en": "There's already an account with that email."},
+    "err_email_required": {"es": "Los jugadores necesitan un email.",
+                           "en": "Players need an email."},
+    "err_password_required": {"es": "Escribe una contraseña.", "en": "Type a password."},
+    "err_role": {"es": "Ese rol no es válido (un administrador necesita su organización).",
+                 "en": "That role isn't valid (an admin needs their organization)."},
+    "err_own_role": {"es": "No puedes cambiar tu propio rol.", "en": "You can't change your own role."},
+    "err_player_claimed": {"es": "Ese jugador ya tiene una cuenta.",
+                           "en": "That player already has an account."},
+    "err_already_linked": {"es": "Esta cuenta ya tiene un jugador en esta organización.",
+                           "en": "This account already has a player in this organization."},
     "no_orgs": {"es": "Todavía no hay organizaciones.", "en": "No organizations yet."},
     "err_org_fields": {"es": "Escribe el nombre, el usuario y la contraseña.",
                        "en": "Type the name, the user and the password."},

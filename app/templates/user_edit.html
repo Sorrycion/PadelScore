@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ account.display_name or account.username }} · PadelScore{% endblock %}
+{% block content %}
+<p class="eyebrow"><a class="plain" href="/users">🔑 {{ _("nav_users") }}</a></p>
+<h1>{{ account.display_name or account.username }} <span class="tag">{{ _(ROLE_KEYS[account.role]) }}</span></h1>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+
+<h2>{{ _("account_details") }}</h2>
+<form method="post" action="/users/{{ account.id }}" class="stack card">
+  <label>{{ _("username") }} <input name="username" value="{{ account.username }}" autocomplete="off" autocapitalize="off" required></label>
+  <label>{{ _("email") }} <input type="email" name="email" value="{{ account.email or '' }}" autocomplete="off" {% if account.role == "player" %}required{% endif %}></label>
+  <label>{{ _("first_name") }} <input name="first_name" value="{{ account.first_name or '' }}" autocomplete="off"></label>
+  <label>{{ _("last_name") }} <input name="last_name" value="{{ account.last_name or '' }}" autocomplete="off"></label>
+  <label>{{ _("display_name") }} <input name="display_name" value="{{ account.display_name or '' }}" autocomplete="off"></label>
+  <button type="submit">{{ _("save") }}</button>
+</form>
+
+<h2>{{ _("password") }}</h2>
+{% if account.role == "org_admin" and superadmin and account.password_plain %}
+<p class="password-box">{{ _("current_password") }}: <code>{{ account.password_plain }}</code></p>
+{% endif %}
+<form method="post" action="/users/{{ account.id }}/password" class="inline">
+  <input name="password" autocomplete="off" autocapitalize="off" placeholder="{{ _('new_password') }}" aria-label="{{ _('new_password') }}" required>
+  <button type="submit">{{ _("save") }}</button>
+</form>
+<p class="muted">{{ _("reset_password_hint") }}</p>
+
+<h2>{{ _("player") }}</h2>
+{% if player %}
+<p><a class="plain" href="/players/{{ player.id }}">🎾 {{ player.name }}</a></p>
+<form method="post" action="/users/{{ account.id }}/unlink" class="inline">
+  <button type="submit" class="secondary">{{ _("unlink_player") }}</button>
+</form>
+{% elif free_players %}
+<form method="post" action="/users/{{ account.id }}/link" class="inline">
+  <select name="player_id" aria-label="{{ _('player') }}">
+    {% for p in free_players %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+  </select>
+  <button type="submit">{{ _("link_player") }}</button>
+</form>
+{% endif %}
+<p class="muted">{{ _("link_player_hint") }}</p>
+
+{% if superadmin %}
+<h2>{{ _("role") }}</h2>
+<form method="post" action="/users/{{ account.id }}/role" class="inline">
+  <select name="role" aria-label="{{ _('role') }}">
+    {% for r in ("player", "org_admin", "super") %}<option value="{{ r }}" {% if account.role == r %}selected{% endif %}>{{ _(ROLE_KEYS[r]) }}</option>{% endfor %}
+  </select>
+  <select name="organization_id" aria-label="{{ _('org_name') }}">
+    <option value="">—</option>
+    {% for o in organizations %}<option value="{{ o.id }}" {% if account.organization_id == o.id %}selected{% endif %}>{{ o.name }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="secondary">{{ _("save") }}</button>
+</form>
+<p class="muted">{{ _("role_hint") }}</p>
+{% endif %}
+{% endblock %}

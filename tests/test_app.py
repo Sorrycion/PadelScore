@@ -4,12 +4,14 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app import db, orgs
+from app import db, orgs, users
 from app.i18n import LANGS, TEXT
 from app.main import app
 from app.scoring import (ScoreError, check_set, court_moves, court_rotation, court_table,
                          next_courts, tournament_results)
 
+# The schema before sql/predeployment/0001_users.sql: db.SCHEMA is the starting point.
+BEFORE_ACCOUNTS = db.SCHEMA
 NAMES = ["Ana", "Bea", "Carlos", "Diego", "Elena", "Fer", "Gabi", "Hugo"]
 APP_DIR = Path(__file__).parent.parent / "app"
 
@@ -335,7 +337,7 @@ def test_new_set_form_selects_the_latest_matchday(league):
 @pytest.fixture
 def locked(league):
     """The league, seen by a browser that entered the organization but isn't logged in."""
-    league.cookies.delete("editor")
+    league.cookies.delete("user")
     return league
 
 
@@ -631,7 +633,7 @@ def test_delete_player_only_without_sets(league):
 def test_old_database_is_upgraded_for_pending_sets(tmp_path, monkeypatch):
     import sqlite3
     path = tmp_path / "old.db"
-    old = (db.SCHEMA.replace("team_a_games INTEGER,", "team_a_games INTEGER NOT NULL,")
+    old = (BEFORE_ACCOUNTS.replace("team_a_games INTEGER,", "team_a_games INTEGER NOT NULL,")
                     .replace("team_b_games INTEGER,", "team_b_games INTEGER NOT NULL,"))
     assert old.count("NOT NULL,") > db.SCHEMA.count("NOT NULL,")
     conn = sqlite3.connect(path)
@@ -763,7 +765,6 @@ def test_deleting_a_matchday_removes_its_absences(league):
 
 
 def test_marking_absent_needs_the_password(locked):
-    locked.cookies.delete("editor")
     r = locked.post("/matchdays/1/absent/1", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/login")
 
@@ -1232,8 +1233,11 @@ def test_organizations_only_see_their_own_data(league):
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM players WHERE name = 'Ana'").fetchone()[0] == 2
         assert conn.execute("SELECT team_a_games FROM matches WHERE id = 1").fetchone()[0] == 6
-    # The first club's admin cookie is no admin here.
-    league.cookies.delete("editor")
+    # The first club's admin is no admin here.
+    other_org = league.cookies.get("org")
+    league.post("/login", data={"username": "admin", "password": "secreto"})
+    league.cookies.delete("org")
+    league.cookies.set("org", other_org)
     assert league.post("/players", data={"name": "Zed"}, follow_redirects=False) \
         .headers["location"].startswith("/login")
 
@@ -1274,22 +1278,78 @@ def test_super_admin_creates_and_enters_organizations(locked):
     locked.post("/orgs/2/admin", data={"admin_user": "nene2", "admin_password": ""})
     assert "<code>nueva</code>" in locked.get("/orgs").text  # an empty password keeps it
     locked.post("/logout")
-    r = locked.post("/login", data={"username": "nene2", "password": "nueva", "role": "admin"})
+    r = locked.post("/login", data={"username": "nene2", "password": "nueva", "role": "account"})
     assert "🏢 Nene" in r.text
 
 
-def test_login_page_has_a_section_per_role(locked):
-    page = locked.get("/login").text
-    assert all(f'value="{role}"' in page for role in ("player", "admin", "super"))
-    with db.connect() as conn:
-        orgs.set_superadmin(conn, "julio", "super")
-    # Each section only accepts its own kind of login.
-    r = locked.post("/login", data={"username": "julio", "password": "super", "role": "admin"})
+def test_login_page_has_an_account_and_a_player_section(with_players):
+    with_players.cookies.delete("user")
+    page = with_players.get("/login").text
+    assert 'value="account"' in page and 'value="player"' in page
+    # The account section doesn't take player passwords, nor the player section accounts.
+    r = with_players.post("/login", data={"username": "x", "password": "jugamos", "role": "account"})
     assert r.status_code == 401
-    r = locked.post("/login", data={"username": "admin", "password": "secreto", "role": "super"})
+    r = with_players.post("/login", data={"username": "admin", "password": "secreto", "role": "player"})
     assert r.status_code == 401
-    r = locked.post("/login", data={"username": "admin", "password": "secreto", "role": "admin"})
+    r = with_players.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
     assert r.status_code == 200 and "Log out" in r.text
+
+
+def test_accounts_log_in_with_username_or_email(locked):
+    with db.connect() as conn:
+        users.create_user(conn, "player", "juli", "clave-larga", email="Juli@Example.com")
+        orgs.set_superadmin(conn, "julio", "super")
+    for name in ("juli", "JULI", "juli@example.com"):
+        locked.cookies.delete("user")
+        r = locked.post("/login", data={"username": name, "password": "clave-larga",
+                                        "role": "account"}, follow_redirects=False)
+        assert r.status_code == 303 and "user" in r.cookies, name
+    # A player account isn't an admin.
+    assert "Delete tournament" not in locked.get("/tournaments/1").text
+    locked.post("/logout")
+    r = locked.post("/login", data={"username": "julio", "password": "super", "role": "account"})
+    assert "Delete tournament" in locked.get("/tournaments/1").text  # super: admin everywhere
+
+
+def test_old_admins_become_accounts(tmp_path, monkeypatch):
+    """Databases from before accounts: their super admin and organization admin log in
+    as before, now as users rows (sql/predeployment/0001_users.sql)."""
+    import sqlite3
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(BEFORE_ACCOUNTS)
+    conn.execute("INSERT INTO superadmins (username, password, secret) VALUES (?, ?, 's')",
+                 ("raiz", orgs.hash_password("clave-raiz")))
+    conn.execute("INSERT INTO organizations (name, admin_user, admin_password, secret) "
+                 "VALUES ('Vieja', 'raiz', ?, 's2')", (orgs.hash_password("clave-org"),))
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(db, "DB_PATH", str(path))
+    db.init_db()
+    db.init_db()  # a second start leaves it alone
+    conn = sqlite3.connect(path)
+    rows = conn.execute("SELECT role, username, organization_id FROM users ORDER BY id").fetchall()
+    assert rows == [("super", "raiz", None), ("org_admin", "raiz_1", 1)]
+    assert conn.execute("SELECT version FROM schema_migrations").fetchall() == [("0001_users",)]
+    with db.connect() as c:
+        assert users.login(c, "raiz", "clave-raiz")["role"] == "super"
+        assert users.login(c, "raiz_1", "clave-org")["role"] == "org_admin"
+
+
+def test_a_failing_predeployment_file_changes_nothing(tmp_path, monkeypatch):
+    from app import migrate
+    folder = tmp_path / "sql"
+    folder.mkdir()
+    (folder / "0001_ok.sql").write_text("CREATE TABLE uno (x INTEGER);")
+    (folder / "0002_bad.sql").write_text("CREATE TABLE dos (x INTEGER); SELECT * FROM nada;")
+    monkeypatch.setattr(migrate, "FOLDER", folder)
+    import sqlite3
+    conn = sqlite3.connect(tmp_path / "m.db")
+    with pytest.raises(sqlite3.OperationalError):
+        migrate.apply(conn, log=lambda m: None)
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    assert "uno" in tables and "dos" not in tables
+    assert migrate.applied(conn) == {"0001_ok"}
 
 
 def test_player_password_enters_its_organization(with_players):
@@ -1334,3 +1394,51 @@ def test_enter_page_lists_the_top_ten_organizations(league):
     assert "Org 09" not in names and "Org 08" in names
     r = league.post("/enter", data={"name": "Club", "next": "/"})
     assert "Liga Amigos" in r.text
+
+
+def test_admins_manage_their_players_accounts(league):
+    with db.connect() as conn:
+        juli = users.create_user(conn, "player", "juli", "clave-larga", email="juli@example.com")
+        users.link_player(conn, juli, 1)  # Ana
+        orgs.create_org(conn, "Otro club", "otro", "clave")
+        stranger = users.create_user(conn, "player", "lejos", "clave-larga", email="l@example.com")
+    page = league.get("/users").text
+    assert "juli" in page and "lejos" not in page and "Ana" in page
+    assert league.get(f"/users/{stranger}").status_code == 404  # not this organization's
+    # Edit details; taken usernames and emails are refused.
+    league.post(f"/users/{juli}", data={"username": "juli", "email": "nuevo@example.com",
+                                        "first_name": "Juliana", "last_name": "Pérez",
+                                        "display_name": "Juli"})
+    assert "nuevo@example.com" in league.get(f"/users/{juli}").text
+    r = league.post(f"/users/{juli}", data={"username": "admin", "email": "x@example.com"})
+    assert "That username is taken" in r.text
+    r = league.post(f"/users/{juli}", data={"username": "juli", "email": ""})
+    assert "Players need an email" in r.text
+    # A new password logs the account out and lets it in with the new one.
+    other = TestClient(app)
+    other.cookies.set("lang", "en")
+    other.post("/login", data={"username": "juli", "password": "clave-larga", "role": "account"})
+    assert other.cookies.get("user")
+    league.post(f"/users/{juli}/password", data={"password": "otra-clave"})
+    with db.connect() as conn:
+        assert users.login(conn, "nuevo@example.com", "otra-clave")
+        assert auth_user_from(other) is None
+    # Unlink and link the player.
+    league.post(f"/users/{juli}/unlink")
+    with db.connect() as conn:
+        assert conn.execute("SELECT user_id FROM players WHERE id = 1").fetchone()[0] is None
+    league.post(f"/users/{juli}/link", data={"player_id": 2})
+    assert "Account" in league.get("/players/2").text
+    assert "Guest player" in league.get("/players/1").text
+    # Only super admins change roles.
+    assert league.post(f"/users/{juli}/role", data={"role": "super"},
+                       follow_redirects=False).headers["location"].startswith("/login")
+
+
+def auth_user_from(client):
+    """The account a test client's cookie logs in, or None."""
+    from app import auth
+    user_id, _, token = client.cookies.get("user", "").partition(".")
+    with db.connect() as conn:
+        user = users.get(conn, int(user_id)) if user_id.isdigit() else None
+    return user if user and auth.user_cookie(user) == f"{user_id}.{token}" else None

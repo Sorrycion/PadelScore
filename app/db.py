@@ -13,9 +13,9 @@ DB_PATH = os.environ.get("PADELSCORE_DB", "padelscore.db")
 ORG = ContextVar("org", default=None)
 
 SCHEMA = """
--- A club or group of friends. Its admin logs in with admin_user and the password
--- (a hash, see orgs.py); admin_password_plain keeps it readable for super admins
--- (NULL for passwords set before it existed). `secret` signs its cookies.
+-- A club or group of friends. `secret` signs the cookie of browsers that entered it.
+-- admin_user / admin_password / admin_password_plain: deprecated, the admin is now a
+-- users row (role org_admin); kept in sync with it so an older app version still works.
 CREATE TABLE IF NOT EXISTS organizations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     secret TEXT NOT NULL
 );
 
--- May create organizations and is admin in all of them (see auth.py).
+-- Deprecated: super admins are now users rows (role super); see sql/predeployment/0001_users.sql.
 CREATE TABLE IF NOT EXISTS superadmins (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS superadmins (
     secret TEXT NOT NULL
 );
 
+-- A player of an organization (sql/predeployment/0001 adds user_id: the account that
+-- claimed it; without one a guest player).
 CREATE TABLE IF NOT EXISTS players (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     organization_id INTEGER REFERENCES organizations(id),
@@ -120,7 +122,12 @@ def connect():
         conn.close()
 
 
-def init_db():
+def init_db(log=lambda message: None):
+    """Create the database, or bring an existing one up to date. SCHEMA is the database
+    as it was before pre-deployment SQL existed; the older changes below (Python) bring
+    older databases to it, then the SQL files of sql/predeployment that haven't run yet
+    are applied in order (migrate.py), on new databases too."""
+    from . import migrate
     # On Azure the database lives in a folder that may not exist yet (/home/data).
     os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
     with connect() as conn:
@@ -128,6 +135,7 @@ def init_db():
         allow_pending_sets(conn)
         add_rule_types(conn)
         add_organizations(conn)
+        migrate.apply(conn, log)
         # Every tournament has a player password; older ones get the default.
         for t in conn.execute("SELECT id, name FROM tournaments WHERE player_password IS NULL "
                               "OR player_password = ''").fetchall():
@@ -147,8 +155,9 @@ def add_organizations(conn):
     tournaments get one too. They stay NULL until the first organization adopts them
     (orgs.create_org)."""
     if "organization_id" not in {r["name"] for r in conn.execute("PRAGMA table_info(players)")}:
-        create = SCHEMA[SCHEMA.index("CREATE TABLE IF NOT EXISTS players"):]
-        create = create[:create.index(");") + 2].replace("IF NOT EXISTS players", "players_new")
+        create = ("CREATE TABLE players_new (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                  "organization_id INTEGER REFERENCES organizations(id), name TEXT NOT NULL, "
+                  "UNIQUE (organization_id, name));")
         conn.commit()
         conn.execute("PRAGMA foreign_keys = OFF")  # matches etc. point at players
         conn.executescript(f"""

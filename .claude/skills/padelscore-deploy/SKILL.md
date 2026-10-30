@@ -28,6 +28,8 @@ subscription.
    which does:
    - test,
    - back up the database to `/home/data/padelscore-backup-<date>-gh.db`,
+   - run the pending SQL files of `sql/predeployment` on the live database
+     (`app/migrate.py`),
    - zip deploy and restart,
    - check that `/enter` answers 200.
 6. Watch it: `GH_TOKEN=$(gh auth token --user Sorrycion) gh run list -R Sorrycion/PadelScore -L 3`,
@@ -57,6 +59,14 @@ az webapp restart --subscription af2fe534-02d1-4920-8bea-24efdcac3083 -g padelsc
 ```
 
 Then poll the live site until the change shows.
+
+## Database changes
+
+Every schema change goes in a new numbered file `sql/predeployment/NNNN_name.sql`.
+Never edit one that already ran. Keep each change additive, so the running version
+still works between the migration and the deploy. Check the live database with
+`python3 -m app.migrate --status`, which is read-only (see the `padelscore-live-admin`
+skill for how to run it there).
 
 ## Never
 
