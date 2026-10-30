@@ -1442,3 +1442,109 @@ def auth_user_from(client):
     with db.connect() as conn:
         user = users.get(conn, int(user_id)) if user_id.isdigit() else None
     return user if user and auth.user_cookie(user) == f"{user_id}.{token}" else None
+
+
+# --- From guest to account ------------------------------------------------------------
+
+def test_tournament_password_offers_an_account_or_guest(with_players):
+    r = with_players.post("/login", data={"password": "jugamos", "role": "player"})
+    assert "/welcome?t=1" in str(r.url)
+    assert "Create account" in r.text and "Continue as a guest" in r.text
+    assert 'href="/tournaments/1"' in r.text  # the guest carries on as before
+    # Without the tournament's password there's nothing to claim.
+    with_players.cookies.delete("player_1")
+    r = with_players.get("/signup?t=1", follow_redirects=False)
+    assert r.headers["location"].startswith("/login")
+
+
+def signup(client, **form):
+    data = {"t": 1, "who": "1", "first_name": "Ana", "last_name": "López",
+            "display_name": "Ana L", "username": "analo", "email": "ana@example.com",
+            "password": "clave-larga", "password2": "clave-larga", **form}
+    return client.post("/signup", data=data)
+
+
+def test_signup_claims_a_guest_player(with_players):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    assert "Ana" in c.get("/signup?t=1").text
+    assert "at least 8" in signup(c, password="corta", password2="corta").text
+    assert "don't match" in signup(c, password2="otra-clave").text
+    assert "That player already exists" in signup(c, display_name="Bea").text  # another player's name
+    r = signup(c)
+    assert str(r.url).endswith("/me") and "Ana L" in r.text and "Liga Amigos" in r.text
+    assert "My sets to play" in r.text and "Ana L / Bea" in r.text  # a pending set
+    with db.connect() as conn:
+        ana = conn.execute("SELECT * FROM players WHERE id = 1").fetchone()
+        assert ana["name"] == "Ana L" and ana["user_id"] is not None
+    # The account scores its tournament without the tournament password.
+    c.cookies.delete("player_1")
+    r = c.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"},
+               follow_redirects=False)
+    assert r.status_code == 303 and not r.headers["location"].startswith("/login")
+    # Nobody else can claim Ana, and the username and email are taken.
+    c.post("/logout")
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    assert "Ana L" not in c.get("/signup?t=1").text.split("Who are you")[1].split("</select>")[0]
+    r = signup(c, who="1", username="otra", email="otra@example.com", display_name="Otra")
+    assert r.status_code == 400 and "Choose who you are" in r.text
+    r = signup(c, who="2", username="ANALO", email="b@example.com", display_name="Bea")
+    assert "That username is taken" in r.text
+    r = signup(c, who="2", username="bea", email="ANA@example.com", display_name="Bea")
+    assert "already an account with that email" in r.text
+
+
+def test_signup_as_a_new_player_joins_the_tournament(with_players):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    r = signup(c, who="new", display_name="Zoe", username="zoe", email="zoe@example.com")
+    assert str(r.url).endswith("/me")
+    with db.connect() as conn:
+        zoe = conn.execute("SELECT * FROM players WHERE name = 'Zoe'").fetchone()
+        assert zoe["user_id"] and conn.execute(
+            "SELECT 1 FROM tournament_players WHERE tournament_id = 1 AND player_id = ?",
+            (zoe["id"],)).fetchone()
+
+
+def test_an_existing_account_links_its_player(with_players):
+    c = with_players
+    with db.connect() as conn:
+        users.create_user(conn, "player", "bea", "clave-larga", email="bea@example.com",
+                          display_name="Bea B")
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    c.post("/login", data={"username": "bea@example.com", "password": "clave-larga",
+                           "role": "account"})
+    r = c.get("/welcome?t=1")
+    assert "Link your player" in r.text
+    r = c.post("/welcome/link", data={"t": 1, "player_id": 2})
+    assert str(r.url).endswith("/me") and "Liga Amigos" in r.text
+    with db.connect() as conn:
+        assert conn.execute("SELECT name FROM players WHERE id = 2").fetchone()[0] == "Bea B"
+
+
+def test_the_profile_edits_details_and_password(with_players):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)
+    r = c.post("/me", data={"username": "analo", "email": "ana@example.com",
+                            "first_name": "Ana", "last_name": "López", "display_name": "Bea"})
+    assert "That player already exists" in r.text  # Bea is another player's name
+    r = c.post("/me", data={"username": "analo", "email": "ana@example.com",
+                            "first_name": "Ana", "last_name": "López", "display_name": "Anita"})
+    assert "Saved" in r.text and "👤 Anita" in r.text
+    with db.connect() as conn:
+        assert conn.execute("SELECT name FROM players WHERE id = 1").fetchone()[0] == "Anita"
+    r = c.post("/me/password", data={"current": "nope", "password": "nueva-clave",
+                                     "password2": "nueva-clave"})
+    assert "Wrong password" in r.text or "wrong" in r.text.lower()
+    r = c.post("/me/password", data={"current": "clave-larga", "password": "nueva-clave",
+                                     "password2": "nueva-clave"})
+    assert "Saved" in r.text  # still logged in, with the new cookie
+    c.post("/logout")
+    r = c.post("/login", data={"username": "analo", "password": "nueva-clave", "role": "account"})
+    assert str(r.url).endswith("/me")
+
+
+def test_the_profile_needs_an_account(client):
+    client.cookies.delete("user")
+    assert client.get("/me", follow_redirects=False).headers["location"].startswith("/login")

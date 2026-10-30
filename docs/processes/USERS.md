@@ -37,6 +37,41 @@ erDiagram
     organizations ||--o{ players : has
 ```
 
+## From guest to account
+
+After a tournament's player password, a browser without an account lands on
+`/welcome`:
+
+```mermaid
+flowchart TD
+    W["/welcome (tournament password accepted)"] --> G["👻 Seguir como invitado → the tournament, as before"]
+    W --> C["✨ Crear cuenta → /signup"]
+    W --> H["👤 Ya tengo cuenta → log in → pick my player → linked"]
+    C --> Q{"¿Quién eres?"}
+    Q -- "one of the tournament's free players" --> L["account claims that player:<br/>its earlier sets and points come along"]
+    Q -- "Soy nuevo/a" --> N["new player named after the display name,<br/>added to the tournament"]
+    L --> M["/me"]
+    N --> M
+```
+
+- **Who can claim:** only a browser that has the tournament's password can claim one of
+  its players, and only players nobody has claimed yet.
+- **Signup asks for:** first and last name, display name, username, email, and a
+  password of at least 8 characters, entered twice.
+- **The display name is the league name:** it renames the claimed player, unless
+  another player of that organization already has that name.
+- **A player account** scores in its tournaments without the tournament password.
+
+## Profile (`/me`)
+
+Any account can open `/me`, from the 👤 name in the header. It shows:
+
+- for each of its players, by organization: the tournaments with position and points,
+  the sets still to play (with a link to the jornada to score them), and the latest
+  sets;
+- a form to edit names, display name, username and email;
+- a form to change the password, which asks for the current one.
+
 ## Details
 
 - **Admins manage accounts** on `/users`:

@@ -71,6 +71,8 @@ def create_user(conn, role, username, password, organization_id=None, **fields):
         raise UserError("err_password_required")
     fields = clean({"username": username, **fields})
     check_fields(conn, fields)
+    if role == "player" and not fields.get("email"):
+        raise UserError("err_email_required")
     columns = ["role", "organization_id", "password", "password_plain", "secret", *fields]
     values = [role, organization_id, hash_password(password),
               password if role == "org_admin" else None, secrets.token_hex(32),

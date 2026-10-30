@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ account.display_name or account.username }} · PadelScore{% endblock %}
+{% block content %}
+<h1>👤 {{ account.display_name or account.username }}</h1>
+<p class="muted">{{ account.first_name or "" }} {{ account.last_name or "" }} · <code>{{ account.username }}</code>{% if account.email %} · {{ account.email }}{% endif %}</p>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+{% if saved %}<p class="saved">✅ {{ _("saved") }}</p>{% endif %}
+
+{% for s in summaries %}
+<section class="court-block court-{{ loop.cycle('a', 'b') }}">
+  <div class="court-head">
+    <h2>🏢 {{ s.player.org_name }}</h2>
+    <form method="post" action="/enter" class="inline">
+      <input type="hidden" name="name" value="{{ s.player.org_name }}">
+      <input type="hidden" name="next" value="/players/{{ s.player.id }}">
+      <button type="submit" class="go">🎾 {{ _("my_summary") }}</button>
+    </form>
+  </div>
+
+  <h3>🏆 {{ _("my_tournaments") }}</h3>
+  {% if s.tournaments %}
+  <ul class="cards">
+    {% for t in s.tournaments %}
+    <li class="card org-card">
+      <form method="post" action="/enter">
+        <input type="hidden" name="name" value="{{ s.player.org_name }}">
+        <input type="hidden" name="next" value="/tournaments/{{ t.id }}">
+        <button type="submit" class="go name">{{ t.name }}</button>
+      </form>
+      <div class="meta muted">{{ RULE_ICONS.get(t.rule_code, "") }} {{ t.rule_type }}{% if t.ended %} · {{ _("tournament_ended") }}{% endif %}
+        {% if t.me %} · {{ _("position_n", n=t.me.position) }} · {{ _("n_points", n=t.me.points) }}{% endif %}</div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="empty">{{ _("no_my_tournaments") }}</p>{% endif %}
+
+  <h3>⏳ {{ _("my_pending_sets") }}</h3>
+  {% if s.pending %}
+  <ul class="players">
+    {% for m in s.pending %}
+    <li>
+      <form method="post" action="/enter" class="inline">
+        <input type="hidden" name="name" value="{{ s.player.org_name }}">
+        <input type="hidden" name="next" value="/matchdays/{{ m.matchday_id }}#set-{{ m.id }}">
+        <button type="submit" class="go">{{ m.tournament }} · {{ _("matchday_short", n=m.matchday) }} · {{ _("court_n", n=m.court) }}</button>
+      </form>
+      <span class="muted">{{ m.a1 }} / {{ m.a2 }} vs {{ m.b1 }} / {{ m.b2 }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="empty">{{ _("no_pending_sets") }}</p>{% endif %}
+
+  {% if s.recent %}
+  <h3>🎾 {{ _("my_recent_sets") }}</h3>
+  <ul class="matches">{% for m in s.recent %}{% include "_match_row.html" %}{% endfor %}</ul>
+  {% endif %}
+</section>
+{% else %}
+<p class="empty">{{ _("no_my_players") }}</p>
+{% endfor %}
+
+<h2>{{ _("account_details") }}</h2>
+<form method="post" action="/me" class="stack card">
+  <label>{{ _("first_name") }} <input name="first_name" value="{{ account.first_name or '' }}" autocomplete="given-name"></label>
+  <label>{{ _("last_name") }} <input name="last_name" value="{{ account.last_name or '' }}" autocomplete="family-name"></label>
+  <label>{{ _("display_name") }} <input name="display_name" value="{{ account.display_name or '' }}" autocomplete="nickname"></label>
+  <label>{{ _("username") }} <input name="username" value="{{ account.username }}" autocomplete="username" autocapitalize="off" required></label>
+  <label>{{ _("email") }} <input type="email" name="email" value="{{ account.email or '' }}" autocomplete="email" {% if account.role == "player" %}required{% endif %}></label>
+  <button type="submit">{{ _("save") }}</button>
+</form>
+
+<h2 id="password">{{ _("password") }}</h2>
+<form method="post" action="/me/password" class="stack card">
+  <label>{{ _("current_password") }} <input type="password" name="current" autocomplete="current-password" required></label>
+  <label>{{ _("new_password") }} <input type="password" name="password" autocomplete="new-password" minlength="8" required></label>
+  <label>{{ _("password_again") }} <input type="password" name="password2" autocomplete="new-password" minlength="8" required></label>
+  <button type="submit">{{ _("change_password") }}</button>
+</form>
+{% endblock %}
