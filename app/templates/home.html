@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+{# The start page once logged in. Needs: tournaments (with org_id, org_name, roles, me),
+   upcoming (sets still to play, oldest date first), account (None for a guest).
+   Links into another organization go through /enter, which switches the browser to it. #}
+{% macro go(org_name, url, label, cls="go") %}<form method="post" action="/enter" class="inline">
+  <input type="hidden" name="name" value="{{ org_name }}">
+  <input type="hidden" name="next" value="{{ url }}">
+  <button type="submit" class="{{ cls }}">{{ label }}</button>
+</form>{% endmacro %}
+<h1>👋 {{ _("hello_name", name=account.display_name or account.username) if account else _("hello_guest") }}</h1>
+
+<h2>⏳ {{ _("my_upcoming_sets") }}</h2>
+{% if upcoming %}
+<ul class="cards upcoming">
+  {% for m in upcoming %}
+  <li class="card">
+    <div class="meta muted">📅 {{ m.played_on }} · {{ m.tournament }} · {{ _("round_short" if m.rule_code in ROUND_MODES else "matchday_short", n=m.matchday) }} · {{ _("court_n", n=m.court) }}{% if tournaments|map(attribute="org_id")|unique|list|length > 1 %} · 🏢 {{ m.org_name }}{% endif %}</div>
+    <div class="vs"><span>{{ m.a1 }} / {{ m.a2 }}</span><span class="muted">vs</span><span>{{ m.b1 }} / {{ m.b2 }}</span></div>
+    {{ go(m.org_name, "/matches/%d/edit"|format(m.id), "✏️ " ~ _("enter_result")) }}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="empty">{{ _("no_pending_sets") }}</p>{% endif %}
+
+<h2>🏆 {{ _("my_tournaments") }}</h2>
+{% if tournaments %}
+<ul class="cards">
+  {% for t in tournaments %}
+  <li class="card org-card">
+    {{ go(t.org_name, "/tournaments/%d"|format(t.id), t.name, "go name") }}
+    <div class="meta muted">{{ RULE_ICONS.get(t.rule_code, "") }} {{ t.rule_type }} · 🏢 {{ t.org_name }}{% if t.ended %} · {{ _("tournament_ended") }}{% endif %}
+      {% if t.me %} · {{ _("position_n", n=t.me.position) }} · {{ _("n_points", n=t.me.points) }}{% endif %}</div>
+    <div class="roles">{% if "admin" in t.roles %}<span class="tag">🛠️ {{ _("role_admin_short") }}</span>{% endif %}{% if "player" in t.roles %}<span class="tag">{{ _("role_player") }}</span>{% endif %}{% if "guest" in t.roles %}<span class="tag">👻 {{ _("guest") }}</span>{% endif %}</div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="empty">{{ _("no_my_tournaments") }}</p>{% endif %}
+
+{% if not account %}<p class="muted">{{ _("guest_home_hint") }}</p>{% endif %}
+{% endblock %}

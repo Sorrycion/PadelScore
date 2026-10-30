@@ -41,7 +41,8 @@
     {# Main sections: a row of pills on wide screens, a list in the ☰ menu on phones. #}
     <nav class="tabbar">
       {% for url, icon, key, active in [
-           ("/", "🏆", "nav_standings", path == "/"),
+           ("/", "🏠", "nav_home", path == "/"),
+         ("/standings", "🏆", "nav_standings", path == "/standings"),
            ("/tournaments", "📅", "nav_tournaments", path.startswith(("/tournaments", "/matchdays"))),
            ("/matches", "🎾", "nav_sets", path.startswith("/matches")),
            ("/players", "👥", "nav_players", path.startswith("/players")),

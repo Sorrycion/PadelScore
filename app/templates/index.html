@@ -4,7 +4,7 @@
 {% if tournaments|length > 1 %}
 <nav class="tabs tournament-tabs" aria-label="{{ _('tournaments') }}">
   {% for t in tournaments %}
-  <a href="/?tournament={{ t.id }}" {% if t.id == tournament.id %}class="active" aria-current="page"{% endif %}>{{ RULE_ICONS.get(t.rule_code, "") }} {{ t.name }}</a>
+  <a href="/standings?tournament={{ t.id }}" {% if t.id == tournament.id %}class="active" aria-current="page"{% endif %}>{{ RULE_ICONS.get(t.rule_code, "") }} {{ t.name }}</a>
   {% endfor %}
 </nav>
 {% endif %}

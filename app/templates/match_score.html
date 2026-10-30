@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ _("enter_result") }} · PadelScore{% endblock %}
+{% block content %}
+{# A player's Edit page for a set: just its games (the whole set is for editors). #}
+<p class="eyebrow"><a class="plain" href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · <a class="plain" href="/matchdays/{{ m.matchday_id }}">{{ _("round_n" if m.rule_code in ROUND_MODES else "matchday_n", n=m.matchday) }}</a> · 📅 {{ m.played_on }}</p>
+<h1>✏️ {{ _("enter_result") }}</h1>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+<form method="post" action="/matches/{{ m.id }}/score" id="score-{{ m.id }}" class="score-form"></form>
+<ul class="matches">
+<li class="match">
+  <div class="scoreboard">
+    <input class="score-box" form="score-{{ m.id }}" type="number" name="team_a_games" min="0" inputmode="numeric" placeholder="00" required value="{{ m.team_a_games if m.team_a_games is not none else '' }}" aria-label="{{ _('team_a') }} · {{ _('games_legend') }}" autofocus>
+    <input class="score-box" form="score-{{ m.id }}" type="number" name="team_b_games" min="0" inputmode="numeric" placeholder="00" required value="{{ m.team_b_games if m.team_b_games is not none else '' }}" aria-label="{{ _('team_b') }} · {{ _('games_legend') }}">
+  </div>
+  <div class="teams">
+    <div class="team a"><span>{{ m.a1 }}</span><span>{{ m.a2 }}</span></div>
+    <div class="team b"><span>{{ m.b1 }}</span><span>{{ m.b2 }}</span></div>
+  </div>
+  <span class="chip">{{ _("court_n", n=m.court) }}</span>
+</li>
+</ul>
+<p class="inline">
+  <button type="submit" form="score-{{ m.id }}">{{ _("save") }}</button>
+  <a class="button secondary" href="/matchdays/{{ m.matchday_id }}#set-{{ m.id }}">{{ _("cancel") }}</a>
+</p>
+{% endblock %}

@@ -19,12 +19,13 @@ Scoring follows the league rules in [`docs/REGLAMENTO.md`](docs/REGLAMENTO.md), 
   - **Manual individual**: a matchday is just a date; each set is created by hand (court and pairs). Each player scores the games difference of each set (can go negative).
 - **Absences:** on a matchday page a player can be marked absent. Their sets stay the same (a substitute plays), but they score 0 that matchday, win or lose, and it doesn't count as played.
 - **Courts:** *Add matchday* opens a draft: from matchday 2 on it first asks whether 1 or 2 players move up and down per court (court 1's best and the last court's worst stay), then suggests the courts from the previous matchday. Move players, add or remove courts, and press **Save matchday**: only then are the matchday and each court's 3 sets saved (every player partnering each of the other three once). Cancelling saves nothing.
-- **Sets:** created sets are *pending* until their games are entered, right on the matchday page. Any score can be entered (a set may be cut short); a tied set gives no one the set-won point. Sets can also be added one by one, edited, deleted and filtered by tournament or player. A court that already has results keeps its players.
+- **Sets:** created sets are *pending* until their games are entered on the set's Edit page. Any score can be entered (a set may be cut short); a tied set gives no one the set-won point. Sets can also be added one by one, edited, deleted and filtered by tournament or player. A court that already has results keeps its players.
 - **Matchday points (Liga):** when all the sets of a court are played, its players get a place (1st 9, 2nd 6, 3rd 4, 4th 3) plus 1 point per set won. Places go by sets won, then games difference (won − lost), then league position before the matchday; on the first matchday a draw (fixed per court) settles ties. The same order decides court changes.
 - **Tournament standings** add up the matchday points, with one column per matchday. A matchday can be deleted with its sets; the later ones are renumbered.
 - **Court changes:** each matchday page suggests who moves up or down a court (1 or 2 players, per the draw). Court 1 is the top court.
 - **Players:** each has a profile with results per matchday, partners and sets. Players can be renamed, and deleted while they have no sets.
-- **Home page:** standings of the latest tournament.
+- **Home page:** the login; once logged in, your next sets (by date) and every
+  tournament you play or run. Standings of the latest tournament are at `/standings`.
 - **Language:** Spanish (default) or English, switched with ES / EN in the header; the choice is remembered in a cookie. Texts live in `app/i18n.py`.
 - Works on phones and supports dark mode.
 

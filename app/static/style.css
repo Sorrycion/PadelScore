@@ -37,6 +37,8 @@ header.topbar { display: flex; flex-wrap: wrap; align-items: center; justify-con
 .standings .username { color: var(--muted); font-size: .85em; white-space: nowrap; }
 .career-medals { margin: -4px 0 16px; }
 .career-medals img.medal { width: 30px; height: 35px; }
+ul.upcoming .vs { display: flex; flex-wrap: wrap; gap: 6px; font-weight: 600; margin: 4px 0 8px; }
+.roles { display: flex; gap: 6px; flex-wrap: wrap; }
 label.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
 label.check input { width: auto; margin-top: 3px; }
 .brand { font-weight: 800; font-size: 1.15rem; color: var(--text); text-decoration: none; }
