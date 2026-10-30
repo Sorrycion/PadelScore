@@ -2,6 +2,7 @@
 {% block title %}{{ player.name }} · PadelScore{% endblock %}
 {% block content %}
 <h1>{{ player.name }}</h1>
+{% set tab = "summary" %}{% include "_player_tabs.html" %}
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 
 {% for t in tournaments %}
