@@ -9,7 +9,7 @@
 <ul class="medal-grid">
   {% for m in won %}
   <li class="medal-card kind-{{ m.kind }}">
-    <img class="medal {% if m.tier %}tier-{{ m.tier }}{% endif %}" src="{{ m.image }}?v={{ css_version }}" alt="" width="72" height="84">
+    <img class="medal {% if m.tier %}tier-{{ m.tier }}{% endif %}" src="{{ m.image }}?v={{ css_version }}" alt="" width="72" height="72">
     <strong>{{ m.name }}</strong>
     <span class="muted">{% if m.tier %}{{ _(TIER_KEYS[m.tier]) }} · {{ m.value }}{% elif m.count > 1 %}×{{ m.count }}{% endif %}</span>
     {% if m.detail %}<span class="detail">{{ m.detail|unique|join(", ") }}</span>{% endif %}
@@ -25,7 +25,7 @@
 <ul class="medal-grid">
   {% for m in missing %}
   <li class="medal-card missing" title="{{ m.how }}">
-    <img class="medal" src="{{ m.image }}?v={{ css_version }}" alt="" width="72" height="84">
+    <img class="medal" src="{{ m.image }}?v={{ css_version }}" alt="" width="72" height="72">
     <strong>{{ m.name }}</strong>
     <span class="muted">{{ m.how }}</span>
   </li>

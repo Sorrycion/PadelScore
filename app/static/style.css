@@ -36,7 +36,7 @@ header.topbar { display: flex; flex-wrap: wrap; align-items: center; justify-con
 .menu-button, .menu-backdrop { display: none; }
 .standings .username { color: var(--muted); font-size: .85em; white-space: nowrap; }
 .career-medals { margin: -4px 0 16px; }
-.career-medals img.medal { width: 30px; height: 35px; }
+.career-medals img.medal { width: 32px; height: 32px; }
 ul.upcoming .vs { display: flex; flex-wrap: wrap; gap: 6px; font-weight: 600; margin: 4px 0 8px; }
 .roles { display: flex; gap: 6px; flex-wrap: wrap; }
 label.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
@@ -109,7 +109,7 @@ img.medal.tier-3 { filter: drop-shadow(0 0 8px #ffd700); }
 .medal-table td { vertical-align: middle; }
 .mini-medals { display: inline-flex; flex-wrap: wrap; gap: 2px; vertical-align: middle;
                margin-left: 4px; }
-.mini-medals img.medal { width: 20px; height: 23px; }
+.mini-medals img.medal { width: 22px; height: 22px; }
 .mini-medals img.medal.tier-3 { filter: drop-shadow(0 0 3px #ffd700); }
 .court-block h3 { font-size: 1rem; margin: 16px 0 8px; }
 button.go { background: none; color: var(--accent); padding: 0; font-weight: 600; font-size: inherit; text-align: left; }

@@ -12,7 +12,7 @@
   {% for m in catalog if m.kind == kind %}
     {% set who = holders.get(m.code, []) %}
     <tr>
-      <td><img class="medal" src="{{ m.image }}?v={{ css_version }}" alt="" width="48" height="56"></td>
+      <td><img class="medal" src="{{ m.image }}?v={{ css_version }}" alt="" width="48" height="48"></td>
       <td><strong>{{ m.name }}</strong></td>
       <td class="muted">{{ m.how }}</td>
       <td>{% for p in who %}<a class="plain" href="/players/{{ p.id }}/medals">{{ p.name }}</a>{% if not loop.last %}, {% endif %}{% else %}<span class="muted">—</span>{% endfor %}</td>
