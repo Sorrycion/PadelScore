@@ -48,6 +48,12 @@ def org_cookie(org) -> str:
     return f"{org['id']}.{_sign(org, 'org:%d' % org['id'])}"
 
 
+def recap_token(org, matchday_id: int, player_id: int) -> str:
+    """Signs a jornada recap's share link (/r/...), so it opens without entering the
+    organization but can't be made up for other jornadas or players."""
+    return _sign(org, f"recap:{matchday_id}:{player_id}")[:20]
+
+
 def org_from_cookie(request: Request):
     """The organization this browser entered, or None."""
     org_id, _, token = request.cookies.get(ORG_COOKIE, "").partition(".")
