@@ -39,7 +39,7 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 # Pages that work before entering an organization (and "/" itself: the login, or the
 # account's tournaments in every organization).
 OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me",
-              "/health", "/signup", "/join", "/sw.js")
+              "/health", "/signup", "/join", "/sw.js", "/install")
 # The commit being served: the deploy pipeline writes it to app/VERSION ("dev" locally).
 VERSION = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "dev"
 
@@ -1005,6 +1005,12 @@ def unlink_user_player(request: Request, user_id: int):
         if player:
             users.unlink_player(conn, player["id"])
     return user_action(request, user_id, change)
+
+
+@app.get("/install", response_class=HTMLResponse)
+def install_page(request: Request):
+    """📲 Install the app: a button on Android, drawn steps for iPhone (install.html)."""
+    return templates.TemplateResponse(request, "install.html", {})
 
 
 @app.get("/sw.js")

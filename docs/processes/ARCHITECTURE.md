@@ -60,7 +60,9 @@ sequenceDiagram
   `in_org(org_id, work)`. That's `/` (the home: tournaments and next sets in every
   organization) and `/me`, which lists an account's players everywhere and adds them up
   (`career`).
-- **Navigation:** on wide screens the sections are a row of pills under the header. On
+- **Navigation:** Inicio, 🙋 Mi resumen (the account's player in this organization,
+  `my_player` from `auth_context`), Clasificación, Torneos, Sets, Jugadores, Reglamento.
+  On wide screens the sections are a row of pills under the header. On
   phones (640 px or less) they fold, with the account links and the language, into a
   ☰ menu. It's a hidden checkbox (`#menu-toggle`) and CSS, with no JavaScript.
 
@@ -82,7 +84,23 @@ flowchart LR
   with Chrome's path, the PNGs (apple-touch-icon 180, 192, 512 and a maskable 512).
 - **`/sw.js`** is a route (an open path) so the service worker's scope is the whole site.
   Bump `CACHE` in `sw.js` when `offline.html` changes.
-- `/me` explains how to install it on iPhone and Android.
+- **📲 Instalar app** (`/install`, an open path, in the ☰ menu on phones; hidden once the
+  app runs installed, `display-mode: standalone`):
+  - **Android:** Chrome's `beforeinstallprompt` event is kept, and the **Instalar** button
+    opens Chrome's own install dialog. Without it, the drawn ⋮ → "Instalar app" steps
+    show.
+  - **iPhone:** Safari has no install API, so the page shows 3 drawn steps (Compartir →
+    Agregar a inicio → Agregar). They're inline SVG in the page's colors and language.
+    An iPhone sees its section first.
+
+```mermaid
+flowchart TD
+    M["☰ → 📲 Instalar app"] --> I["/install"]
+    I --> A{"Android Chrome<br/>fired beforeinstallprompt?"}
+    A -- yes --> B["Instalar button → Chrome's dialog → installed ✅"]
+    A -- no --> S["drawn steps: ⋮ → Instalar app"]
+    I --> P["iPhone: drawn steps<br/>Compartir → Agregar a inicio → Agregar"]
+```
 
 ## Data
 

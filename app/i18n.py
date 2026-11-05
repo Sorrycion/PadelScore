@@ -578,12 +578,39 @@ TEXT = {
                            "sin la barra del navegador.",
                      "en": "Install it as an app: it opens full screen, with its icon, "
                            "without the browser bar."},
-    "install_iphone": {"es": "en Safari, toca Compartir ⬆️ y luego «Agregar a inicio».",
-                       "en": "in Safari, tap Share ⬆️, then \"Add to Home Screen\"."},
-    "install_android": {"es": "en Chrome, abre el menú ⋮ y toca «Instalar app» o «Agregar a "
-                              "la pantalla principal».",
-                        "en": "in Chrome, open the ⋮ menu and tap \"Install app\" or \"Add "
-                              "to Home screen\"."},
+    "install_app": {"es": "Instalar app", "en": "Install the app"},
+    "install_now": {"es": "Instalar", "en": "Install"},
+    "install_done": {"es": "Ya la tienes instalada", "en": "It's already installed"},
+    "install_done_hint": {"es": "Ábrela desde su ícono en tu pantalla de inicio.",
+                          "en": "Open it from its icon on your home screen."},
+    "install_android_steps": {"es": "En Chrome: abre el menú ⋮ (arriba a la derecha) y toca "
+                                    "«Instalar app» (o «Agregar a la pantalla principal»).",
+                              "en": "In Chrome: open the ⋮ menu (top right) and tap \"Install "
+                                    "app\" (or \"Add to Home screen\")."},
+    "install_android_or": {"es": "O desde el menú ⋮ de Chrome, «Instalar app»:",
+                           "en": "Or from Chrome's ⋮ menu, \"Install app\":"},
+    "install_android_step1": {"es": "Menú ⋮ → «Instalar app», y confirma.",
+                              "en": "⋮ menu → \"Install app\", then confirm."},
+    "install_android_menu_tab": {"es": "Nueva pestaña", "en": "New tab"},
+    "install_android_menu_history": {"es": "Historial", "en": "History"},
+    "install_android_menu_install": {"es": "Instalar app", "en": "Install app"},
+    "install_iphone_safari": {"es": "En Safari (en otros navegadores del iPhone, ábrela primero "
+                                    "en Safari):",
+                              "en": "In Safari (from another iPhone browser, open it in Safari "
+                                    "first):"},
+    "install_iphone_step1": {"es": "Toca Compartir ⬆️, en la barra de abajo.",
+                             "en": "Tap Share ⬆️, in the bottom bar."},
+    "install_iphone_step2": {"es": "Baja en la lista y toca «Agregar a inicio».",
+                             "en": "Scroll down the list and tap \"Add to Home Screen\"."},
+    "install_iphone_step3": {"es": "Toca «Agregar». El ícono de PadelScore queda en tu pantalla "
+                                   "de inicio.",
+                             "en": "Tap \"Add\". PadelScore's icon is now on your home screen."},
+    "install_iphone_copy": {"es": "Copiar", "en": "Copy"},
+    "install_iphone_favorite": {"es": "Agregar a favoritos", "en": "Add to Favorites"},
+    "install_iphone_add": {"es": "Agregar a inicio", "en": "Add to Home Screen"},
+    "install_iphone_find": {"es": "Buscar en la página", "en": "Find on Page"},
+    "install_iphone_confirm": {"es": "Agregar", "en": "Add"},
+    "cancel_plain": {"es": "Cancelar", "en": "Cancel"},
     "my_summary": {"es": "Mi resumen", "en": "My summary"},
     "my_tournaments": {"es": "Mis torneos", "en": "My tournaments"},
     "no_my_tournaments": {"es": "Todavía no juegas ningún torneo.",

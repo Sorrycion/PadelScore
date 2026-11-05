@@ -52,18 +52,21 @@
     <div class="menu-panel">
     {# Main sections: a row of pills on wide screens, a list in the ☰ menu on phones. #}
     <nav class="tabbar">
+      {% set on_my_page = my_player and path.startswith("/players/%d"|format(my_player.id)) %}
       {% for url, icon, key, active in [
            ("/", "🏠", "nav_home", path == "/"),
          ("/standings", "🏆", "nav_standings", path == "/standings"),
            ("/tournaments", "📅", "nav_tournaments", path.startswith(("/tournaments", "/matchdays"))),
            ("/matches", "🎾", "nav_sets", path.startswith("/matches")),
-           ("/players", "👥", "nav_players", path.startswith("/players")),
+           ("/players", "👥", "nav_players", path.startswith("/players") and not on_my_page),
            ("/rules", "📖", "nav_rules", path == "/rules")] %}
       <a href="{{ url }}" {% if active %}class="active" aria-current="page"{% endif %}><span class="icon" aria-hidden="true">{{ icon }}</span>{{ _(key) }}</a>
+      {% if loop.first and my_player %}<a href="/players/{{ my_player.id }}" {% if on_my_page %}class="active" aria-current="page"{% endif %}><span class="icon" aria-hidden="true">🙋</span>{{ _("my_summary") }}</a>{% endif %}
       {% endfor %}
     </nav>
     <div class="top-actions">
       {% if editor %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
+      <a class="install-link" href="/install">📲 {{ _("install_app") }}</a>
       {% if login_enabled %}
         {% if user %}<a href="/me" title="{{ _('my_profile') }}">👤 {{ user.display_name or user.username }}</a>
         {% elif not editor %}<a href="/login?next={{ path|urlencode }}">{{ _("login") }}</a>{% endif %}
