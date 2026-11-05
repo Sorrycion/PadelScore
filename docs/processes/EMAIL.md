@@ -7,6 +7,22 @@ library only).
 
 ## What it sends
 
+- **⏰ The game-day reminder**, the morning of the jornada (the same daily job, first
+  `POST /tasks/send-reminders`). It goes to every account with an email and a player
+  that has a set of that jornada still to play, once (`sent_emails`, kind
+  `reminder`), unless "⏰ Recordarme…" is off on `/me`. It has:
+  - the jornada and **court**;
+  - the **position and points** before the jornada, and the current streak;
+  - the **summary** of the tournament so far (sets won, win rate);
+  - **each set:** partner, rivals, the **chance of winning** (a bar: favorites at 60%+,
+    even, uphill at 40% or less), and the record against each rival ("contra Omar:
+    3-1", or "primera vez");
+  - a link to the jornada.
+
+  The chance is `stats.win_probability` (see [STATS.md](STATS.md)). The web shows the
+  same numbers: a bar on each **pending set** of a jornada and on its result page,
+  and "🎯 Probabilidad de ganarle a X" on ⚔️ Cara a cara.
+
 - **The jornada recap**, the morning after. A daily GitHub Actions job
   (`.github/workflows/daily-emails.yml`, 9:00 Mexico time) calls
   `POST /tasks/send-recaps`. That emails every account that:
@@ -35,6 +51,9 @@ library only).
   Email apps ignore stylesheets and most don't show SVG. So it's plain HTML with inline
   styles and tables, the charts are HTML bars and squares, and the medals are their
   emoji (`medals.ICONS`, the same list that draws their images).
+- **⏰ next to a player** in a tournament's player list (admins): sends that player now
+  the reminder of their next jornada with sets to play (or their latest one). It isn't
+  recorded. The unsubscribe link of a reminder only stops reminders (`?kind=reminders`).
 - **📧 Probar email** on **🔑 Cuentas** (`/users`, admins), on each account with an email:
   sends that account, right away, the recap of its player's latest jornada in this
   organization, or a plain test message if it has none. It isn't recorded.

@@ -698,6 +698,47 @@ TEXT = {
                                 "en": "🟩 won · 🟥 lost · ⬜ tied, oldest to newest"},
     "recap_email_medals": {"es": "Tus medallas del torneo", "en": "Your medals in the tournament"},
     "recap_email_new": {"es": "¡nueva!", "en": "new!"},
+    "email_reminders_label": {"es": "Recordarme por email el día que juego (cancha, rivales y "
+                                    "probabilidades)",
+                              "en": "Remind me by email on game day (court, rivals and chances)"},
+    "reminder_subject": {"es": "⏰ Hoy juegas · {tournament} · Jornada {n} · Cancha {court}",
+                         "en": "⏰ You play today · {tournament} · Matchday {n} · Court {court}"},
+    "reminder_title": {"es": "¡Hoy juegas, {name}!", "en": "You play today, {name}!"},
+    "reminder_position": {"es": "Vas {n}.º con {points} pts", "en": "You're #{n} with {points} pts"},
+    "reminder_first": {"es": "Primera jornada: todos empiezan en cero.",
+                       "en": "First matchday: everyone starts at zero."},
+    "reminder_streak_win": {"es": "Llegas con {n} sets ganados seguidos",
+                            "en": "You come in with {n} sets won in a row"},
+    "reminder_streak_loss": {"es": "Llegas con {n} sets perdidos seguidos: ¡hoy se rompe!",
+                             "en": "You come in with {n} sets lost in a row: today it ends!"},
+    "reminder_sets": {"es": "Tus sets de hoy", "en": "Your sets today"},
+    "reminder_with": {"es": "Con {name}", "en": "With {name}"},
+    "reminder_already_played": {"es": "ya jugado", "en": "already played"},
+    "reminder_chance": {"es": "{n}% de ganar", "en": "{n}% to win"},
+    "chance_fav": {"es": "Van de favoritos", "en": "You're the favorites"},
+    "chance_hint": {"es": "Probabilidad de ganar el set según los sets jugados: el % ganado de "
+                          "cada jugador (suavizado) y el promedio de cada pareja.",
+                    "en": "Chance of winning the set from the sets played: each player's "
+                          "(smoothed) share won and each pair's average."},
+    "h2h_chance": {"es": "Probabilidad de ganarle a {name} en un set",
+                   "en": "Chance of beating {name} in a set"},
+    "chance_even": {"es": "Parejo", "en": "Even"},
+    "chance_hard": {"es": "Cuesta arriba", "en": "Uphill"},
+    "reminder_h2h": {"es": "contra {name}: {won}-{lost}", "en": "against {name}: {won}-{lost}"},
+    "reminder_h2h_none": {"es": "primera vez contra {name}", "en": "first time against {name}"},
+    "reminder_how": {"es": "La probabilidad sale de los sets jugados: el % de sets ganados de "
+                           "cada jugador (suavizado) y el promedio de cada pareja, comparados. "
+                           "Es un cálculo, no un pronóstico.",
+                     "en": "Chances come from the sets played: each player's (smoothed) share "
+                           "of sets won and each pair's average, compared. It's a calculation, "
+                           "not a forecast."},
+    "reminder_open": {"es": "Abrir la jornada", "en": "Open the matchday"},
+    "email_reminder_now": {"es": "Enviarle el recordatorio de su próxima jornada por email",
+                           "en": "Email them the reminder of their next matchday"},
+    "confirm_email_reminder": {"es": "¿Enviar a {name} el recordatorio de su próxima jornada?",
+                               "en": "Email {name} the reminder of their next matchday?"},
+    "err_no_jornada_yet": {"es": "Ese jugador aún no tiene jornadas en este torneo.",
+                           "en": "That player has no matchdays in this tournament yet."},
     "email_recap_now": {"es": "Enviarle el resumen de su última jornada por email",
                         "en": "Email them the recap of their latest matchday"},
     "confirm_email_recap": {"es": "¿Enviar a {name} el resumen de su última jornada por email?",
@@ -716,10 +757,10 @@ TEXT = {
     "recap_email_unsubscribe": {"es": "No recibir más estos emails",
                                 "en": "Stop these emails"},
     "unsubscribed_title": {"es": "Listo, ya no te llegarán", "en": "Done, no more emails"},
-    "unsubscribed_hint": {"es": "Ya no recibirás el resumen de tus jornadas por email. Puedes "
-                                "volver a activarlo en tu perfil.",
-                          "en": "You won't get your matchday recaps by email anymore. You "
-                                "can turn them back on in your profile."},
+    "unsubscribed_hint": {"es": "Ya no recibirás esos emails. Puedes volver a activarlos en tu "
+                                "perfil.",
+                          "en": "You won't get those emails anymore. You can turn them back on "
+                                "in your profile."},
     "test_email": {"es": "Probar email", "en": "Test email"},
     "test_email_hint": {"es": "Te manda un email de prueba a tu dirección.",
                         "en": "Sends a test email to your address."},

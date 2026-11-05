@@ -3,6 +3,7 @@
 `sets` are rows like main.set_rows() gives (a1_id/a1 ... b2_id/b2, team_a_games,
 team_b_games, winner, played_on), oldest first, played ones only.
 """
+import math
 from collections import Counter, defaultdict
 
 TEAMS = {"A": ("a1", "a2"), "B": ("b1", "b2")}
@@ -134,6 +135,35 @@ def head_to_head(sets, pid, other):
     together["win_pct"] = (round(100 * together["won"] / together["played"])
                            if together["played"] else 0)
     return {"against": against, "together": together, "form": form, "sets": both[::-1]}
+
+
+def player_rates(sets):
+    """{player id: (sets won, sets played)} for everyone in these sets."""
+    table = defaultdict(lambda: [0, 0])
+    for s in sets:
+        for team, keys in TEAMS.items():
+            for key in keys:
+                row = table[s[key + "_id"]]
+                row[0] += s["winner"] == team
+                row[1] += 1
+    return {pid: tuple(row) for pid, row in table.items()}
+
+
+def level(rates, pid):
+    """A player's level: their share of sets won, smoothed as (won + 1) / (played + 2) so
+    a newcomer starts at 50% and a few sets don't make 0% or 100%."""
+    won, played = rates.get(pid, (0, 0))
+    return (won + 1) / (played + 2)
+
+
+def win_probability(rates, team, rivals):
+    """The chance that `team` (two player ids) wins a set against `rivals`, from their
+    records: each pair's level is the average of its two players', and the two levels
+    are compared as odds (like a simple Elo): equal levels give 50%."""
+    logit = lambda p: math.log(p / (1 - p))  # noqa: E731
+    mine = sum(level(rates, p) for p in team) / len(team)
+    theirs = sum(level(rates, p) for p in rivals) / len(rivals)
+    return 1 / (1 + math.exp(logit(theirs) - logit(mine)))
 
 
 def rolling_win_pct(sets, pid, window=10):

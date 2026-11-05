@@ -25,6 +25,15 @@
   <div class="tile"><strong class="up">{{ a.won }}</strong><span>{{ _("h2h_won_by", name=player.name) }}</span></div>
   <div class="tile"><strong class="down">{{ a.lost }}</strong><span>{{ _("h2h_won_by", name=other.name) }}</span></div>
 </div>
+{% endif %}
+{% if chance is not none %}
+<section class="card chart-card h2h-chance">
+  <p><strong>🎯 {{ _("h2h_chance", name=other.name) }}: {{ chance }}%</strong></p>
+  <div class="chance"><span class="a">{{ chance }}%</span><span class="bar" aria-hidden="true"><span style="width: {{ chance }}%"></span></span><span class="b">{{ 100 - chance }}%</span></div>
+  <p class="muted">{{ _("chance_hint") }}</p>
+</section>
+{% endif %}
+{% if a.played %}
 <section class="card chart-card">
   <p class="muted">{{ _("h2h_games", mine=a.games_for, theirs=a.games_against) }}{% if a.tied %} · {{ _("h2h_tied", n=a.tied) }}{% endif %}</p>
   <div class="strip">{{ strip }}</div>

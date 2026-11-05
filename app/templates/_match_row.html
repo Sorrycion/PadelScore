@@ -1,4 +1,5 @@
-{# One set as a scoreboard card. Needs: m. On the matchday page (in_matchday) the
+{# One set as a scoreboard card. Needs: m. Optional: chances ({set id: % pair A wins},
+   shown on pending sets). On the matchday page (in_matchday) the
    tournament's players (scorer) and editors get its ✏️ Edit link: results are always
    entered and corrected on the set's Edit page, never in the card itself. #}
 {% set pending = m.team_a_games is none %}
@@ -15,6 +16,15 @@
     <div class="team a {% if m.winner == 'A' %}winner{% endif %}"><a href="/players/{{ m.a1_id }}">{{ m.a1 }}</a><a href="/players/{{ m.a2_id }}">{{ m.a2 }}</a></div>
     <div class="team b {% if m.winner == 'B' %}winner{% endif %}"><a href="/players/{{ m.b1_id }}">{{ m.b1 }}</a><a href="/players/{{ m.b2_id }}">{{ m.b2 }}</a></div>
   </div>
+  {% set chance = (chances or {}).get(m.id) %}
+  {% if chance is not none and m.team_a_games is none %}
+  {# Before the result: each pair's chance, from the records (stats.win_probability). #}
+  <div class="chance" title="{{ _('chance_hint') }}">
+    <span class="a">{{ chance }}%</span>
+    <span class="bar" aria-hidden="true"><span style="width: {{ chance }}%"></span></span>
+    <span class="b">{{ 100 - chance }}%</span>
+  </div>
+  {% endif %}
   {% if not in_matchday or can_edit %}
   <div class="set-actions">
     {% if not in_matchday %}<a class="tag" href="/tournaments/{{ m.tournament_id }}">{{ m.tournament }}</a>{% endif %}

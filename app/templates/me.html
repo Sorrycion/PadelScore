@@ -84,6 +84,7 @@
   <label>{{ _("email") }} <input type="email" name="email" value="{{ account.email or '' }}" autocomplete="email" {% if account.role == "player" %}required{% endif %}></label>
   {% with country=account.phone_country, number=account.phone %}{% include "_phone_fields.html" %}{% endwith %}
   <label class="check"><input type="checkbox" name="email_recaps" value="1" {% if account.email_recaps %}checked{% endif %}> 📧 {{ _("email_recaps_label") }}</label>
+  <label class="check"><input type="checkbox" name="email_reminders" value="1" {% if account.email_reminders %}checked{% endif %}> ⏰ {{ _("email_reminders_label") }}</label>
   <button type="submit">{{ _("save") }}</button>
 </form>
 

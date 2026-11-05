@@ -2104,6 +2104,88 @@ def test_accounts_page_sends_a_test_email(with_players, monkeypatch):
         assert conn.execute("SELECT COUNT(*) FROM sent_emails").fetchone()[0] == 0
 
 
+def test_win_probability_from_records():
+    from app.stats import level, player_rates, win_probability
+    sets = [a_set(1, 2, 3, 4, 6, 3), a_set(1, 2, 3, 4, 6, 4), a_set(1, 3, 2, 4, 6, 2)]
+    rates = player_rates(sets)
+    assert rates[1] == (3, 3) and rates[4] == (0, 3) and rates[3] == (1, 3)
+    assert level(rates, 1) == 4 / 5 and level(rates, 99) == 0.5  # a newcomer: 50%
+    assert win_probability(rates, (5, 6), (7, 8)) == 0.5  # nobody played: even
+    strong = win_probability(rates, (1, 2), (3, 4))
+    assert strong > 0.75 and abs(strong + win_probability(rates, (3, 4), (1, 2)) - 1) < 1e-9
+
+
+def test_game_day_reminder_email(with_players, monkeypatch):
+    from datetime import date
+    outbox = email_on(monkeypatch)
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # Ana (1), ana@example.com: sets 1 (with Bea) and 2 (with Carlos), pending
+    with db.connect() as conn:
+        conn.execute("UPDATE matchdays SET played_on = ?", (date.today().isoformat(),))
+
+    def task(path="/tasks/send-reminders", token="tarea-secreta"):
+        return c.post(path, headers={"X-Task-Token": token}, follow_redirects=False)
+    assert task(token="nope").status_code == 404
+    assert task().json() == {"enabled": True, "sent": 1, "failed": 0}
+    to, name, subject, text, html = outbox[0]
+    assert to == "ana@example.com" and "Hoy juegas" in subject and "Cancha 1" in subject
+    assert "Con Bea" in html and "Carlos / Diego" in html and "Con Carlos" in html
+    assert "50% de ganar" in html and "primera vez contra Carlos" in html  # no records yet
+    assert "/matchdays/1" in text and "kind=reminders" in html
+    assert task().json()["sent"] == 0  # once per jornada
+    assert task("/tasks/send-recaps").json()["sent"] == 0  # no recap: nothing played
+    # Its unsubscribe link only stops reminders.
+    link = re.search(r"(/unsubscribe/\d+/[0-9a-f]+\?kind=reminders)", html).group(1)
+    c.get(link)
+    with db.connect() as conn:
+        row = conn.execute("SELECT email_recaps, email_reminders FROM users "
+                           "WHERE username = 'analo'").fetchone()
+        assert tuple(row) == (1, 0)
+
+
+def test_profile_switches_reminder_emails(with_players):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)
+    assert 'name="email_reminders" value="1" checked' in c.get("/me").text
+    base = {"username": "analo", "email": "ana@example.com", "display_name": "Ana L",
+            "email_recaps": "1"}
+    c.post("/me", data=base)
+    page = c.get("/me").text
+    assert 'name="email_reminders" value="1" checked' not in page
+    assert 'name="email_recaps" value="1" checked' in page
+
+
+def test_pending_sets_show_each_pairs_chances(league):
+    league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4)))
+    with db.connect() as conn:  # Ana and Bea won their first set together
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 1, winner = 'A' "
+                     "WHERE id = 1")
+    page = league.get("/matchdays/1").text
+    assert page.count('class="chance"') == 2  # the two pending sets, not the played one
+    # Set 2: Ana + Carlos (levels 2/3 and 1/3) vs Bea + Diego (2/3 and 1/3): even.
+    assert '<span class="a">50%</span>' in page
+    r = league.get("/players/1/vs?other=4").text  # Ana (level 2/3) vs Diego (1/3): odds 2:1
+    assert "Chance of beating Diego in a set: 80%" in r  # against 1:2, so 4:1 → 80%
+
+
+def test_admin_emails_a_players_reminder(with_players, monkeypatch):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)
+    c.post("/logout")
+    c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
+    with db.connect() as conn:
+        conn.execute("INSERT OR IGNORE INTO tournament_players VALUES (1, 1)")
+    assert 'action="/tournaments/1/players/1/reminder"' in c.get("/tournaments/1").text
+    outbox = email_on(monkeypatch)
+    r = c.post("/tournaments/1/players/1/reminder")
+    assert "Email sent." in r.text and "Hoy juegas" in outbox[0][2]
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sent_emails").fetchone()[0] == 0
+
+
 def test_super_admin_sends_a_test_email(locked, monkeypatch):
     with db.connect() as conn:
         orgs.set_superadmin(conn, "julio", "super")
