@@ -2081,6 +2081,38 @@ def test_the_app_can_be_installed(client):
     assert client.get("/static/offline.html").status_code == 200
 
 
+def test_my_summary_is_in_the_menu(with_players):
+    c = with_players
+    assert ">Mi resumen<" not in c.get("/").text and ">My summary<" not in c.get("/").text
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # Ana (1)
+    page = c.get("/players/1").text
+    menu = page.split('class="tabbar"')[1].split("</nav>")[0]
+    assert 'href="/players/1" class="active"' in menu and "My summary" in menu
+    assert 'href="/players" class="active"' not in menu  # not both highlighted
+
+
+def test_home_has_a_closable_install_banner(client):
+    home = client.get("/").text  # the admin's home
+    assert 'id="install-banner" hidden' in home and 'href="/install"' in home
+    assert 'id="install-banner-close"' in home and "localStorage" in home
+    client.cookies.clear()
+    assert 'id="install-banner"' in client.get("/").text  # the login, as the home page
+    assert 'id="install-banner"' not in client.get("/login").text  # not the plain login
+
+
+def test_install_page_in_the_menu(client):
+    page = client.get("/").text
+    assert 'class="install-link" href="/install"' in page
+    assert 'href="/install"' in client.get("/me").text
+    client.cookies.clear()  # no organization nor login needed
+    r = client.get("/install", follow_redirects=False)
+    assert r.status_code == 200
+    assert "beforeinstallprompt" in r.text and 'id="install-button"' in r.text  # Android
+    assert 'id="install-iphone"' in r.text and r.text.count("<svg") >= 4  # iPhone, drawn
+    assert "Agregar a inicio" in r.text  # Spanish by default
+
+
 def test_health_reports_the_version_and_migrations(client):
     client.cookies.delete("org")  # works before entering an organization
     r = client.get("/health")

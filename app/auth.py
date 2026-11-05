@@ -181,8 +181,13 @@ def player_cookies(request: Request) -> list[str]:
 def auth_context(request: Request) -> dict:
     """Jinja context processor: the organization, the account, and whether this browser
     may edit."""
-    user = current_user(request)
+    user, org = current_user(request), current_org(request)
     editor, superadmin = is_editor(request), is_super(request)
-    return {"editor": editor, "superadmin": superadmin, "org": current_org(request),
-            "user": user, "login_enabled": True,
+    my_player = None  # the account's player here, for "Mi resumen" in the menu
+    if user and org:
+        with db.connect() as conn:
+            my_player = conn.execute("SELECT id, name FROM players WHERE user_id = ? AND "
+                                     "organization_id = ?", (user["id"], org["id"])).fetchone()
+    return {"editor": editor, "superadmin": superadmin, "org": org,
+            "user": user, "login_enabled": True, "my_player": my_player,
             "logged_in": bool(user) or bool(player_cookies(request))}

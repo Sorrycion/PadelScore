@@ -4,6 +4,7 @@
 {# The login: accounts log in; players without one are sent to make it (they join their
    tournaments inside, with each tournament's password). A guest can still use just a
    tournament's password, folded away under 👻. #}
+{% if home %}{% include "_install_banner.html" %}{% endif %}
 <h1>{{ _("home_login_title") if home else _("login_title") }}</h1>
 {% if home %}<p class="muted">{{ _("home_login_hint") }}</p>{% endif %}
 <div class="login-sections">
