@@ -1,0 +1,30 @@
+# Every morning: ask the live app to email yesterday's jornada recaps
+# (POST /tasks/send-recaps, see docs/processes/EMAIL.md). Azure App Service F1 can't run
+# scheduled jobs, so GitHub calls it. The app checks the X-Task-Token header against its
+# TASKS_TOKEN app setting; the same value is the repository secret TASKS_TOKEN.
+name: Daily emails
+
+on:
+  schedule:
+    - cron: "0 15 * * *"   # 15:00 UTC = 9:00 in Mexico City (UTC-6 all year)
+  workflow_dispatch:       # "Run workflow" by hand, e.g. to try it
+
+permissions: {}
+
+jobs:
+  recaps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send the jornada recaps
+        env:
+          TASKS_TOKEN: ${{ secrets.TASKS_TOKEN }}
+          SITE: https://padelscore-sorrycion.azurewebsites.net
+        run: |
+          if [ -z "$TASKS_TOKEN" ]; then
+            echo "::notice::The TASKS_TOKEN secret isn't set: email is off (docs/processes/EMAIL.md)"
+            exit 0
+          fi
+          # F1 sleeps when idle: the first request may take a while to wake it.
+          curl -fsS --max-time 180 --retry 2 --retry-delay 20 -X POST \
+            -H "X-Task-Token: $TASKS_TOKEN" "$SITE/tasks/send-recaps"
+          echo

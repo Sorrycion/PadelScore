@@ -9,7 +9,7 @@ Background: `docs/processes/MEDALS.md`.
 
 ```mermaid
 flowchart LR
-    SQL["new sql/predeployment file:<br/>INSERT INTO medal_types"] --> IMG["scripts/make_medals.py:<br/>MEDALS[code] = emoji → run"]
+    SQL["new sql/predeployment file:<br/>INSERT INTO medal_types"] --> IMG["app/medals.py ICONS[code] = emoji<br/>→ scripts/make_medals.py"]
     IMG --> RULE["app/medals.py awards():<br/>give(code, n, what)"]
     RULE --> TEST["tests: test_medals_are_computed…"]
 ```
@@ -20,8 +20,9 @@ flowchart LR
    - to change: `UPDATE`;
    - `kind` is `glory`, `rival` or `shame` (a joke);
    - `sort`: glory goes 1-19, rival 20-29, shame 30 and up.
-2. **Image.** Add `"code": "<emoji>"` to `MEDALS` in `scripts/make_medals.py`, run it,
-   and commit the new `app/static/medals/<code>.svg`. Each image is only the icon of
+2. **Image.** Add `"code": "<emoji>"` to `ICONS` in `app/medals.py` (the one list:
+   emails show the emoji, and `scripts/make_medals.py` draws the image from it). Run the
+   script and commit the new `app/static/medals/<code>.svg`. Each image is only the icon of
    the situation: no medal, ribbon or ring (the user's decision). Check that the
    emoji isn't cut off at 72 px (shoes and boots sit low).
    **Names in Spanish are Mexican** (zapato, salado, sotanero, "es su papá"), never

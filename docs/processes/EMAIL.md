@@ -1,0 +1,123 @@
+# Email
+
+PadelScore sends email through **Azure Communication Services** (ACS), in the personal
+subscription, at about US$0.00025 per email. A league of 20 players costs cents a
+year. The code is `app/mailer.py` (the ACS REST API signed with the access key, standard
+library only).
+
+## What it sends
+
+- **The jornada recap**, the morning after. A daily GitHub Actions job
+  (`.github/workflows/daily-emails.yml`, 9:00 Mexico time) calls
+  `POST /tasks/send-recaps`. That emails every account that:
+  - played a jornada in the last 3 days (up to yesterday);
+  - has an email, and has recaps on (the default);
+  - has **all its sets of that jornada played** (otherwise it waits for the next
+    morning);
+  - wasn't emailed that recap yet (`sent_emails`). Each recap goes once.
+
+  **Only accounts with an email and a player** get it: the task starts from the players
+  of the jornada's sets and joins their accounts, so admins without a player never do.
+
+  The email (`email_recap.html`, built by `recap_email` with `email_extras`) has:
+  - **the jornada:** place, points and sets won on the court, the position in the
+    standings with ▲▼, the next jornada's court;
+  - **🏆 Clasificación del torneo:** the whole standings table, with the player's row
+    highlighted;
+  - **📊 Tu torneo:** sets, wins, win rate, games difference and best streak in that
+    tournament;
+  - **charts:** points per jornada (bars, today's in dark blue) and the latest 12 sets
+    (green / red / gray squares);
+  - **🏅 Tus medallas del torneo:** each one with its emoji, and "¡nueva!" on the ones won
+    that day;
+  - buttons to the public recap ("📲 Mi jornada") and to share it on WhatsApp.
+
+  Email apps ignore stylesheets and most don't show SVG. So it's plain HTML with inline
+  styles and tables, the charts are HTML bars and squares, and the medals are their
+  emoji (`medals.ICONS`, the same list that draws their images).
+- **📧 Probar email** on `/orgs` (super admins) sends a test email to your own address.
+- **📧 next to a player** in a tournament's player list (admins; only players whose
+  account has an email): emails that player, right away, the recap of their latest
+  jornada in the tournament, to try it. It isn't recorded, so the morning email still
+  goes.
+- **No domain needed:** the setup uses an *Azure-managed domain*, so mail comes from
+  `DoNotReply@<code>.azurecomm.net`, with no DNS and nothing to buy. Its quotas are low
+  but enough for a league. The first emails may go to spam until players mark them as
+  not spam.
+
+```mermaid
+sequenceDiagram
+    participant GH as GitHub Actions (9:00 MX)
+    participant App as PadelScore (Azure F1)
+    participant DB as SQLite
+    participant ACS as Azure Communication Services
+    actor P as Player
+    GH->>App: POST /tasks/send-recaps (X-Task-Token)
+    App->>DB: recaps_due(): last 3 days, all sets played, not sent, recaps on
+    loop each account
+        App->>ACS: POST /emails:send (HMAC-signed)
+        ACS-->>App: 202 accepted
+        App->>DB: sent_emails (recap, user, jornada)
+        ACS->>P: "🎾 Tu jornada 3 · Liga …"
+    end
+    P->>App: unsubscribe link (signed) → email_recaps = 0
+```
+
+- **Opting out:** the checkbox "📧 Recibir por email el resumen de mi jornada" on `/me`,
+  or the unsubscribe link in each email (`/unsubscribe/{id}/{token}`, signed with the
+  account's secret, so it works without logging in).
+- **Language:** Spanish (accounts don't keep a language yet).
+- **Without the settings** below, nothing is sent: the task answers
+  `{"enabled": false}` and `/orgs` says email is off.
+
+## Setup (once, by the owner)
+
+These change Azure settings and secrets, so the owner runs them, in **Azure Cloud Shell**
+(Bash) on the **personal subscription**:
+
+```bash
+SUB=af2fe534-02d1-4920-8bea-24efdcac3083
+RG=padelscore-rg
+az account set --subscription $SUB            # Cloud Shell only; doesn't touch your laptop
+az provider register --namespace Microsoft.Communication --wait
+az extension add --name communication --upgrade
+
+# 1. Email service + a free Azure-managed sender domain (xxxx.azurecomm.net)
+az communication email create --name padelscore-email --resource-group $RG \
+  --location global --data-location "United States"
+az communication email domain create --domain-name AzureManagedDomain \
+  --email-service-name padelscore-email --resource-group $RG \
+  --location global --domain-management AzureManaged
+
+# 2. Communication Services resource, linked to that domain
+az communication create --name padelscore-acs --resource-group $RG \
+  --location global --data-location "United States"
+DOMAIN_ID=$(az communication email domain show --domain-name AzureManagedDomain \
+  --email-service-name padelscore-email --resource-group $RG --query id -o tsv)
+az communication update --name padelscore-acs --resource-group $RG --linked-domains $DOMAIN_ID
+
+# 3. App settings: connection string, sender, and a token for the daily job
+SENDER_DOMAIN=$(az communication email domain show --domain-name AzureManagedDomain \
+  --email-service-name padelscore-email --resource-group $RG --query mailFromSenderDomain -o tsv)
+CONN=$(az communication list-key --name padelscore-acs --resource-group $RG \
+  --query primaryConnectionString -o tsv)
+TOKEN=$(openssl rand -hex 32)
+az webapp config appsettings set --resource-group $RG --name padelscore-sorrycion -o none \
+  --settings ACS_CONNECTION_STRING="$CONN" MAIL_SENDER="DoNotReply@$SENDER_DOMAIN" TASKS_TOKEN="$TOKEN"
+echo "Sender: DoNotReply@$SENDER_DOMAIN"
+echo "Now save this as the GitHub secret TASKS_TOKEN: $TOKEN"
+```
+
+Then add the repository secret **TASKS_TOKEN** with that value (GitHub → Settings →
+Secrets and variables → Actions, or `gh secret set TASKS_TOKEN -R Sorrycion/PadelScore`).
+Check it with **📧 Probar email** on `/orgs`. Your account needs an email on `/me`, and
+the first emails may land in spam. Actions → "Daily emails" → **Run workflow** runs the
+morning job by hand.
+
+If a CLI command fails (the `communication` extension changes now and then), the
+Portal does the same: create "Email Communication Services" → Provision domains → "Add
+an Azure subdomain"; create "Communication Services" → Email → Domains → Connect
+domain; the connection string is under Keys; the sender is `DoNotReply@<that domain>`.
+
+**Limits:** an Azure-managed domain has low sending quotas (enough for a league). For a
+custom sender (`resultados@tudominio.com`), add your own domain and verify its DNS.

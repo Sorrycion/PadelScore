@@ -9,6 +9,34 @@ from collections import Counter
 
 from . import stats
 
+# Each medal's icon: its image (scripts/make_medals.py draws app/static/medals/
+# <code>.svg from it) and its glyph in emails, which don't show SVG.
+ICONS = {  # code: icon of the situation
+    # 🥇 glory
+    "campeon": "🥇", "subcampeon": "🥈", "tercero": "🥉",
+    "racha": "🔥",          # Bien prendido
+    "perfecta": "💯",       # Jornada perfecta
+    "rey_pista": "👑",      # Rey de la cancha
+    "escalador": "🧗",      # Pa' arriba
+    "rosco": "👞",          # Zapatero: le pusiste zapato (6-0)
+    "muro": "🧱",           # La Muralla
+    "infarto": "💓",        # De infarto (7-6)
+    "pareja_oro": "🤝",     # Dupla dorada
+    "asistencia": "📋",     # Asistencia perfecta
+    "veterano": "🐺",       # Colmilludo
+    # ⚔️ rivalry
+    "rival": "⚔️",          # El Clásico
+    "verdugo": "👨‍👦",        # Es su papá
+    # 🤡 shame (a joke)
+    "gafe": "🧂",           # Salado
+    "comio_rosco": "🥾",    # Le pusieron zapato (0-6)
+    "farolillo": "🕳️",      # Sotanero
+    "jornada_negra": "🌧️",  # Jornada pa' olvidar
+    "paracaidas": "📉",     # Cuesta abajo
+    "bestia_negra": "🍼",   # Ya tiene papá
+    "fantasma": "👻",       # Se lo tragó la tierra
+}
+
 GAME_RULES = ("liga_amigos", "manual")  # rule types whose sets count games
 LIGA = "liga_amigos"
 TIERS = {"racha": (3, 5, 10), "gafe": (3, 5, 8), "veterano": (25, 50, 100)}

@@ -58,6 +58,12 @@ flowchart LR
    Then check the change itself on the live site. Pages need an organization: enter one
    with `curl -c cj -b cj -X POST -d "name=Nene&next=/" .../enter`.
 
+**Other workflow:** `.github/workflows/daily-emails.yml` runs every day at 9:00 Mexico
+time and calls `POST /tasks/send-recaps` with the `TASKS_TOKEN` secret (see
+`docs/processes/EMAIL.md`). It does nothing while that secret isn't set. "Run
+workflow" runs it by hand. Its app settings (`ACS_CONNECTION_STRING`, `MAIL_SENDER`,
+`TASKS_TOKEN`) are set by the user in Azure; they survive deploys.
+
 Pushing `.github/workflows/*` needs the `workflow` scope on Sorrycion's gh token. It
 was added on 2026-10-28. If a push is refused for that, the user runs
 `gh auth switch -h github.com -u Sorrycion`, then

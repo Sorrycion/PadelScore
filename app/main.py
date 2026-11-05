@@ -1,6 +1,7 @@
 """PadelScore web app."""
 import hashlib
 import hmac
+import os
 import time
 import unicodedata
 from collections import Counter
@@ -15,7 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import auth, charts, countries, db, medals, migrate, orgs, rounds, stats, users
+from . import auth, charts, countries, db, mailer, medals, migrate, orgs, rounds, stats, users
 from .auth import LoginRequired, require_editor, require_super
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
 from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
@@ -40,7 +41,8 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 # Pages that work before entering an organization (and "/" itself: the login, or the
 # account's tournaments in every organization).
 OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me",
-              "/health", "/signup", "/join", "/sw.js", "/r/", "/install")
+              "/health", "/signup", "/join", "/sw.js", "/r/", "/install",
+              "/tasks/", "/unsubscribe/")
 # The commit being served: the deploy pipeline writes it to app/VERSION ("dev" locally).
 VERSION = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "dev"
 
@@ -551,7 +553,7 @@ def logout(request: Request):
 
 
 @app.get("/orgs", response_class=HTMLResponse, dependencies=SUPER)
-def orgs_page(request: Request, error: str | None = None):
+def orgs_page(request: Request, error: str | None = None, mail: str | None = None):
     """Super admins: every organization with its admin's user and password, to enter
     one, change its admin or create a new one."""
     with db.connect() as conn:
@@ -561,7 +563,9 @@ def orgs_page(request: Request, error: str | None = None):
             "(SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id) AS players "
             "FROM organizations o LEFT JOIN users u ON u.id = (SELECT MIN(id) FROM users "
             "WHERE role = 'org_admin' AND organization_id = o.id) ORDER BY o.name").fetchall()
-    return templates.TemplateResponse(request, "orgs.html", {"orgs": rows, "error": error})
+    return templates.TemplateResponse(request, "orgs.html", {
+        "orgs": rows, "error": error, "mail_sent": mail == "sent",
+        "mail_enabled": mailer.enabled()})
 
 
 @app.post("/orgs", dependencies=SUPER)
@@ -870,7 +874,7 @@ def me_page(request: Request, error: str | None = None, saved: str | None = None
 def update_me(request: Request, username: str = Form(""), email: str = Form(""),
               first_name: str = Form(""), last_name: str = Form(""),
               display_name: str = Form(""), phone_country: str = Form(""),
-              phone: str = Form("")):
+              phone: str = Form(""), email_recaps: str = Form("")):
     """Change your own details. A new display name renames your players too (if no one
     else in their organization has it)."""
     user = auth.current_user(request)
@@ -889,6 +893,8 @@ def update_me(request: Request, username: str = Form(""), email: str = Form(""),
                               phone_country=phone_country, phone=phone)
         except users.UserError as e:
             return redirect(f"/me?error={e}")
+        conn.execute("UPDATE users SET email_recaps = ? WHERE id = ?",
+                     (1 if email_recaps else 0, user["id"]))
         for p in mine:
             in_org(p["organization_id"], lambda: take_display_name(conn, p, display))
     return redirect("/me?saved=1")
@@ -1107,7 +1113,8 @@ def add_tournament(name: str = Form(...), held_on: str = Form(""),
 
 
 @app.get("/tournaments/{tournament_id}", response_class=HTMLResponse)
-def tournament_page(request: Request, tournament_id: int, error: str | None = None):
+def tournament_page(request: Request, tournament_id: int, error: str | None = None,
+                    mail: str | None = None):
     with db.connect() as conn:
         tournament = get_tournament(conn, tournament_id)
         results, standings = load_results(conn, tournament_id)
@@ -1119,6 +1126,11 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
             "usernames": account_usernames(conn),
             "participants": tournament_players(conn, tournament_id),
             "players": all_players(conn),
+            # admins can email these players their recap, to try it (📧 in the list)
+            "emailable": {r[0] for r in conn.execute(
+                "SELECT p.id FROM players p JOIN users u ON u.id = p.user_id "
+                "WHERE p.organization_id = ? AND u.email IS NOT NULL", (org_id(),))},
+            "mail_sent": mail == "sent",
             "today": date.today().isoformat(),
             "error": error,
         })
@@ -1353,6 +1365,7 @@ def delete_matchday(matchday_id: int):
         matchday = get_or_404(conn, "matchdays", matchday_id)
         conn.execute("DELETE FROM matches WHERE matchday_id = ?", (matchday_id,))
         conn.execute("DELETE FROM absences WHERE matchday_id = ?", (matchday_id,))
+        conn.execute("DELETE FROM sent_emails WHERE matchday_id = ?", (matchday_id,))
         conn.execute("DELETE FROM matchdays WHERE id = ?", (matchday_id,))
         later = conn.execute(
             "SELECT id FROM matchdays WHERE tournament_id = ? AND number > ? ORDER BY number",
@@ -1848,7 +1861,7 @@ def jornada_recap(conn, matchday_id, player_id, lang):
     return {"tournament": tournament, "matchday": md, "player": get_or_404(conn, "players", player_id),
             "court": court, "row": row, "sets": sets, "players": len(md_players(md)),
             "position": after, "moved": before - after if before and after else None,
-            "next_court": next_court,
+            "next_court": next_court, "standings": standings,
             "medals": [{**m, **won[m["code"]]} for m in medal_types(conn, lang)
                        if m["code"] in won]}
 
@@ -1882,6 +1895,156 @@ def recap_share(request, org, recap):
         lines.append("🏅 " + ", ".join(m["name"] for m in recap["medals"]))
     text = "\n".join(str(line) for line in lines) + f"\n{url}"
     return {"url": url, "text": text, "whatsapp": "https://wa.me/?text=" + quote(text, safe="")}
+
+
+def email_extras(conn, recap):
+    """What the recap email adds to the recap: the player's tournament (totals, best
+    streak, form, points per jornada) and their medals in it. Charts are HTML (bars and
+    squares) and medals their emoji: email apps don't show SVG."""
+    t, pid = recap["tournament"], recap["player"]["id"]
+    sets = [s for s in reversed(set_rows(conn, tournament_id=t["id"], player_id=pid))
+            if is_played(s)]
+    me = next((r for r in recap["standings"] if r["id"] == pid), None)
+    days = sorted(me["by_matchday"].items()) if me else []
+    top = max((pts for _, pts in days), default=0) or 1
+    today = {m["code"] for m in recap["medals"]}
+    won = tournament_medals(conn, t["id"], recap["standings"], "es").get(pid, [])
+    return {"totals": stats.totals(sets, pid), "streak": stats.streaks(sets, pid),
+            "form": [stats.outcome(s, pid) for s in sets][-12:],
+            "bars": [{"number": n, "points": pts, "width": max(round(100 * pts / top), 2)}
+                     for n, pts in days],
+            "medals": [{**m, "icon": medals.ICONS.get(m["code"], "🏅"), "new": m["code"] in today}
+                       for m in won]}
+
+
+def recap_email(request, org, recap, user, extras=None):
+    """(subject, plain text, HTML) of a jornada recap email, in Spanish (the league's
+    language; accounts have no language of their own yet). `extras`: email_extras()."""
+    _ = translator("es")
+    share = recap_share(request, org, recap)
+    base = share["url"].split("/r/", 1)[0]
+    unsubscribe = f"{base}/unsubscribe/{user['id']}/{auth.unsubscribe_token(user)}"
+    subject = str(_("recap_email_subject", n=recap["matchday"]["number"],
+                    tournament=recap["tournament"]["name"]))
+    text = (f"{share['text']}\n\n{_('recap_email_whatsapp')}: {share['whatsapp']}\n\n"
+            f"{_('recap_email_unsubscribe')}: {unsubscribe}")
+    html = templates.env.get_template("email_recap.html").render(
+        _=_, recap=recap, share=share, unsubscribe=unsubscribe, org_name=org["name"],
+        x=extras or {"totals": None, "streak": None, "form": [], "bars": [], "medals": []})
+    return subject, text, html
+
+
+def recaps_due(conn):
+    """(matchday, player, account, organization) for every account to email the recap
+    of a jornada played in the last 3 days (up to yesterday). Only accounts with an email
+    AND a player (the jornada's players joined to their account); recaps on; all its
+    sets of that jornada played; not emailed yet."""
+    today = date.today()
+    return conn.execute(
+        """
+        SELECT DISTINCT d.id AS matchday_id, p.id AS player_id, u.id AS user_id,
+               t.organization_id
+        FROM matchdays d
+        JOIN tournaments t ON t.id = d.tournament_id
+        JOIN matches m ON m.matchday_id = d.id
+        JOIN players p ON p.id IN (m.a1, m.a2, m.b1, m.b2)
+        JOIN users u ON u.id = p.user_id
+        WHERE d.played_on BETWEEN ? AND ? AND u.email IS NOT NULL AND u.email_recaps = 1
+          AND NOT EXISTS (SELECT 1 FROM sent_emails s WHERE s.kind = 'recap'
+                          AND s.user_id = u.id AND s.matchday_id = d.id)
+          AND NOT EXISTS (SELECT 1 FROM matches x WHERE x.matchday_id = d.id
+                          AND p.id IN (x.a1, x.a2, x.b1, x.b2) AND x.team_a_games IS NULL)
+        ORDER BY d.id, u.id
+        """, ((today - timedelta(days=3)).isoformat(),
+              (today - timedelta(days=1)).isoformat())).fetchall()
+
+
+@app.post("/tasks/send-recaps")
+def send_recaps(request: Request):
+    """Called every morning by GitHub Actions (.github/workflows/daily-emails.yml): emails
+    each account the recap of the jornada it played (recaps_due), once. The header
+    X-Task-Token must match the app setting TASKS_TOKEN; otherwise it doesn't exist."""
+    token = os.environ.get("TASKS_TOKEN", "")
+    if not token or not hmac.compare_digest(request.headers.get("x-task-token", ""), token):
+        raise HTTPException(404, "Not found")
+    if not mailer.enabled():
+        return {"enabled": False, "sent": 0, "failed": 0}
+    sent = failed = 0
+    with db.connect() as conn:
+        for due in recaps_due(conn):
+            org = conn.execute("SELECT * FROM organizations WHERE id = ?",
+                               (due["organization_id"],)).fetchone()
+            recap = in_org(org["id"], lambda: jornada_recap(
+                conn, due["matchday_id"], due["player_id"], "es"))
+            user = users.get(conn, due["user_id"])
+            if recap is None:
+                continue
+            extras = in_org(org["id"], lambda: email_extras(conn, recap))
+            if mailer.send(user["email"], user["display_name"] or user["username"],
+                           *recap_email(request, org, recap, user, extras)):
+                conn.execute("INSERT INTO sent_emails (kind, user_id, matchday_id) "
+                             "VALUES ('recap', ?, ?)", (user["id"], due["matchday_id"]))
+                sent += 1
+            else:
+                failed += 1
+    return {"enabled": True, "sent": sent, "failed": failed}
+
+
+@app.get("/unsubscribe/{user_id}/{token}", response_class=HTMLResponse)
+def unsubscribe(request: Request, user_id: int, token: str):
+    """An email's unsubscribe link: no more recap emails for that account. /me turns
+    them back on."""
+    with db.connect() as conn:
+        user = users.get(conn, user_id)
+        if user is None or not hmac.compare_digest(token, auth.unsubscribe_token(user)):
+            raise HTTPException(404, "Not found")
+        conn.execute("UPDATE users SET email_recaps = 0 WHERE id = ?", (user_id,))
+    return templates.TemplateResponse(request, "unsubscribed.html", {})
+
+
+@app.post("/tournaments/{tournament_id}/players/{player_id}/email", dependencies=EDIT)
+def email_player_recap(request: Request, tournament_id: int, player_id: int):
+    """📧 in the tournament's player list (admins): email the player, now, the recap of
+    their latest jornada in this tournament, to try the email. It isn't recorded, so the
+    morning email still goes."""
+    back = f"/tournaments/{tournament_id}"
+    with db.connect() as conn:
+        get_tournament(conn, tournament_id)
+        get_or_404(conn, "players", player_id)
+        user = conn.execute("SELECT u.* FROM users u JOIN players p ON p.user_id = u.id "
+                            "WHERE p.id = ?", (player_id,)).fetchone()
+        if user is None or not user["email"]:
+            return redirect(f"{back}?error=err_no_player_email#players")
+        if not mailer.enabled():
+            return redirect(f"{back}?error=err_mail_off#players")
+        latest = conn.execute(
+            "SELECT d.id FROM matchdays d JOIN matches m ON m.matchday_id = d.id "
+            "WHERE d.tournament_id = ? AND ? IN (m.a1, m.a2, m.b1, m.b2) "
+            "AND m.team_a_games IS NOT NULL ORDER BY d.number DESC LIMIT 1",
+            (tournament_id, player_id)).fetchone()
+        recap = latest and jornada_recap(conn, latest["id"], player_id, "es")
+        if not recap:
+            return redirect(f"{back}?error=err_no_recap_yet#players")
+        ok = mailer.send(user["email"], user["display_name"] or user["username"],
+                         *recap_email(request, auth.current_org(request), recap, user,
+                                      email_extras(conn, recap)))
+    return redirect(f"{back}?mail=sent#players" if ok else f"{back}?error=err_mail_failed#players")
+
+
+@app.post("/orgs/test-email", dependencies=SUPER)
+def test_email(request: Request):
+    """📧 Probar email (super admins): send a test email to your own address, to check
+    the Azure setup (docs/processes/EMAIL.md)."""
+    user = auth.current_user(request)
+    if not user["email"]:
+        return redirect("/orgs?error=err_no_email")
+    if not mailer.enabled():
+        return redirect("/orgs?error=err_mail_off")
+    _ = translator("es")
+    ok = mailer.send(user["email"], user["display_name"] or user["username"],
+                     str(_("test_email_subject")), str(_("test_email_body")),
+                     f"<p>{_('test_email_body')}</p>")
+    return redirect("/orgs?mail=sent" if ok else "/orgs?error=err_mail_failed")
 
 
 @app.get("/matchdays/{matchday_id}/recap", response_class=HTMLResponse)
