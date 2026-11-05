@@ -1728,6 +1728,31 @@ def player_stats_page(request: Request, player_id: int):
     })
 
 
+@app.get("/players/{player_id}/vs", response_class=HTMLResponse)
+def head_to_head_page(request: Request, player_id: int, other: str | None = None):
+    """⚔️ Cara a cara: the player against any other player of the organization (sets won
+    and lost against them, games, and as partners). Without `other`, their main rival."""
+    _ = translator(get_lang(request))
+    with db.connect() as conn:
+        player = get_or_404(conn, "players", player_id)
+        played = [s for s in reversed(set_rows(conn, player_id=player_id)) if is_played(s)]
+        people = {p["id"]: p for p in all_players(conn) if p["id"] != player_id}
+    met = Counter(i for s in played for i in (s["a1_id"], s["a2_id"], s["b1_id"], s["b2_id"])
+                  if i != player_id)
+    choices = sorted((p for p in people.values() if met[p["id"]]),
+                     key=lambda p: (-met[p["id"]], p["name"].lower()))
+    rival = stats.highlights(played, player_id)["rival"]
+    chosen = opt_int(other)
+    if chosen not in people:
+        chosen = rival["id"] if rival else None
+    h2h = stats.head_to_head(played, player_id, chosen) if chosen else None
+    results = {"W": str(_("won")), "L": str(_("lost")), "T": str(_("tied"))}
+    return templates.TemplateResponse(request, "head_to_head.html", {
+        "player": player, "other": people.get(chosen), "choices": choices, "h2h": h2h,
+        "strip": charts.streak_strip(h2h["form"], _("h2h_results"), results) if h2h else "",
+    })
+
+
 def medal_types(conn, lang):
     """The medal catalog in the page's language, in display order."""
     return [{"code": m["code"], "kind": m["kind"], "name": m[f"name_{lang}"],

@@ -1925,6 +1925,37 @@ def test_medals_are_computed_from_sets_and_tournaments():
     assert medals.tier("veterano", 50) == 2 and medals.tier("gafe", 8) == 3
 
 
+def test_head_to_head_page(league):
+    for (a1, a2, b1, b2), ga, gb in ROTATION:  # Ana with each of Bea, Carlos, Diego
+        league.post("/matches", data=set_form((a1, a2, b1, b2), ga, gb))
+    league.post("/matches", data=set_form((2, 4, 1, 3), 6, 1))  # Bea+Diego beat Ana+Carlos
+    page = league.get("/players/1/vs?other=2").text
+    assert "⚔️ Head to head" in page and "Ana ⚔️" in page
+    # Ana vs Bea: 3 sets against (won 6-2, lost 3-6, lost 1-6: games 10 to 14), 1 together.
+    tiles = page.split("Sets against each other")[0]
+    assert "<strong>3</strong>" in tiles
+    assert '<strong class="up">1</strong><span>Won by Ana</span>' in page
+    assert '<strong class="down">2</strong><span>Won by Bea</span>' in page
+    assert "Games: 10 to 14" in page
+    together = page.split("As partners")[1]
+    assert "<strong>1</strong>" in together and "100%" in together
+    assert page.count('class="match"') == 4
+    # Without a choice: the main rival; a player never met isn't offered.
+    default = league.get("/players/1/vs").text
+    assert "selected>" in default and '>Hugo<' not in default.split("</select>")[0]
+    assert "No sets played yet" in league.get("/players/8/vs").text
+
+
+def test_head_to_head_numbers():
+    from app.stats import head_to_head
+    sets = [a_set(1, 2, 3, 4, 6, 3), a_set(1, 3, 2, 4, 2, 6), a_set(1, 4, 2, 3, 6, 6)]
+    h = head_to_head(sets, 1, 3)
+    assert h["against"] == {"played": 2, "won": 1, "lost": 0, "tied": 1,
+                            "games_for": 12, "games_against": 9}
+    assert h["together"] == {"played": 1, "won": 0, "lost": 1, "win_pct": 0}
+    assert h["form"] == ["W", "T"] and len(h["sets"]) == 3
+
+
 def test_medal_pages(league):
     for (a1, a2, b1, b2), ga, gb in ROTATION:
         league.post("/matches", data=set_form((a1, a2, b1, b2), ga, gb))

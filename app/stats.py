@@ -108,6 +108,34 @@ def highlights(sets, pid):
     }
 
 
+def head_to_head(sets, pid, other):
+    """The player against (and with) one other player: their sets as rivals (won, lost,
+    tied, games) and as partners, the results against them oldest first, and every set
+    the two played, newest first."""
+    against = {"played": 0, "won": 0, "lost": 0, "tied": 0, "games_for": 0, "games_against": 0}
+    together = {"played": 0, "won": 0, "lost": 0}
+    form, both = [], []
+    for s in sets:
+        kind = outcome(s, pid)
+        if other in (o for o, _ in opponents(s, pid)):
+            mine, theirs = games(s, pid)
+            against["played"] += 1
+            against[{"W": "won", "L": "lost", "T": "tied"}[kind]] += 1
+            against["games_for"] += mine
+            against["games_against"] += theirs
+            form.append(kind)
+        elif partner(s, pid)[0] == other:
+            together["played"] += 1
+            together["won"] += kind == "W"
+            together["lost"] += kind == "L"
+        else:
+            continue
+        both.append(s)
+    together["win_pct"] = (round(100 * together["won"] / together["played"])
+                           if together["played"] else 0)
+    return {"against": against, "together": together, "form": form, "sets": both[::-1]}
+
+
 def rolling_win_pct(sets, pid, window=10):
     """Win % over the last `window` sets, after each set."""
     out, wins = [], []

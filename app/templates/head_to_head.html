@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ _("tab_h2h") }} · {{ player.name }} · PadelScore{% endblock %}
+{% block content %}
+{# ⚔️ Cara a cara. Needs: player, choices (players met, most first), other (or None), h2h
+   (stats.head_to_head: against, together, form, sets) and strip (the results chart). #}
+<h1>{{ player.name }}</h1>
+{% set tab = "h2h" %}{% include "_player_tabs.html" %}
+{% if not choices %}
+<p class="empty">{{ _("no_stats") }}</p>
+{% else %}
+<form method="get" action="/players/{{ player.id }}/vs" class="inline h2h-pick">
+  <label>⚔️ {{ _("h2h_against") }}
+    <select name="other" onchange="this.form.submit()">
+      {% for p in choices %}<option value="{{ p.id }}" {% if other and p.id == other.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button type="submit">{{ _("show") }}</button></noscript>
+</form>
+{% if other %}
+{% set a = h2h.against %}{% set t = h2h.together %}
+<h2>{{ player.name }} ⚔️ <a class="plain" href="/players/{{ other.id }}">{{ other.name }}</a></h2>
+{% if a.played %}
+<div class="tiles">
+  <div class="tile"><strong>{{ a.played }}</strong><span>{{ _("h2h_sets_against") }}</span></div>
+  <div class="tile"><strong class="up">{{ a.won }}</strong><span>{{ _("h2h_won_by", name=player.name) }}</span></div>
+  <div class="tile"><strong class="down">{{ a.lost }}</strong><span>{{ _("h2h_won_by", name=other.name) }}</span></div>
+</div>
+<section class="card chart-card">
+  <p class="muted">{{ _("h2h_games", mine=a.games_for, theirs=a.games_against) }}{% if a.tied %} · {{ _("h2h_tied", n=a.tied) }}{% endif %}</p>
+  <div class="strip">{{ strip }}</div>
+</section>
+{% else %}<p class="empty">{{ _("h2h_never_against", name=other.name) }}</p>{% endif %}
+
+<h2>🤝 {{ _("h2h_together") }}</h2>
+{% if t.played %}
+<div class="tiles">
+  <div class="tile"><strong>{{ t.played }}</strong><span>{{ _("sets") }}</span></div>
+  <div class="tile"><strong class="up">{{ t.won }}</strong><span>{{ _("won") }}</span></div>
+  <div class="tile"><strong>{{ t.win_pct }}%</strong><span>{{ _("win_pct") }}</span></div>
+</div>
+{% else %}<p class="empty">{{ _("h2h_never_together", name=other.name) }}</p>{% endif %}
+
+{% if h2h.sets %}
+<h2>🎾 {{ _("h2h_their_sets") }}</h2>
+<ul class="matches">{% for m in h2h.sets[:10] %}{% include "_match_row.html" %}{% endfor %}</ul>
+{% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}

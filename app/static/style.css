@@ -115,6 +115,10 @@ img.medal.tier-1 { filter: drop-shadow(0 0 6px #cd7f32); }
 img.medal.tier-2 { filter: drop-shadow(0 0 6px #c0c0c0); }
 img.medal.tier-3 { filter: drop-shadow(0 0 8px #ffd700); }
 .medal-table td { vertical-align: middle; }
+.h2h-pick { margin: 4px 0 8px; }
+.h2h-pick label { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.h2h-pick select { width: auto; min-width: 12rem; }
+.player-tabs { flex-wrap: wrap; }
 .mini-medals { display: inline-flex; flex-wrap: wrap; gap: 2px; vertical-align: middle;
                margin-left: 4px; }
 .mini-medals img.medal { width: 22px; height: 22px; }
