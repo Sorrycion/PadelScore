@@ -38,6 +38,7 @@
   <li class="card">
     <div class="meta muted">📅 {{ m.played_on }} · {{ m.tournament }} · {{ _("round_short" if m.rule_code in ROUND_MODES else "matchday_short", n=m.matchday) }} · {{ _("court_n", n=m.court) }}{% if tournaments|map(attribute="org_id")|unique|list|length > 1 %} · 🏢 {{ m.org_name }}{% endif %}</div>
     <div class="vs"><span>{{ m.a1 }} / {{ m.a2 }}</span><span class="muted">vs</span><span>{{ m.b1 }} / {{ m.b2 }}</span></div>
+    {% set chance = m.chance %}{% if chance is not none %}{% include "_chance.html" %}{% endif %}
     {{ go(m.org_name, "/matches/%d/edit"|format(m.id), "✏️ " ~ _("enter_result")) }}
   </li>
   {% endfor %}

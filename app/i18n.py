@@ -600,6 +600,12 @@ TEXT = {
     "install_banner": {"es": "Instala la app en tu teléfono", "en": "Install the app on your phone"},
     "close": {"es": "Cerrar", "en": "Close"},
     "install_now": {"es": "Instalar", "en": "Install"},
+    "install_samsung": {"es": "Estás en Samsung Internet: ahí Google Play Protect bloquea la app "
+                              "instalada («app no segura»). Copia el enlace y ábrelo en Chrome "
+                              "para instalarla.",
+                        "en": "You're on Samsung Internet: Google Play Protect blocks apps "
+                              "installed from it (\"unsafe app\"). Copy the link and open it in "
+                              "Chrome to install it."},
     "install_done": {"es": "Ya la tienes instalada", "en": "It's already installed"},
     "install_done_hint": {"es": "Ábrela desde su ícono en tu pantalla de inicio.",
                           "en": "Open it from its icon on your home screen."},

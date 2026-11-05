@@ -16,15 +16,8 @@
     <div class="team a"><span>{{ m.a1 }}</span><span>{{ m.a2 }}</span></div>
     <div class="team b"><span>{{ m.b1 }}</span><span>{{ m.b2 }}</span></div>
   </div>
-  {% set chance = (chances or {}).get(m.id) %}
-  {% if chance is not none and m.team_a_games is none %}
-  {# Before the result: each pair's chance, from the records (stats.win_probability). #}
-  <div class="chance" title="{{ _('chance_hint') }}">
-    <span class="a">{{ chance }}%</span>
-    <span class="bar" aria-hidden="true"><span style="width: {{ chance }}%"></span></span>
-    <span class="b">{{ 100 - chance }}%</span>
-  </div>
-  {% endif %}
+  {% set chance = chance_of(m) %}
+  {% if chance is not none %}{% include "_chance.html" %}{% endif %}
   <span class="chip">{{ _("court_n", n=m.court) }}</span>
 </li>
 </ul>
