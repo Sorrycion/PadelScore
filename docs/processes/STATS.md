@@ -29,3 +29,20 @@ flowchart LR
 The charts are plain SVG built on the server (`app/charts.py`), with no JavaScript. They
 use the stylesheet's colors, so they work in dark mode. Tapping a point or bar shows its
 value. Labels are escaped.
+
+## ⚔️ Cara a cara (head to head)
+
+The player's tab `/players/{id}/vs?other={id}`: one player against another of the
+organization. The list offers everyone they've shared a set with, most sets first, and
+starts on their main rival (the opponent faced most).
+
+```mermaid
+flowchart LR
+    S["the player's played sets"] --> H["stats.head_to_head(sets, pid, other)"]
+    H --> A["against: sets, won by each, ties, games for / against,<br/>results strip (oldest first)"]
+    H --> T["together: sets as partners, won, win %"]
+    H --> L["their last 10 sets, newest first"]
+```
+
+Like the rest of the dashboard it's calculated from the sets every time, and only
+played sets count.
