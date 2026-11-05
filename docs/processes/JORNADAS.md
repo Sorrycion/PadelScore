@@ -48,6 +48,39 @@ flowchart LR
   player takes the place in pending sets and in the tournament list. See
   [Tournaments](TOURNAMENTS.md).
 
+## 📲 Mi jornada (recap and WhatsApp)
+
+`/matchdays/{id}/recap?player={id}`, linked from every jornada page ("📲 Mi jornada") and
+from the home page ("Tu última jornada", the account's latest played jornada). It
+starts on the logged-in account's player; anyone can pick another player of that
+jornada.
+
+- **It shows:** place and points on the court (or 🚫 absent), sets won, the position
+  in the standings after that jornada with ▲▼ against the one before, the court of
+  the next jornada (if it exists), the medals won that day (`medals.awards` on that
+  day's sets and matchday row), and the player's sets.
+- **📲 Compartir por WhatsApp** opens `https://wa.me/?text=…` with a ready message and
+  the recap's **public link**, `/r/{org}/{jornada}/{player}/{token}`. It opens without
+  entering the organization (an open path), and the token (HMAC with the
+  organization's secret) means nobody can make up links for other jornadas or players.
+  `og:` meta tags give WhatsApp's link preview a title and summary.
+
+```mermaid
+sequenceDiagram
+    actor P as Player
+    participant R as /matchdays/{id}/recap
+    participant W as WhatsApp
+    actor F as Friends
+    P->>R: 📲 Mi jornada
+    R-->>P: recap + "Compartir por WhatsApp"
+    P->>W: wa.me/?text=🎾 Julio · Liga · Jornada 2 … + /r/1/2/1/<token>
+    W->>F: message with a link preview (og: tags)
+    F->>R: /r/… opens without entering the organization (token checked)
+```
+
+No message is sent by the app: the player chooses the chat. Sending automatically
+(email or the WhatsApp Business API) needs a paid or registered service.
+
 ## Americano and Mexicano (rounds)
 
 ```mermaid

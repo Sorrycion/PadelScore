@@ -60,6 +60,24 @@ TEXT = {
 
     # Home
     "latest_sets": {"es": "🕒 Últimos sets", "en": "🕒 Latest sets"},
+    "recap_title": {"es": "Mi jornada", "en": "My matchday"},
+    "recap_latest": {"es": "Tu última jornada", "en": "Your latest matchday"},
+    "recap_sets_won": {"es": "Sets ganados", "en": "Sets won"},
+    "recap_ranking": {"es": "Clasificación", "en": "Standings"},
+    "recap_next_court": {"es": "Cancha próxima jornada", "en": "Next matchday's court"},
+    "recap_whatsapp": {"es": "Compartir por WhatsApp", "en": "Share on WhatsApp"},
+    "recap_medals": {"es": "Medallas de la jornada", "en": "Medals of the matchday"},
+    "recap_sets": {"es": "Sus sets", "en": "Their sets"},
+    "recap_see_tournament": {"es": "Ver el torneo", "en": "See the tournament"},
+    "recap_not_played": {"es": "No jugó esta jornada.", "en": "Didn't play this matchday."},
+    "recap_share_head": {"es": "🎾 {name} · {tournament} · Jornada {n}",
+                         "en": "🎾 {name} · {tournament} · Matchday {n}"},
+    "recap_share_court": {"es": "🏅 {place}.º en la cancha {court} · {points} pts · "
+                                "{won}/{sets} sets ganados",
+                          "en": "🏅 {place} on court {court} · {points} pts · "
+                                "{won}/{sets} sets won"},
+    "recap_share_absent": {"es": "🚫 Ausente esta jornada", "en": "🚫 Absent this matchday"},
+    "recap_share_rank": {"es": "📈 Clasificación: {n}.º", "en": "📈 Standings: #{n}"},
     "all_sets_tournament": {"es": "Todos los sets de este torneo →",
                             "en": "All sets in this tournament →"},
     "no_tournaments_start": {

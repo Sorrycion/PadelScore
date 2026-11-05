@@ -806,6 +806,39 @@ def test_an_absent_player_is_on_the_next_jornada(league):
     assert standing_points(league.get("/tournaments/1").text, "Carlos") == 0  # still 0
 
 
+def test_jornada_recap_and_its_share_link(league):
+    league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 8)))
+    with db.connect() as conn:  # court 1: Ana wins all 3 sets, one of them 6-0
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 2, winner = 'A'")
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 0 WHERE id = 1")
+    page = league.get("/matchdays/1").text
+    assert 'href="/matchdays/1/recap"' in page
+    picker = league.get("/matchdays/1/recap").text
+    assert "Choose" in picker and ">Ana<" in picker  # the admin isn't a player: pick one
+    r = league.get("/matchdays/1/recap?player=1").text
+    assert "<h1>Ana</h1>" in r and "3/3" in r and "Share on WhatsApp" in r
+    assert "https://wa.me/?text=" in r and "Shutout" in r and "Perfect matchday" in r
+    assert 'property="og:title" content="Ana · Liga Amigos · Matchday 1"' in r
+    link = re.search(r"(/r/1/1/1/[0-9a-f]+)", r).group(1)
+    # The shared link opens without entering the organization; a made-up one doesn't.
+    league.cookies.clear()
+    league.cookies.set("lang", "en")
+    shared = league.get(link, follow_redirects=False)
+    assert shared.status_code == 200 and "<h1>Ana</h1>" in shared.text
+    assert "See the tournament" in shared.text and "Choose" not in shared.text
+    assert league.get(link[:-2] + "00", follow_redirects=False).status_code == 404
+    assert league.get("/r/1/1/2/" + link.rsplit("/", 1)[1]).status_code == 404  # other player
+
+
+def test_home_links_the_latest_jornada_recap(with_players):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # Ana
+    c.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"})
+    home = c.get("/").text
+    assert "Your latest matchday" in home and "/matchdays/1/recap?player=1" in home
+
+
 def test_deleting_a_matchday_removes_its_absences(league):
     league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4))
     league.post("/matchdays/1/absent/1")

@@ -25,6 +25,7 @@
 <p class="inline"><a class="button" href="/matchdays/{{ matchday.id }}/courts">{{ _("assign_courts") }}</a></p>
 {% endif %}
 {% if scorer and not editor %}<p class="muted">{{ _("player_mode_note") }}</p>{% endif %}
+{% if recap_players %}<p><a href="/matchdays/{{ matchday.id }}/recap">📲 {{ _("recap_title") }}</a></p>{% endif %}
 
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if matchday.courts %}

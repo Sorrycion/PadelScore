@@ -1,5 +1,6 @@
 """PadelScore web app."""
 import hashlib
+import hmac
 import time
 import unicodedata
 from collections import Counter
@@ -39,7 +40,7 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 # Pages that work before entering an organization (and "/" itself: the login, or the
 # account's tournaments in every organization).
 OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me",
-              "/health", "/signup", "/join", "/sw.js")
+              "/health", "/signup", "/join", "/sw.js", "/r/")
 # The commit being served: the deploy pipeline writes it to app/VERSION ("dev" locally).
 VERSION = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "dev"
 
@@ -329,12 +330,13 @@ def home(request: Request, error: str | None = None):
     the login."""
     user = auth.current_user(request)
     with db.connect() as conn:
-        tournaments, upcoming = (account_home(conn, user) if user
-                                 else guest_home(request, conn))
+        tournaments, upcoming, latest = (account_home(conn, user) if user
+                                         else guest_home(request, conn))
     if not user and not tournaments:
         return templates.TemplateResponse(request, "login.html", {"next": "/", "home": True})
     return templates.TemplateResponse(request, "home.html", {
-        "tournaments": tournaments, "upcoming": upcoming, "account": user, "error": error})
+        "tournaments": tournaments, "upcoming": upcoming, "account": user, "error": error,
+        "latest": latest})
 
 
 def home_tournament(t, org, role, me=None):
@@ -352,7 +354,7 @@ def by_date(tournaments, upcoming):
 def account_home(conn, user):
     """(tournaments, sets to play) of an account, across organizations: the tournaments
     its players play (with position and points) and, for admins, those they run."""
-    found, upcoming = {}, []
+    found, upcoming, latest = {}, [], []
     if user["role"] == "super":
         admin_of = conn.execute("SELECT * FROM organizations ORDER BY name").fetchall()
     elif user["role"] == "org_admin":
@@ -373,7 +375,11 @@ def account_home(conn, user):
             else:
                 found[t["id"]] = home_tournament(t, org, "player", t["me"])
         upcoming += [{**s, "org_name": org["name"]} for s in summary["pending"]]
-    return by_date(list(found.values()), upcoming)
+        latest += [{**s, "org_name": org["name"], "player_id": player["id"]}
+                   for s in summary["recent"][:1]]
+    tournaments, upcoming = by_date(list(found.values()), upcoming)
+    latest = max(latest, key=lambda s: (s["played_on"], s["matchday"]), default=None)
+    return tournaments, upcoming, latest
 
 
 def guest_home(request, conn):
@@ -395,7 +401,7 @@ def guest_home(request, conn):
         row, pending = in_org(org["id"], work)
         tournaments.append(home_tournament(row, org, "guest"))
         upcoming += [{**s, "org_name": org["name"]} for s in pending]
-    return by_date(tournaments, upcoming)
+    return (*by_date(tournaments, upcoming), None)
 
 
 @app.get("/standings", response_class=HTMLResponse)
@@ -1275,6 +1281,7 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
             "next_number": results[-1]["number"] + 1 if results[-1]["id"] == matchday_id else None,
             "next_date": (date.fromisoformat(matchday["played_on"]) + timedelta(days=7)).isoformat(),
             "in_matchday": True,
+            "recap_players": md_players(result),
             "scorer": auth.can_score(request, tournament),
         })
 
@@ -1759,6 +1766,117 @@ def head_to_head_page(request: Request, player_id: int, other: str | None = None
         "player": player, "other": people.get(chosen), "choices": choices, "h2h": h2h,
         "strip": charts.streak_strip(h2h["form"], _("h2h_results"), results) if h2h else "",
     })
+
+
+def ranking_upto(standings, number):
+    """{player id: position} counting matchdays 1..number (equal points share a
+    position), for the players who had played by then."""
+    points = {r["id"]: sum(p for n, p in r["by_matchday"].items() if n <= number)
+              for r in standings if any(n <= number for n in r["by_matchday"])}
+    return {pid: 1 + sum(1 for other in points.values() if other > p)
+            for pid, p in points.items()}
+
+
+def jornada_recap(conn, matchday_id, player_id, lang):
+    """A player's jornada: their court (place, points, sets), their sets, the ranking
+    after it and how it moved, the court of the next jornada, and the medals won that
+    day. None if they didn't play it."""
+    matchday = get_or_404(conn, "matchdays", matchday_id)
+    tournament = get_tournament(conn, matchday["tournament_id"])
+    results, standings = load_results(conn, tournament["id"])
+    md = next(r for r in results if r["id"] == matchday_id)
+    mine = [(court, r) for court, rows in md["courts"].items() for r in rows
+            if r["id"] == player_id and r["sets"]]
+    if not mine:
+        return None
+    court, row = mine[0]
+    sets = set_rows(conn, matchday_id=matchday_id, player_id=player_id)
+    played = [s for s in reversed(sets) if is_played(s)]
+    after = ranking_upto(standings, md["number"]).get(player_id)
+    before = ranking_upto(standings, md["number"] - 1).get(player_id)
+    upcoming = next((r for r in results if r["number"] == md["number"] + 1), None)
+    next_court = next((c for c, rows in upcoming["courts"].items() for r in rows
+                       if r["id"] == player_id), None) if upcoming else None
+    # Medals of that day only: its sets, and the tournament's row for that matchday.
+    day = [{**t, "ended": False, "matchdays": 0,
+            "history": [h for h in t["history"] if h["id"] == matchday_id]}
+           for t in player_tournaments(conn, player_id, played) if t["id"] == tournament["id"]]
+    won = medals.awards(played, player_id, day)
+    return {"tournament": tournament, "matchday": md, "player": get_or_404(conn, "players", player_id),
+            "court": court, "row": row, "sets": sets, "players": len(md_players(md)),
+            "position": after, "moved": before - after if before and after else None,
+            "next_court": next_court,
+            "medals": [{**m, **won[m["code"]]} for m in medal_types(conn, lang)
+                       if m["code"] in won]}
+
+
+def md_players(md):
+    """{player id: name} of everyone on a matchday's courts, by name."""
+    rows = {r["id"]: r["name"] for rows in md["courts"].values() for r in rows}
+    return dict(sorted(rows.items(), key=lambda kv: kv[1].lower()))
+
+
+def recap_share(request, org, recap):
+    """The recap's public link (/r/...) and its WhatsApp message."""
+    _ = translator(get_lang(request))
+    md, pid = recap["matchday"], recap["player"]["id"]
+    scheme = "https" if auth.is_https(request) else "http"
+    url = (f"{scheme}://{request.url.netloc}/r/{org['id']}/{md['id']}/{pid}/"
+           f"{auth.recap_token(org, md['id'], pid)}")
+    row = recap["row"]
+    lines = [_("recap_share_head", name=recap["player"]["name"],
+               tournament=recap["tournament"]["name"], n=md["number"])]
+    if row["absent"]:
+        lines.append(_("recap_share_absent"))
+    else:
+        lines.append(_("recap_share_court", place=row["place"] or "–", court=recap["court"],
+                       points=row["points"], won=row["sets_won"], sets=row["sets"]))
+    if recap["position"]:
+        moved = recap["moved"]
+        arrow = f" ▲{moved}" if moved and moved > 0 else f" ▼{-moved}" if moved else ""
+        lines.append(_("recap_share_rank", n=recap["position"]) + arrow)
+    if recap["medals"]:
+        lines.append("🏅 " + ", ".join(m["name"] for m in recap["medals"]))
+    text = "\n".join(str(line) for line in lines) + f"\n{url}"
+    return {"url": url, "text": text, "whatsapp": "https://wa.me/?text=" + quote(text, safe="")}
+
+
+@app.get("/matchdays/{matchday_id}/recap", response_class=HTMLResponse)
+def recap_page(request: Request, matchday_id: int, player: str | None = None):
+    """📲 Mi jornada: a player's jornada, ready to share on WhatsApp. Without `player`,
+    the logged-in account's player (or a list to pick from)."""
+    lang = get_lang(request)
+    user = auth.current_user(request)
+    with db.connect() as conn:
+        matchday = get_or_404(conn, "matchdays", matchday_id)
+        results, _ = load_results(conn, matchday["tournament_id"])
+        md = next(r for r in results if r["id"] == matchday_id)
+        people = md_players(md)
+        mine = linked_player(conn, user["id"]) if user else None
+        chosen = opt_int(player) or (mine["id"] if mine and mine["id"] in people else None)
+        recap = jornada_recap(conn, matchday_id, chosen, lang) if chosen in people else None
+    return templates.TemplateResponse(request, "recap.html", {
+        "recap": recap, "people": people, "chosen": chosen, "matchday": md,
+        "share": recap and recap_share(request, auth.current_org(request), recap),
+        "shared": False})
+
+
+@app.get("/r/{org_id}/{matchday_id}/{player_id}/{token}", response_class=HTMLResponse)
+def shared_recap(request: Request, org_id: int, matchday_id: int, player_id: int, token: str):
+    """A recap's public link, as shared on WhatsApp: it opens without entering the
+    organization (the token proves the link came from the app)."""
+    with db.connect() as conn:
+        org = conn.execute("SELECT * FROM organizations WHERE id = ?", (org_id,)).fetchone()
+        if org is None or not hmac.compare_digest(token, auth.recap_token(org, matchday_id,
+                                                                          player_id)):
+            raise HTTPException(404, "Not found")
+        recap = in_org(org_id, lambda: jornada_recap(conn, matchday_id, player_id,
+                                                     get_lang(request)))
+    if recap is None:
+        raise HTTPException(404, "Not found")
+    return templates.TemplateResponse(request, "recap.html", {
+        "recap": recap, "people": {}, "chosen": player_id, "matchday": recap["matchday"],
+        "share": recap_share(request, org, recap), "shared": True, "org_name": org["name"]})
 
 
 def medal_types(conn, lang):

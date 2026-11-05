@@ -13,6 +13,7 @@
   <meta name="apple-mobile-web-app-title" content="PadelScore">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>{% block title %}PadelScore{% endblock %}</title>
+  {% block head %}{% endblock %}
   {# A relative link: behind Azure's HTTPS front end url_for() would build an http:// URL,
      which browsers block on an https:// page. #}
   <link rel="stylesheet" href="/static/style.css?v={{ css_version }}">
