@@ -92,6 +92,10 @@ flowchart LR
   - **iPhone:** Safari has no install API, so the page shows 3 drawn steps (Compartir →
     Agregar a inicio → Agregar). They're inline SVG in the page's colors and language.
     An iPhone sees its section first.
+- **Banner** at the top of the home page (and of the login when it's the home page):
+  "📲 Instala la app en tu teléfono" → `/install`, with ✕ to close it for good in that
+  browser (`localStorage`). Phones only, never inside the installed app
+  (`_install_banner.html`).
 
 ```mermaid
 flowchart TD

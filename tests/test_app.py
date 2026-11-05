@@ -2092,6 +2092,15 @@ def test_my_summary_is_in_the_menu(with_players):
     assert 'href="/players" class="active"' not in menu  # not both highlighted
 
 
+def test_home_has_a_closable_install_banner(client):
+    home = client.get("/").text  # the admin's home
+    assert 'id="install-banner" hidden' in home and 'href="/install"' in home
+    assert 'id="install-banner-close"' in home and "localStorage" in home
+    client.cookies.clear()
+    assert 'id="install-banner"' in client.get("/").text  # the login, as the home page
+    assert 'id="install-banner"' not in client.get("/login").text  # not the plain login
+
+
 def test_install_page_in_the_menu(client):
     page = client.get("/").text
     assert 'class="install-link" href="/install"' in page

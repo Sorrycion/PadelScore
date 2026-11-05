@@ -8,6 +8,7 @@
   <input type="hidden" name="next" value="{{ url }}">
   <button type="submit" class="{{ cls }}">{{ label }}</button>
 </form>{% endmacro %}
+{% include "_install_banner.html" %}
 <h1>👋 {{ _("hello_name", name=account.display_name or account.username) if account else _("hello_guest") }}</h1>
 
 {% if account %}

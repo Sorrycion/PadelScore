@@ -1,0 +1,20 @@
+{# A small "install the app" banner for the top of the home page. Phones only (CSS), never
+   inside the installed app, and gone for good once closed (✕, remembered in this
+   browser's localStorage). It starts hidden: the script shows it when it applies. #}
+<div class="install-banner" id="install-banner" hidden>
+  <a href="/install">📲 {{ _("install_banner") }}</a>
+  <button type="button" class="link plain-link" id="install-banner-close" aria-label="{{ _('close') }}" title="{{ _('close') }}">✕</button>
+</div>
+<script>
+  (function () {
+    var KEY = "padelscore-install-banner-closed", banner = document.getElementById("install-banner");
+    var installed = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    var closed = false;
+    try { closed = localStorage.getItem(KEY) === "1"; } catch (e) {}
+    if (!installed && !closed) banner.hidden = false;
+    document.getElementById("install-banner-close").addEventListener("click", function () {
+      banner.hidden = true;
+      try { localStorage.setItem(KEY, "1"); } catch (e) {}
+    });
+  })();
+</script>

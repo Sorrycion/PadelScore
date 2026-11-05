@@ -597,6 +597,8 @@ TEXT = {
                      "en": "Install it as an app: it opens full screen, with its icon, "
                            "without the browser bar."},
     "install_app": {"es": "Instalar app", "en": "Install the app"},
+    "install_banner": {"es": "Instala la app en tu teléfono", "en": "Install the app on your phone"},
+    "close": {"es": "Cerrar", "en": "Close"},
     "install_now": {"es": "Instalar", "en": "Install"},
     "install_done": {"es": "Ya la tienes instalada", "en": "It's already installed"},
     "install_done_hint": {"es": "Ábrela desde su ícono en tu pantalla de inicio.",
