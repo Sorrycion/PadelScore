@@ -64,6 +64,26 @@ sequenceDiagram
   phones (640 px or less) they fold, with the account links and the language, into a
   ☰ menu. It's a hidden checkbox (`#menu-toggle`) and CSS, with no JavaScript.
 
+## Installable app (PWA)
+
+PadelScore can be added to a phone's home screen and opens full screen, with its own
+icon. Nothing is stored offline: results change all the time, so pages always come from
+the network.
+
+```mermaid
+flowchart LR
+    B[base.html] -- "link rel=manifest" --> M["/static/manifest.webmanifest<br/>name, start_url /, standalone, icons"]
+    B -- "apple-touch-icon + apple-mobile-web-app-* metas" --> I["iPhone: Compartir → Agregar a inicio"]
+    B -- "register('/sw.js')" --> W["/sw.js (route, no-cache)<br/>= app/static/sw.js"]
+    W -- "navigation fails (offline)" --> O["/static/offline.html<br/>(cached at install)"]
+```
+
+- **Icons:** `scripts/make_icons.py` draws `app/static/icons/icon.svg` (the favicon) and,
+  with Chrome's path, the PNGs (apple-touch-icon 180, 192, 512 and a maskable 512).
+- **`/sw.js`** is a route (an open path) so the service worker's scope is the whole site.
+  Bump `CACHE` in `sw.js` when `offline.html` changes.
+- `/me` explains how to install it on iPhone and Android.
+
 ## Data
 
 ```mermaid

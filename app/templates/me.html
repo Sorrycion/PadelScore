@@ -92,4 +92,13 @@
   <label>{{ _("password_again") }} <input type="password" name="password2" autocomplete="new-password" minlength="8" required></label>
   <button type="submit">{{ _("change_password") }}</button>
 </form>
+
+<h2 id="install">📲 {{ _("install_title") }}</h2>
+<div class="card install-card">
+  <p class="muted">{{ _("install_hint") }}</p>
+  <ul>
+    <li><strong>iPhone</strong>: {{ _("install_iphone") }}</li>
+    <li><strong>Android</strong>: {{ _("install_android") }}</li>
+  </ul>
+</div>
 {% endblock %}

@@ -1930,6 +1930,23 @@ def test_tournament_page_shows_only_its_own_medals(league):
     assert "Shutout" not in two and "Got shut out" not in two
 
 
+def test_the_app_can_be_installed(client):
+    import json
+    page = client.get("/").text
+    assert '<link rel="manifest" href="/static/manifest.webmanifest">' in page
+    assert 'rel="apple-touch-icon"' in page and 'register("/sw.js")' in page
+    manifest = json.loads(client.get("/static/manifest.webmanifest").text)
+    assert manifest["display"] == "standalone" and manifest["start_url"] == "/"
+    for icon in manifest["icons"]:
+        assert client.get(icon["src"]).status_code == 200, icon["src"]
+    assert client.get("/static/icons/apple-touch-icon.png").status_code == 200
+    client.cookies.clear()  # the service worker needs no organization nor login
+    r = client.get("/sw.js", follow_redirects=False)
+    assert r.status_code == 200 and "javascript" in r.headers["content-type"]
+    assert "/static/offline.html" in r.text
+    assert client.get("/static/offline.html").status_code == 200
+
+
 def test_health_reports_the_version_and_migrations(client):
     client.cookies.delete("org")  # works before entering an organization
     r = client.get("/health")

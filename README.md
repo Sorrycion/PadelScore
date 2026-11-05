@@ -157,7 +157,7 @@ app/
   templates/     # HTML pages
   static/        # CSS, picker.js, medals/*.svg
 sql/predeployment/  # numbered database changes, run before each deploy
-scripts/         # make_medals.py (medal images), render_pages.py (screenshots)
+scripts/         # make_medals.py (medal images), make_icons.py (app icons), render_pages.py (screenshots)
 docs/            # league rules (REGLAMENTO.md), processes/ (how each part works, diagrams)
 CLAUDE.md        # context Claude Code loads in every session
 .claude/skills/  # Claude Code skills: feature, db-change, deploy, live admin, screenshot, medal
