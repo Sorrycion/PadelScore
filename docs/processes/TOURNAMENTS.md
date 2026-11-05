@@ -37,6 +37,9 @@ These actions are on the tournament page, in the players section:
 
 - **Add**: pick a player, or type a new name and create it.
 - **Remove**: takes the player out of the list. Their sets and points so far stay.
+  Someone who played the last jornada is still suggested for the next one; saving it
+  puts them back on the list. To take them out for good, change their court in the
+  new jornada before saving.
 - **Replace**: the new player takes the old one's place in the list and in the
   *pending* (not yet played) sets only. Played sets stay with the old player. It can
   also be started from the jornada page, with the "Reemplazar" link next to a player

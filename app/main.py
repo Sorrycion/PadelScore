@@ -1376,10 +1376,19 @@ def same_court(old, new, code):
 
 
 def add_court_sets(conn, matchday_id, court, players, code):
+    """The court's sets, pending. Its players also go on the tournament's list (if it
+    keeps one), so whoever plays a jornada can be chosen for the next one, even a
+    player whose place on the list someone else took while they were absent."""
     for (a1, a2), (b1, b2) in court_sets(players, code):
         conn.execute(
             "INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
             "VALUES (?, ?, ?, ?, ?, ?)", (matchday_id, court, a1, a2, b1, b2))
+    tournament_id = conn.execute("SELECT tournament_id FROM matchdays WHERE id = ?",
+                                 (matchday_id,)).fetchone()[0]
+    if conn.execute("SELECT 1 FROM tournament_players WHERE tournament_id = ?",
+                    (tournament_id,)).fetchone():
+        conn.executemany("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
+                         "VALUES (?, ?)", [(tournament_id, p) for p in players])
 
 
 def draw_round(conn, tournament, number, courts=None, rest=()):
@@ -1412,11 +1421,19 @@ def render_courts(request, conn, tournament, courts, *, matchday=None, number=No
                   played_on=None, previous=None, move=None, resting=(), asked=(),
                   court_count=None, error=None, status_code=200):
     """The courts screen: for a new matchday (nothing is saved until the form is sent)
-    or to change the courts of an existing one."""
+    or to change the courts of an existing one. The players to choose from are the
+    tournament's list plus anyone already placed on a court, e.g. a player the
+    suggestion moves down after being absent, whose place on the list someone else
+    took: otherwise their select would come up empty."""
+    listed = players_for(conn, tournament["id"])
+    known = {p["id"] for p in listed}
+    placed = {p for ids in courts for p in ids if p and p not in known}
+    choices = sorted([*listed, *(p for p in all_players(conn) if p["id"] in placed)],
+                     key=lambda p: p["name"].lower())
     return templates.TemplateResponse(request, "courts.html", {
         "tournament": tournament, "matchday": matchday, "courts": courts,
         "number": matchday["number"] if matchday else number,
-        "played_on": played_on, "players": players_for(conn, tournament["id"]),
+        "played_on": played_on, "players": choices,
         "previous": previous, "move": move,
         "resting": [p["name"] for p in all_players(conn) if p["id"] in resting],
         # Americano / Mexicano: the round's settings (courts available, who asked to rest).

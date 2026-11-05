@@ -776,6 +776,36 @@ def test_mark_player_absent_on_a_matchday(league):
     assert league.post("/matchdays/1/absent/8").status_code == 404  # Hugo isn't playing
 
 
+def test_an_absent_player_is_on_the_next_jornada(league):
+    """Production case (2026-11-04): Bruno was absent on jornada 1, a substitute took his
+    place on the tournament's list, and jornada 2's suggested courts couldn't show him."""
+    with db.connect() as conn:
+        conn.executemany("INSERT INTO tournament_players (tournament_id, player_id) VALUES (1, ?)",
+                         [(p,) for p in (1, 2, 3, 4, 5, 6, 7, 8)])
+    league.post("/matchdays/1/courts", data=courts_form((1, 2, 3, 4), (5, 6, 7, 8)))
+    with db.connect() as conn:
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 3, winner = 'A'")
+    league.post("/matchdays/1/absent/3")  # Carlos missed jornada 1
+    with db.connect() as conn:  # and a substitute took his place on the list
+        conn.execute("INSERT INTO players (organization_id, name) VALUES (1, 'Sub')")
+        conn.execute("DELETE FROM tournament_players WHERE player_id = 3")
+        conn.execute("INSERT INTO tournament_players (tournament_id, player_id) "
+                     "SELECT 1, id FROM players WHERE name = 'Sub'")
+    assert standing_points(league.get("/tournaments/1").text, "Carlos") == 0  # absent: 0
+
+    page = league.get("/tournaments/1/matchdays/new",
+                      params={"played_on": "2026-10-30", "move": "1"}).text
+    court_2 = "".join(page.split('name="court-2"')[1:])
+    assert '<option value="3" selected>Carlos</option>' in court_2  # last on 1: moves down
+    data = {"played_on": "2026-10-30", **courts_form((1, 2, 4, 5), (3, 6, 7, 8))}
+    r = league.post("/tournaments/1/matchdays", data=data)
+    assert str(r.url).endswith("/matchdays/2")
+    with db.connect() as conn:  # back on the list, for the jornadas after this one
+        assert conn.execute("SELECT 1 FROM tournament_players WHERE tournament_id = 1 "
+                            "AND player_id = 3").fetchone()
+    assert standing_points(league.get("/tournaments/1").text, "Carlos") == 0  # still 0
+
+
 def test_deleting_a_matchday_removes_its_absences(league):
     league.post("/matches", data=set_form((1, 2, 3, 4), 6, 4))
     league.post("/matchdays/1/absent/1")
