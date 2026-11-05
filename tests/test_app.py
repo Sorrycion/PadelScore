@@ -1998,6 +1998,7 @@ def email_on(monkeypatch):
     monkeypatch.setenv("ACS_CONNECTION_STRING", FAKE_ACS)
     monkeypatch.setenv("MAIL_SENDER", "DoNotReply@test.azurecomm.net")
     monkeypatch.setenv("TASKS_TOKEN", "tarea-secreta")
+    monkeypatch.setenv("MAIL_PAUSE", "0")
     outbox = []
     monkeypatch.setattr(mailer, "send", lambda *args: outbox.append(args) or True)
     return outbox
@@ -2019,7 +2020,7 @@ def test_jornada_recaps_are_emailed_the_next_day_once(with_players, monkeypatch)
         return c.post("/tasks/send-recaps", headers={"X-Task-Token": token},
                       follow_redirects=False)
     assert task("nope").status_code == 404
-    assert task().json() == {"enabled": True, "sent": 0, "failed": 0}  # a set still to play
+    assert task().json()["sent"] == 0  # a set still to play
     with db.connect() as conn:
         conn.execute("UPDATE matches SET team_a_games = 3, team_b_games = 6, winner = 'B' "
                      "WHERE id = 2")
@@ -2127,7 +2128,7 @@ def test_game_day_reminder_email(with_players, monkeypatch):
     def task(path="/tasks/send-reminders", token="tarea-secreta"):
         return c.post(path, headers={"X-Task-Token": token}, follow_redirects=False)
     assert task(token="nope").status_code == 404
-    assert task().json() == {"enabled": True, "sent": 1, "failed": 0}
+    assert task().json()["sent"] == 1
     to, name, subject, text, html = outbox[0]
     assert to == "ana@example.com" and "Hoy juegas" in subject and "Cancha 1" in subject
     assert "Con Bea" in html and "Carlos / Diego" in html and "Con Carlos" in html
@@ -2245,6 +2246,54 @@ def test_accounts_page_sends_a_test_reminder(with_players, monkeypatch):
                      "WHERE matchday_id = 1")
     c.post(f"/users/{uid}/test-reminder")  # nothing pending: the latest jornada
     assert "Jornada 2" in outbox[-1][2]
+
+
+def test_hourly_job_paces_and_stops_at_azures_limit(with_players, monkeypatch):
+    from datetime import date
+    from app import mailer
+    outbox = email_on(monkeypatch)
+    c = with_players
+    with db.connect() as conn:  # two accounts play today, both with sets to play
+        conn.execute("UPDATE matchdays SET played_on = ?", (date.today().isoformat(),))
+        for pid, name in ((1, "ana"), (2, "bea")):
+            uid = users.create_user(conn, "player", name, "clave-larga",
+                                    email=f"{name}@example.com")
+            users.link_player(conn, uid, pid)
+
+    def run():
+        return c.post("/tasks/send-emails", headers={"X-Task-Token": "tarea-secreta"}).json()
+    monkeypatch.setenv("MAIL_PER_RUN", "1")
+    assert run() == {"enabled": True, "sent": 1, "failed": 0, "left": 1, "throttled": False}
+    assert run()["sent"] == 1 and run()["sent"] == 0  # the next run carries on, once each
+    assert len(outbox) == 2
+    # Over Azure's limit (429): stop, record nothing, try again next run.
+    with db.connect() as conn:
+        conn.execute("DELETE FROM sent_emails")
+
+    def refused(*args):
+        mailer.last_status = 429
+        return False
+    monkeypatch.setattr(mailer, "send", refused)
+    monkeypatch.setenv("MAIL_PER_RUN", "9")
+    out = run()
+    assert out["throttled"] and out["failed"] == 1 and out["left"] == 1 and out["sent"] == 0
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sent_emails").fetchone()[0] == 0
+
+
+def test_test_buttons_explain_azures_limit(locked, monkeypatch):
+    from app import mailer
+    with db.connect() as conn:
+        orgs.set_superadmin(conn, "julio", "super")
+        conn.execute("UPDATE users SET email = 'julio@example.com' WHERE username = 'julio'")
+    locked.post("/login", data={"username": "julio", "password": "super", "role": "account"})
+    email_on(monkeypatch)
+
+    def refused(*args):
+        mailer.last_status = 429
+        return False
+    monkeypatch.setattr(mailer, "send", refused)
+    assert "10 emails an hour" in locked.post("/orgs/test-email").text
 
 
 def test_super_admin_sends_a_test_email(locked, monkeypatch):

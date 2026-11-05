@@ -788,6 +788,10 @@ TEXT = {
                            "en Azure (docs/processes/EMAIL.md).",
                      "en": "Email is off: ACS_CONNECTION_STRING and MAIL_SENDER are missing "
                            "in Azure (docs/processes/EMAIL.md)."},
+    "err_mail_throttled": {"es": "Azure no dejó enviarlo: con su dominio gratis permite 10 emails "
+                                 "por hora (y 5 por minuto) en total. Inténtalo en un rato.",
+                           "en": "Azure refused it: its free domain allows 10 emails an hour (and "
+                                 "5 a minute) in total. Try again in a while."},
     "err_mail_failed": {"es": "Azure no aceptó el email: revisa la configuración y el log.",
                         "en": "Azure didn't accept the email: check the setup and the log."},
     "phone_country": {"es": "País (lada)", "en": "Country (code)"},
