@@ -122,10 +122,21 @@ TEXT = {
     "replace_who": {"es": "Sale", "en": "Leaves"},
     "replace_with": {"es": "Entra", "en": "Comes in"},
     "replace_hint": {
-        "es": "El nuevo jugador toma su lugar en la lista y en los sets sin jugar. Los sets "
-              "ya jugados y sus puntos se quedan con quien sale.",
+        "es": "El nuevo jugador toma su lugar en la lista y en los sets sin jugar. Elige qué "
+              "pasa con los sets ya jugados y sus puntos.",
         "en": "The new player takes their place in the list and in the sets not played yet. "
-              "Sets already played, and their points, stay with the player who leaves."},
+              "Choose what happens to the sets already played and their points."},
+    "replace_points": {"es": "🎯 Puntos ya jugados", "en": "🎯 Points already played"},
+    "replace_keep": {"es": "Se quedan con quien sale; el nuevo empieza de cero",
+                     "en": "They stay with the player who leaves; the new one starts from zero"},
+    "replace_move": {"es": "Pasan al nuevo jugador: toma su lugar en todo el torneo",
+                     "en": "They go to the new player, who takes their place in the whole "
+                           "tournament"},
+    "err_replace_conflict_all": {
+        "es": "Ese jugador ya jugó con o contra quien sale en este torneo: no puede tomar sus "
+              "puntos.",
+        "en": "That player already played with or against the one leaving in this "
+              "tournament: they can't take over their points."},
     "confirm_remove_player": {
         "es": "¿Quitar a este jugador del torneo? Sus resultados anteriores se conservan.",
         "en": "Remove this player from the tournament? Their results so far are kept."},

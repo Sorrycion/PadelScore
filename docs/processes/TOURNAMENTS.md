@@ -41,9 +41,24 @@ These actions are on the tournament page, in the players section:
   puts them back on the list. To take them out for good, change their court in the
   new jornada before saving.
 - **Replace**: the new player takes the old one's place in the list and in the
-  *pending* (not yet played) sets only. Played sets stay with the old player. It can
-  also be started from the jornada page, with the "Reemplazar" link next to a player
-  in a court table.
+  *pending* (not yet played) sets. **🎯 Puntos ya jugados** chooses what happens to
+  the sets already played in this tournament (the user's request, 2026-11-05):
+  - **Se quedan con quien sale** (the default): played sets and their points stay with
+    the old player, and the new one starts from zero.
+  - **Pasan al nuevo jugador**: the played sets and the absences move too, so the new
+    player takes the whole place: points, per-jornada history and medals of this
+    tournament. It's refused if the new player already played with or against the
+    old one in this tournament (a set can't have the same player twice).
+
+  It can also be started from the jornada page, with the "Reemplazar" link next to a
+  player in a court table.
+
+```mermaid
+flowchart LR
+    R["🔁 Reemplazar a Bruno por Charly"] --> Q{"🎯 Puntos ya jugados"}
+    Q -- "Se quedan con quien sale" --> K["pending sets + list → Charly<br/>played sets, points → stay with Bruno<br/>Charly starts at 0"]
+    Q -- "Pasan al nuevo jugador" --> M["every set of the tournament + absences + list → Charly<br/>Charly has Bruno's points"]
+```
 
 ## Ending (Terminar torneo)
 
