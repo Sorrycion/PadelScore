@@ -48,6 +48,12 @@ flowchart LR
   player takes the place in pending sets and in the tournament list. See
   [Tournaments](TOURNAMENTS.md).
 
+## 🎯 Chances on pending sets
+
+Before its result is entered, each set on the jornada page (and on its result page)
+shows each pair's chance of winning, as a bar: for example "58% · 42%". It comes from
+the records of the four players ([STATS.md](STATS.md)). Played sets don't show it.
+
 ## 📲 Mi jornada (recap and WhatsApp)
 
 `/matchdays/{id}/recap?player={id}`, linked from every jornada page ("📲 Mi jornada") and

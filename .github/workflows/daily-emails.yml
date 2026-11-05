@@ -1,5 +1,6 @@
-# Every morning: ask the live app to email yesterday's jornada recaps
-# (POST /tasks/send-recaps, see docs/processes/EMAIL.md). Azure App Service F1 can't run
+# Every morning: ask the live app to email today's game-day reminders
+# (POST /tasks/send-reminders) and yesterday's jornada recaps (POST /tasks/send-recaps);
+# see docs/processes/EMAIL.md. Azure App Service F1 can't run
 # scheduled jobs, so GitHub calls it. The app checks the X-Task-Token header against its
 # TASKS_TOKEN app setting; the same value is the repository secret TASKS_TOKEN.
 name: Daily emails
@@ -15,7 +16,7 @@ jobs:
   recaps:
     runs-on: ubuntu-latest
     steps:
-      - name: Send the jornada recaps
+      - name: Send the game-day reminders and the jornada recaps
         env:
           TASKS_TOKEN: ${{ secrets.TASKS_TOKEN }}
           SITE: https://padelscore-sorrycion.azurewebsites.net
@@ -25,6 +26,9 @@ jobs:
             exit 0
           fi
           # F1 sleeps when idle: the first request may take a while to wake it.
-          curl -fsS --max-time 180 --retry 2 --retry-delay 20 -X POST \
-            -H "X-Task-Token: $TASKS_TOKEN" "$SITE/tasks/send-recaps"
-          echo
+          for task in send-reminders send-recaps; do
+            echo "$task:"
+            curl -fsS --max-time 180 --retry 2 --retry-delay 20 -X POST \
+              -H "X-Task-Token: $TASKS_TOKEN" "$SITE/tasks/$task"
+            echo
+          done

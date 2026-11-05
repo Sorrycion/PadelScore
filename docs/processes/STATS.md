@@ -30,6 +30,28 @@ The charts are plain SVG built on the server (`app/charts.py`), with no JavaScri
 use the stylesheet's colors, so they work in dark mode. Tapping a point or bar shows its
 value. Labels are escaped.
 
+## 🎯 Chances of winning a set
+
+`stats.player_rates` (everyone's sets won and played in the organization) and
+`stats.win_probability(rates, team, rivals)`:
+
+- **A player's level** is (won + 1) / (played + 2): a newcomer starts at 50%, and a few
+  sets don't make 0% or 100%.
+- **A pair's level** is the average of its two players.
+- **The chance** compares the two levels as odds (like a simple Elo): equal levels give
+  50%, and 2/3 against 1/3 gives 80%.
+
+```mermaid
+flowchart LR
+    S["every played set of the organization"] --> R["player_rates: won / played"]
+    R --> L["level = (won+1)/(played+2)"]
+    L --> P["pair = average of its 2 players"]
+    P --> W["chance = odds(A) / (odds(A) + odds(B))"]
+    W --> J["jornada: bar on each pending set"]
+    W --> E["⏰ game-day email: each set"]
+    W --> H["⚔️ Cara a cara: you vs that player"]
+```
+
 ## ⚔️ Cara a cara (head to head)
 
 The player's tab `/players/{id}/vs?other={id}`: one player against another of the

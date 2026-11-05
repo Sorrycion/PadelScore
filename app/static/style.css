@@ -262,6 +262,15 @@ input.score-box::-webkit-inner-spin-button, input.score-box::-webkit-outer-spin-
 .score { display: flex; gap: 10px; }
 form.score-form { display: none; }
 .teams { display: grid; grid-template-columns: 1fr 1fr; }
+/* A pending set's chances: pair A (left, accent) against pair B (right). */
+.chance { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+          padding: 2px 16px 6px; font-size: .85rem; font-weight: 700; }
+.chance .a { color: var(--accent); }
+.chance .b { color: var(--muted); }
+.chance .bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.chance .bar span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.h2h-chance p { margin: 0 0 8px; }
+.h2h-chance .chance { padding: 0 0 8px; }
 .team { padding: 4px 20px; font-size: 1.1rem; display: grid; gap: 8px; }
 .team.b { text-align: right; border-left: 1px solid var(--border); }
 .team.winner { color: var(--accent); font-weight: 700; }

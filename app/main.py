@@ -874,7 +874,8 @@ def me_page(request: Request, error: str | None = None, saved: str | None = None
 def update_me(request: Request, username: str = Form(""), email: str = Form(""),
               first_name: str = Form(""), last_name: str = Form(""),
               display_name: str = Form(""), phone_country: str = Form(""),
-              phone: str = Form(""), email_recaps: str = Form("")):
+              phone: str = Form(""), email_recaps: str = Form(""),
+              email_reminders: str = Form("")):
     """Change your own details. A new display name renames your players too (if no one
     else in their organization has it)."""
     user = auth.current_user(request)
@@ -893,8 +894,8 @@ def update_me(request: Request, username: str = Form(""), email: str = Form(""),
                               phone_country=phone_country, phone=phone)
         except users.UserError as e:
             return redirect(f"/me?error={e}")
-        conn.execute("UPDATE users SET email_recaps = ? WHERE id = ?",
-                     (1 if email_recaps else 0, user["id"]))
+        conn.execute("UPDATE users SET email_recaps = ?, email_reminders = ? WHERE id = ?",
+                     (1 if email_recaps else 0, 1 if email_reminders else 0, user["id"]))
         for p in mine:
             in_org(p["organization_id"], lambda: take_display_name(conn, p, display))
     return redirect("/me?saved=1")
@@ -1368,6 +1369,7 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
             "next_number": results[-1]["number"] + 1 if results[-1]["id"] == matchday_id else None,
             "next_date": (date.fromisoformat(matchday["played_on"]) + timedelta(days=7)).isoformat(),
             "in_matchday": True,
+            "chances": set_chances(conn, sets),
             "recap_players": md_players(result),
             "scorer": auth.can_score(request, tournament),
         })
@@ -1840,6 +1842,7 @@ def head_to_head_page(request: Request, player_id: int, other: str | None = None
         player = get_or_404(conn, "players", player_id)
         played = [s for s in reversed(set_rows(conn, player_id=player_id)) if is_played(s)]
         people = {p["id"]: p for p in all_players(conn) if p["id"] != player_id}
+        rates = org_rates(conn)
     met = Counter(i for s in played for i in (s["a1_id"], s["a2_id"], s["b1_id"], s["b2_id"])
                   if i != player_id)
     choices = sorted((p for p in people.values() if met[p["id"]]),
@@ -1853,6 +1856,8 @@ def head_to_head_page(request: Request, player_id: int, other: str | None = None
     return templates.TemplateResponse(request, "head_to_head.html", {
         "player": player, "other": people.get(chosen), "choices": choices, "h2h": h2h,
         "strip": charts.streak_strip(h2h["form"], _("h2h_results"), results) if h2h else "",
+        "chance": round(100 * stats.win_probability(rates, (player_id,), (chosen,)))
+                  if chosen else None,
     })
 
 
@@ -1949,13 +1954,30 @@ def email_extras(conn, recap):
                        for m in won]}
 
 
+def site_base(request):
+    """https://<host> of this request (Azure's front end speaks HTTPS for us)."""
+    return f"{'https' if auth.is_https(request) else 'http'}://{request.url.netloc}"
+
+
+def unsubscribe_url(request, user, kind):
+    """An email's signed unsubscribe link; `kind` is "recaps" or "reminders"."""
+    return f"{site_base(request)}/unsubscribe/{user['id']}/{auth.unsubscribe_token(user)}?kind={kind}"
+
+
+def require_task_token(request):
+    """The daily tasks only exist for a caller with the X-Task-Token header equal to the
+    TASKS_TOKEN app setting (GitHub Actions)."""
+    token = os.environ.get("TASKS_TOKEN", "")
+    if not token or not hmac.compare_digest(request.headers.get("x-task-token", ""), token):
+        raise HTTPException(404, "Not found")
+
+
 def recap_email(request, org, recap, user, extras=None):
     """(subject, plain text, HTML) of a jornada recap email, in Spanish (the league's
     language; accounts have no language of their own yet). `extras`: email_extras()."""
     _ = translator("es")
     share = recap_share(request, org, recap)
-    base = share["url"].split("/r/", 1)[0]
-    unsubscribe = f"{base}/unsubscribe/{user['id']}/{auth.unsubscribe_token(user)}"
+    unsubscribe = unsubscribe_url(request, user, "recaps")
     subject = str(_("recap_email_subject", n=recap["matchday"]["number"],
                     tournament=recap["tournament"]["name"]))
     text = (f"{share['text']}\n\n{_('recap_email_whatsapp')}: {share['whatsapp']}\n\n"
@@ -1996,9 +2018,7 @@ def send_recaps(request: Request):
     """Called every morning by GitHub Actions (.github/workflows/daily-emails.yml): emails
     each account the recap of the jornada it played (recaps_due), once. The header
     X-Task-Token must match the app setting TASKS_TOKEN; otherwise it doesn't exist."""
-    token = os.environ.get("TASKS_TOKEN", "")
-    if not token or not hmac.compare_digest(request.headers.get("x-task-token", ""), token):
-        raise HTTPException(404, "Not found")
+    require_task_token(request)
     if not mailer.enabled():
         return {"enabled": False, "sent": 0, "failed": 0}
     sent = failed = 0
@@ -2022,15 +2042,166 @@ def send_recaps(request: Request):
     return {"enabled": True, "sent": sent, "failed": failed}
 
 
+def org_rates(conn):
+    """Everyone's record in this organization (stats.player_rates of its played sets)."""
+    return stats.player_rates([s for s in set_rows(conn) if is_played(s)])
+
+
+def set_chances(conn, sets):
+    """{set id: % pair A wins} for the pending sets among `sets`, from the records."""
+    pending = [s for s in sets if not is_played(s)]
+    if not pending:
+        return {}
+    rates = org_rates(conn)
+    return {s["id"]: round(100 * stats.win_probability(
+        rates, (s["a1_id"], s["a2_id"]), (s["b1_id"], s["b2_id"]))) for s in pending}
+
+
+def plays(s, pid):
+    return pid in (s["a1_id"], s["a2_id"], s["b1_id"], s["b2_id"])
+
+
+def reminder_data(conn, matchday_id, player_id):
+    """What a game-day reminder says (run inside the organization): the player's court,
+    position and points before the jornada, their tournament so far, and each of their
+    sets that day with partner, rivals, the chance of winning (stats.win_probability on
+    every played set of the organization) and their record against each rival. None if
+    they have no sets that day."""
+    matchday = get_or_404(conn, "matchdays", matchday_id)
+    sets = sorted(set_rows(conn, matchday_id=matchday_id, player_id=player_id),
+                  key=lambda s: (s["court"], s["id"]))
+    if not sets:
+        return None
+    tournament = get_tournament(conn, matchday["tournament_id"])
+    _, standings = load_results(conn, tournament["id"])
+    me = next((r for r in standings if r["id"] == player_id), None)
+    before = matchday["number"] - 1
+    history = [s for s in reversed(set_rows(conn)) if is_played(s)]  # oldest first
+    mine = [s for s in history if plays(s, player_id)]
+    in_tournament = [s for s in mine if s["tournament_id"] == tournament["id"]]
+    rates = stats.player_rates(history)
+    rows = []
+    for s in sets:
+        partner_id, partner_name = stats.partner(s, player_id)
+        rivals = stats.opponents(s, player_id)
+        chance = stats.win_probability(rates, (player_id, partner_id), [i for i, _ in rivals])
+        rows.append({"set": s, "partner": partner_name, "rivals": rivals,
+                     "chance": round(100 * chance), "played": is_played(s),
+                     "h2h": [{"name": name, **stats.head_to_head(mine, player_id, i)["against"]}
+                             for i, name in rivals]})
+    return {"tournament": tournament, "matchday": matchday,
+            "player": get_or_404(conn, "players", player_id), "court": sets[0]["court"],
+            "position": ranking_upto(standings, before).get(player_id),
+            "points": sum(p for n, p in me["by_matchday"].items() if n <= before) if me else 0,
+            "totals": stats.totals(in_tournament, player_id),
+            "streak": stats.streaks(in_tournament, player_id), "sets": rows}
+
+
+def reminder_email(request, org, data, user):
+    """(subject, plain text, HTML) of a game-day reminder, in Spanish."""
+    _ = translator("es")
+    md, t = data["matchday"], data["tournament"]
+    subject = str(_("reminder_subject", tournament=t["name"], n=md["number"], court=data["court"]))
+    lines = [subject]
+    if data["position"]:
+        lines.append(str(_("reminder_position", n=data["position"], points=data["points"])))
+    for i, row in enumerate(data["sets"], 1):
+        rivals = " / ".join(name for _, name in row["rivals"])
+        lines.append(f"{i}. {_('reminder_with', name=row['partner'])} vs {rivals}: "
+                     f"{_('reminder_chance', n=row['chance'])}")
+    link = f"{site_base(request)}/matchdays/{md['id']}"
+    unsubscribe = unsubscribe_url(request, user, "reminders")
+    text = "\n".join(lines) + f"\n\n{link}\n\n{_('recap_email_unsubscribe')}: {unsubscribe}"
+    html = templates.env.get_template("email_reminder.html").render(
+        _=_, d=data, org_name=org["name"], link=link, unsubscribe=unsubscribe)
+    return subject, text, html
+
+
+def reminders_due(conn):
+    """(matchday, player, account, organization) for every account that plays a jornada
+    today: an email and a player, reminders on, a set of that day still to play, and not
+    reminded yet."""
+    return conn.execute(
+        """
+        SELECT DISTINCT d.id AS matchday_id, p.id AS player_id, u.id AS user_id,
+               t.organization_id
+        FROM matchdays d
+        JOIN tournaments t ON t.id = d.tournament_id
+        JOIN matches m ON m.matchday_id = d.id AND m.team_a_games IS NULL
+        JOIN players p ON p.id IN (m.a1, m.a2, m.b1, m.b2)
+        JOIN users u ON u.id = p.user_id
+        WHERE d.played_on = ? AND u.email IS NOT NULL AND u.email_reminders = 1
+          AND NOT EXISTS (SELECT 1 FROM sent_emails s WHERE s.kind = 'reminder'
+                          AND s.user_id = u.id AND s.matchday_id = d.id)
+        ORDER BY d.id, u.id
+        """, (date.today().isoformat(),)).fetchall()
+
+
+@app.post("/tasks/send-reminders")
+def send_reminders(request: Request):
+    """Called every morning by GitHub Actions with the recaps: emails everyone who plays
+    today their game-day reminder (reminders_due), once."""
+    require_task_token(request)
+    if not mailer.enabled():
+        return {"enabled": False, "sent": 0, "failed": 0}
+    sent = failed = 0
+    with db.connect() as conn:
+        for due in reminders_due(conn):
+            org = conn.execute("SELECT * FROM organizations WHERE id = ?",
+                               (due["organization_id"],)).fetchone()
+            data = in_org(org["id"], lambda: reminder_data(conn, due["matchday_id"],
+                                                           due["player_id"]))
+            user = users.get(conn, due["user_id"])
+            if data is None:
+                continue
+            if mailer.send(user["email"], user["display_name"] or user["username"],
+                           *reminder_email(request, org, data, user)):
+                conn.execute("INSERT INTO sent_emails (kind, user_id, matchday_id) "
+                             "VALUES ('reminder', ?, ?)", (user["id"], due["matchday_id"]))
+                sent += 1
+            else:
+                failed += 1
+    return {"enabled": True, "sent": sent, "failed": failed}
+
+
+@app.post("/tournaments/{tournament_id}/players/{player_id}/reminder", dependencies=EDIT)
+def email_player_reminder(request: Request, tournament_id: int, player_id: int):
+    """⏰ in the tournament's player list (admins): email the player, now, the game-day
+    reminder of their next jornada with sets to play (or, without one, their latest), to
+    try it. Not recorded."""
+    back = f"/tournaments/{tournament_id}"
+    with db.connect() as conn:
+        get_tournament(conn, tournament_id)
+        get_or_404(conn, "players", player_id)
+        user = conn.execute("SELECT u.* FROM users u JOIN players p ON p.user_id = u.id "
+                            "WHERE p.id = ?", (player_id,)).fetchone()
+        if user is None or not user["email"]:
+            return redirect(f"{back}?error=err_no_player_email#players")
+        if not mailer.enabled():
+            return redirect(f"{back}?error=err_mail_off#players")
+        jornada = conn.execute(
+            "SELECT d.id FROM matchdays d JOIN matches m ON m.matchday_id = d.id "
+            "WHERE d.tournament_id = ? AND ? IN (m.a1, m.a2, m.b1, m.b2) "
+            "ORDER BY (m.team_a_games IS NULL) DESC, d.number DESC LIMIT 1",
+            (tournament_id, player_id)).fetchone()
+        data = jornada and reminder_data(conn, jornada["id"], player_id)
+        if not data:
+            return redirect(f"{back}?error=err_no_jornada_yet#players")
+        ok = mailer.send(user["email"], user["display_name"] or user["username"],
+                         *reminder_email(request, auth.current_org(request), data, user))
+    return redirect(f"{back}?mail=sent#players" if ok else f"{back}?error=err_mail_failed#players")
+
+
 @app.get("/unsubscribe/{user_id}/{token}", response_class=HTMLResponse)
-def unsubscribe(request: Request, user_id: int, token: str):
-    """An email's unsubscribe link: no more recap emails for that account. /me turns
-    them back on."""
+def unsubscribe(request: Request, user_id: int, token: str, kind: str = "recaps"):
+    """An email's unsubscribe link: no more emails of that kind ("recaps" or
+    "reminders") for that account. /me turns them back on."""
     with db.connect() as conn:
         user = users.get(conn, user_id)
         if user is None or not hmac.compare_digest(token, auth.unsubscribe_token(user)):
             raise HTTPException(404, "Not found")
-        conn.execute("UPDATE users SET email_recaps = 0 WHERE id = ?", (user_id,))
+        column = "email_reminders" if kind == "reminders" else "email_recaps"
+        conn.execute(f"UPDATE users SET {column} = 0 WHERE id = ?", (user_id,))
     return templates.TemplateResponse(request, "unsubscribed.html", {})
 
 
@@ -2333,7 +2504,8 @@ def edit_match_page(request: Request, match_id: int, error: str | None = None):
         row = next(s for s in set_rows(conn, matchday_id=match["matchday_id"])
                    if s["id"] == match_id)
         return templates.TemplateResponse(request, "match_score.html", {
-            "m": row, "tournament": tournament, "error": error})
+            "m": row, "tournament": tournament, "error": error,
+            "chances": set_chances(conn, [row])})
 
 
 @app.post("/matches/{match_id}")
