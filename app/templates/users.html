@@ -6,37 +6,54 @@
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if mail_sent %}<p class="saved">✅ {{ _("recap_email_sent") }}</p>{% endif %}
 {% if not mail_enabled %}<p class="muted">📧 {{ _("err_mail_off") }}</p>{% endif %}
+<p><a href="/emails">📬 {{ _("nav_emails") }}</a></p>
 {% if accounts %}
-<ul class="cards">
+<div class="inline filters">
+  <input type="search" class="table-search" data-filter="accounts" placeholder="{{ _('filter_search') }}" aria-label="{{ _('filter_search') }}">
+  <select data-filter="accounts" data-filter-key="role" aria-label="{{ _('role') }}">
+    <option value="">{{ _("all_roles") }}</option>
+    {% for r in ("player", "org_admin", "super") %}<option value="{{ r }}">{{ _(ROLE_KEYS[r]) }}</option>{% endfor %}
+  </select>
+</div>
+<p class="muted"><span data-filter-count="accounts">{{ accounts|length }}</span> / {{ accounts|length }}</p>
+<div class="scroll">
+<table class="data-table" id="accounts" data-filterable>
+  <thead><tr>
+    <th>{{ _("full_name") }}</th><th></th><th>{{ _("username") }}</th><th>{{ _("role") }}</th>
+    <th>{{ _("email") }}</th><th>{{ _("phone") }}</th><th>{{ _("player") }}</th>
+  </tr></thead>
+  <tbody>
   {% for u in accounts %}
-  <li class="card org-card">
-    <div class="name"><a class="plain" href="/users/{{ u.id }}">{{ u.display_name or u.username }}</a>
-      <span class="tag">{{ _(ROLE_KEYS[u.role]) }}</span></div>
-    <dl class="creds">
-      <dt>{{ _("username") }}</dt><dd><code>{{ u.username }}</code></dd>
-      {% if u.email %}<dt>{{ _("email") }}</dt><dd>{{ u.email }}</dd>{% endif %}
-      {% if u.phone %}<dt>{{ _("phone") }}</dt><dd><a href="{{ u|phone_link }}">{{ u|phone }}</a></dd>{% endif %}
-      {% if u.first_name or u.last_name %}<dt>{{ _("full_name") }}</dt><dd>{{ u.first_name or "" }} {{ u.last_name or "" }}</dd>{% endif %}
-      {% if u.player %}<dt>{{ _("player") }}</dt><dd><a class="plain" href="/players/{{ u.player.id }}">{{ u.player.name }}</a></dd>{% endif %}
-    </dl>
-    <div class="inline account-actions">
-      <a class="button secondary" href="/users/{{ u.id }}">{{ _("edit") }}</a>
+  <tr data-role="{{ u.role }}">
+    <td><a class="plain" href="/users/{{ u.id }}"><strong>{{ u.display_name or u.username }}</strong></a>
+      {% if u.first_name or u.last_name %}<br><span class="muted">{{ u.first_name or "" }} {{ u.last_name or "" }}</span>{% endif %}</td>
+    <td class="row-actions">
+      <a class="button secondary small" href="/users/{{ u.id }}" title="{{ _('edit') }}">✏️</a>
       {% if u.email %}
-      <form method="post" action="/users/{{ u.id }}/test-email" class="inline"
+      <form method="post" action="/users/{{ u.id }}/test-email"
             onsubmit="return confirm('{{ _('confirm_test_email', name=u.display_name or u.username) }}')">
-        <button type="submit" class="secondary">📧 {{ _("test_email") }}</button>
+        <button type="submit" class="secondary small" title="{{ _('test_email') }}">📧</button>
       </form>
       {% if u.player %}
-      <form method="post" action="/users/{{ u.id }}/test-reminder" class="inline"
+      <form method="post" action="/users/{{ u.id }}/test-reminder"
             onsubmit="return confirm('{{ _('confirm_test_reminder', name=u.display_name or u.username) }}')">
-        <button type="submit" class="secondary">⏰ {{ _("test_reminder") }}</button>
+        <button type="submit" class="secondary small" title="{{ _('test_reminder') }}">⏰</button>
       </form>
       {% endif %}
       {% endif %}
-    </div>
-  </li>
+    </td>
+    <td><code>{{ u.username }}</code></td>
+    <td><span class="tag">{{ _(ROLE_KEYS[u.role]) }}</span></td>
+    <td>{{ u.email or "" }}</td>
+    <td>{% if u.phone %}<a href="{{ u|phone_link }}">{{ u|phone }}</a>{% endif %}</td>
+    <td>{% if u.player %}<a class="plain" href="/players/{{ u.player.id }}">{{ u.player.name }}</a>{% endif %}</td>
+  </tr>
   {% endfor %}
-</ul>
+  </tbody>
+</table>
+</div>
+<p class="muted">{{ _("edit") }} · 📧 {{ _("test_email") }} · ⏰ {{ _("test_reminder") }}</p>
+<script src="/static/table-filter.js?v={{ css_version }}" defer></script>
 {% else %}
 <p class="empty">{{ _("no_users") }}</p>
 {% endif %}

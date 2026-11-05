@@ -165,6 +165,10 @@ Any account can open `/me`, from the 👤 name in the header. It shows:
 
 ## Details
 
+- **🔑 Cuentas** (`/<slug>/users`) is a **table**: name, actions (✏️ edit, 📧 test
+  email, ⏰ test reminder), username, role, email, cell phone, player. A text filter
+  (ignores accents and case) and a role filter work right on the page
+  (`static/table-filter.js`).
 - **Admins manage accounts** on `/users`:
   - Organization admins see their organization's admins and the accounts of its
     players. They change details and passwords, and link or unlink players.

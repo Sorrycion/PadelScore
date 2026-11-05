@@ -18,6 +18,13 @@ they have entered an organization.
   that had none, which is how the data from before organizations became Nene's.
 
 
+## ⭐ Organizaciones (super admins)
+
+`/orgs` is a **table** with a text filter: name, actions (Entrar; ✏️ change its admin's
+user or password), its link (`/<slug>`), admin user and password, and its tournaments
+and players. 📧 Probar email sends a test to your own address, and "Crear organización"
+adds one.
+
 ## Each organization's URLs (`/<slug>/...`)
 
 Every organization has a **slug**, its name in its URLs (`Nene` → `nene`). Its pages

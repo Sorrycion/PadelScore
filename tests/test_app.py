@@ -2338,6 +2338,48 @@ def test_test_buttons_explain_azures_limit(locked, monkeypatch):
     assert "10 emails an hour" in locked.post("/orgs/test-email").text
 
 
+def test_emails_page_logs_every_attempt(with_players, monkeypatch):
+    from app import mailer
+    outbox = email_on(monkeypatch)
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # Ana, ana@example.com
+    with db.connect() as conn:
+        conn.execute("UPDATE matchdays SET played_on = ?", (league_today().isoformat(),))
+    c.post("/tasks/send-emails", headers={"X-Task-Token": "tarea-secreta"})  # her reminder
+    assert len(outbox) == 1
+
+    def refused(*args):
+        mailer.last_status, mailer.last_error = 429, "HTTP 429: too many requests"
+        return False
+    monkeypatch.setattr(mailer, "send", refused)
+    c.post("/logout")
+    c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
+    uid = int(re.search(r'action="/club/users/(\d+)/test-email"', c.get("/users").text).group(1))
+    c.post(f"/users/{uid}/test-email")  # refused by Azure: logged too
+    page = c.get("/emails").text
+    assert "📬 Emails" in page and "ana@example.com" in page and "Hoy juegas" in page
+    assert "✅ Sent" in page and "⏳ Azure's limit" in page and "HTTP 429" in page
+    assert page.count("<tr class=\"status-") == 2
+    only_failed = c.get("/emails", params={"status": "throttled"}).text
+    assert only_failed.count("<tr class=\"status-") == 1 and "Hoy juegas" not in only_failed
+    assert "No emails that day" in c.get("/emails", params={"day": "2020-01-01"}).text
+    c.post("/logout")
+    assert c.get("/club/emails", follow_redirects=False).headers["location"].startswith("/login")
+
+
+def test_accounts_and_organizations_are_filterable_tables(locked):
+    with db.connect() as conn:
+        orgs.set_superadmin(conn, "julio", "super")
+    locked.post("/login", data={"username": "julio", "password": "super", "role": "account"})
+    page = locked.get("/club/users").text
+    assert 'id="accounts" data-filterable' in page and 'data-filter-key="role"' in page
+    assert '<tr data-role="org_admin">' in page and "table-filter.js" in page
+    orgs_page = locked.get("/orgs").text
+    assert 'id="orgs" data-filterable' in orgs_page and 'href="/club">/club</a>' in orgs_page
+    assert locked.get("/static/table-filter.js").status_code == 200
+
+
 def test_super_admin_sends_a_test_email(locked, monkeypatch):
     with db.connect() as conn:
         orgs.set_superadmin(conn, "julio", "super")

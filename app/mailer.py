@@ -28,6 +28,7 @@ from urllib.parse import urlsplit
 API = "/emails:send?api-version=2023-03-31"
 THROTTLED = 429  # ACS: over the sending limits
 last_status = None  # HTTP status of the last failed send (None: sent, off, or no answer)
+last_error = None   # why the last send failed, for the email log
 
 
 def per_run():
@@ -77,8 +78,8 @@ def message(sender, to, name, subject, text, html):
 def send(to, name, subject, text, html):
     """Send one email. True when ACS accepted it, False when email is off or it failed
     (the reason goes to the app's log)."""
-    global last_status
-    last_status = None
+    global last_status, last_error
+    last_status = last_error = None
     config = settings()
     if config is None:
         return False
@@ -88,10 +89,13 @@ def send(to, name, subject, text, html):
                                      headers=signed_headers(endpoint, key, body))
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
+            if response.status != 202:
+                last_error = f"HTTP {response.status}"
             return response.status == 202
     except (urllib.error.URLError, TimeoutError) as e:
         if isinstance(e, urllib.error.HTTPError):
             last_status = e.code
         detail = e.read().decode(errors="replace")[:300] if isinstance(e, urllib.error.HTTPError) else e
+        last_error = (f"HTTP {last_status}: {detail}" if last_status else str(detail))[:500]
         print(f"mailer: sending to {to} failed: {detail}", flush=True)
         return False

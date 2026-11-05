@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ _("nav_emails") }} · PadelScore{% endblock %}
+{% block content %}
+{# 📬 The emails of one league day (main.emails_page): who, what, and how it went. #}
+<h1>📬 {{ _("nav_emails") }}</h1>
+<p class="muted">{{ _("emails_hint") }}</p>
+<form method="get" action="/emails" class="inline filters">
+  <a class="button secondary" href="/emails?day={{ prev_day }}" aria-label="{{ _('previous_day') }}">←</a>
+  <input type="date" name="day" value="{{ day }}" aria-label="{{ _('date') }}" onchange="this.form.submit()">
+  <a class="button secondary" href="/emails?day={{ next_day }}" aria-label="{{ _('next_day') }}">→</a>
+  <select name="status" aria-label="{{ _('email_status') }}" onchange="this.form.submit()">
+    <option value="">{{ _("all_statuses") }}</option>
+    {% for s, key in EMAIL_STATUS_KEYS.items() %}<option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ _(key) }}</option>{% endfor %}
+  </select>
+  <select name="kind" aria-label="{{ _('email_kind') }}" onchange="this.form.submit()">
+    <option value="">{{ _("all_kinds") }}</option>
+    {% for k, key in EMAIL_KIND_KEYS.items() %}<option value="{{ k }}" {% if k == kind %}selected{% endif %}>{{ _(key) }}</option>{% endfor %}
+  </select>
+  <noscript><button type="submit">{{ _("show") }}</button></noscript>
+</form>
+
+<div class="tiles">
+  {% for s, key in EMAIL_STATUS_KEYS.items() %}
+  <div class="tile"><strong class="{{ 'up' if s == 'sent' else 'down' }}">{{ counts.get(s, 0) }}</strong><span>{{ _(key) }}</span></div>
+  {% endfor %}
+</div>
+
+{% if rows %}
+<input type="search" class="table-search" data-filter="email-log" placeholder="{{ _('filter_search') }}" aria-label="{{ _('filter_search') }}">
+<p class="muted"><span data-filter-count="email-log">{{ rows|length }}</span> / {{ rows|length }}</p>
+<div class="scroll">
+<table class="data-table" id="email-log" data-filterable>
+  <thead><tr><th>{{ _("time") }}</th><th>{{ _("email_to") }}</th><th>{{ _("email_kind") }}</th><th>{{ _("email_subject") }}</th><th>{{ _("email_status") }}</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr class="status-{{ r.status }}">
+    <td>{{ r.time }}</td>
+    <td>{% if r.user_id %}<a class="plain" href="/users/{{ r.user_id }}">{{ r.display_name or r.username }}</a><br>{% endif %}<span class="muted">{{ r.address }}</span></td>
+    <td>{{ _(EMAIL_KIND_KEYS.get(r.kind, "email_kind_test")) }}</td>
+    <td>{{ r.subject }}</td>
+    <td>{{ _(EMAIL_STATUS_KEYS[r.status]) }}{% if r.error %}<br><span class="muted small" title="{{ r.error }}">{{ r.error[:80] }}</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<script src="/static/table-filter.js?v={{ css_version }}" defer></script>
+{% else %}
+<p class="empty">{{ _("no_emails_day") }}</p>
+{% endif %}
+{% endblock %}
