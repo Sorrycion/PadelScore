@@ -750,6 +750,11 @@ TEXT = {
     "confirm_email_recap": {"es": "¿Enviar a {name} el resumen de su última jornada por email?",
                             "en": "Email {name} the recap of their latest matchday?"},
     "recap_email_sent": {"es": "Email enviado.", "en": "Email sent."},
+    "test_reminder": {"es": "Probar recordatorio", "en": "Test reminder"},
+    "confirm_test_reminder": {"es": "¿Enviar a {name} el recordatorio de su próxima jornada (sea "
+                                    "el día que sea)?",
+                              "en": "Send {name} the reminder of their next matchday (whatever "
+                                    "its date)?"},
     "confirm_test_email": {"es": "¿Enviar a {name} un email de prueba (el resumen de su última "
                                  "jornada, si tiene)?",
                            "en": "Send {name} a test email (the recap of their latest matchday, "

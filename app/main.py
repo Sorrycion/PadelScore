@@ -2180,6 +2180,49 @@ def send_reminders(request: Request):
     return {"enabled": True, "sent": sent, "failed": failed}
 
 
+def next_jornada(conn, player_id, tournament_id=None):
+    """The player's next jornada with a set still to play (the soonest), or else their
+    latest one, in this organization (or that tournament): its id, or None."""
+    where = ("t.organization_id = ? AND ? IN (m.a1, m.a2, m.b1, m.b2)"
+             + (" AND d.tournament_id = ?" if tournament_id else ""))
+    params = (org_id(), player_id) + ((tournament_id,) if tournament_id else ())
+    base = ("SELECT d.id FROM matchdays d JOIN tournaments t ON t.id = d.tournament_id "
+            f"JOIN matches m ON m.matchday_id = d.id WHERE {where}")
+    row = (conn.execute(base + " AND m.team_a_games IS NULL ORDER BY d.played_on, d.number "
+                        "LIMIT 1", params).fetchone()
+           or conn.execute(base + " ORDER BY d.played_on DESC, d.number DESC LIMIT 1",
+                           params).fetchone())
+    return row["id"] if row else None
+
+
+def send_test_reminder(request, conn, user, player_id, tournament_id=None):
+    """Email `user`, now, the game-day reminder of next_jornada(): "sent", or the error."""
+    if not user["email"]:
+        return "err_no_player_email"
+    if not mailer.enabled():
+        return "err_mail_off"
+    jornada = next_jornada(conn, player_id, tournament_id)
+    data = jornada and reminder_data(conn, jornada, player_id)
+    if not data:
+        return "err_no_jornada_yet"
+    ok = mailer.send(user["email"], user["display_name"] or user["username"],
+                     *reminder_email(request, auth.current_org(request), data, user))
+    return "sent" if ok else "err_mail_failed"
+
+
+@app.post("/users/{user_id}/test-reminder", dependencies=EDIT)
+def account_test_reminder(request: Request, user_id: int):
+    """⏰ Probar recordatorio on 🔑 Cuentas: email this account, now, the game-day reminder
+    of its player's next jornada (whatever its date), to try it. Not recorded, so the
+    real reminder still goes on the day."""
+    with db.connect() as conn:
+        user = managed_user(conn, request, user_id)
+        player = linked_player(conn, user_id)
+        result = (send_test_reminder(request, conn, user, player["id"]) if player
+                  else "err_no_jornada_yet")
+    return redirect("/users?mail=sent" if result == "sent" else f"/users?error={result}")
+
+
 @app.post("/tournaments/{tournament_id}/players/{player_id}/reminder", dependencies=EDIT)
 def email_player_reminder(request: Request, tournament_id: int, player_id: int):
     """⏰ in the tournament's player list (admins): email the player, now, the game-day
@@ -2191,21 +2234,10 @@ def email_player_reminder(request: Request, tournament_id: int, player_id: int):
         get_or_404(conn, "players", player_id)
         user = conn.execute("SELECT u.* FROM users u JOIN players p ON p.user_id = u.id "
                             "WHERE p.id = ?", (player_id,)).fetchone()
-        if user is None or not user["email"]:
-            return redirect(f"{back}?error=err_no_player_email#players")
-        if not mailer.enabled():
-            return redirect(f"{back}?error=err_mail_off#players")
-        jornada = conn.execute(
-            "SELECT d.id FROM matchdays d JOIN matches m ON m.matchday_id = d.id "
-            "WHERE d.tournament_id = ? AND ? IN (m.a1, m.a2, m.b1, m.b2) "
-            "ORDER BY (m.team_a_games IS NULL) DESC, d.number DESC LIMIT 1",
-            (tournament_id, player_id)).fetchone()
-        data = jornada and reminder_data(conn, jornada["id"], player_id)
-        if not data:
-            return redirect(f"{back}?error=err_no_jornada_yet#players")
-        ok = mailer.send(user["email"], user["display_name"] or user["username"],
-                         *reminder_email(request, auth.current_org(request), data, user))
-    return redirect(f"{back}?mail=sent#players" if ok else f"{back}?error=err_mail_failed#players")
+        result = (send_test_reminder(request, conn, user, player_id, tournament_id) if user
+                  else "err_no_player_email")
+    return redirect(f"{back}?mail=sent#players" if result == "sent"
+                    else f"{back}?error={result}#players")
 
 
 @app.get("/unsubscribe/{user_id}/{token}", response_class=HTMLResponse)

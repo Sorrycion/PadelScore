@@ -54,6 +54,12 @@ library only).
 - **⏰ next to a player** in a tournament's player list (admins): sends that player now
   the reminder of their next jornada with sets to play (or their latest one). It isn't
   recorded. The unsubscribe link of a reminder only stops reminders (`?kind=reminders`).
+- **⏰ Probar recordatorio** on **🔑 Cuentas** (next to 📧 Probar email, on accounts with an
+  email and a player): sends that account, right away, the game-day reminder of its
+  player's **next jornada with sets to play, whatever its date** (or else its latest
+  one), to see it before the day. It isn't recorded, so the real reminder still goes
+  that morning. The ⏰ in a tournament's player list does the same within that
+  tournament (`next_jornada`, `send_test_reminder`).
 - **📧 Probar email** on **🔑 Cuentas** (`/users`, admins), on each account with an email:
   sends that account, right away, the recap of its player's latest jornada in this
   organization, or a plain test message if it has none. It isn't recorded.

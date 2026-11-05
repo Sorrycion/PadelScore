@@ -26,6 +26,12 @@
             onsubmit="return confirm('{{ _('confirm_test_email', name=u.display_name or u.username) }}')">
         <button type="submit" class="secondary">📧 {{ _("test_email") }}</button>
       </form>
+      {% if u.player %}
+      <form method="post" action="/users/{{ u.id }}/test-reminder" class="inline"
+            onsubmit="return confirm('{{ _('confirm_test_reminder', name=u.display_name or u.username) }}')">
+        <button type="submit" class="secondary">⏰ {{ _("test_reminder") }}</button>
+      </form>
+      {% endif %}
       {% endif %}
     </div>
   </li>

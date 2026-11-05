@@ -2221,6 +2221,32 @@ def test_admin_emails_a_players_reminder(with_players, monkeypatch):
         assert conn.execute("SELECT COUNT(*) FROM sent_emails").fetchone()[0] == 0
 
 
+def test_accounts_page_sends_a_test_reminder(with_players, monkeypatch):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # Ana, in jornada 1 (dated 2026-10-23, not today) with pending sets
+    with db.connect() as conn:  # and a later jornada, played already
+        conn.execute("INSERT INTO matchdays (tournament_id, number, played_on) "
+                     "VALUES (1, 2, '2026-10-30')")
+        conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, team_a_games, "
+                     "team_b_games, winner) VALUES (2, 1, 1, 4, 2, 3, 6, 2, 'A')")
+    c.post("/logout")
+    c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
+    page = c.get("/users").text
+    uid = int(re.search(r'action="/users/(\d+)/test-reminder"', page).group(1))
+    outbox = email_on(monkeypatch)
+    r = c.post(f"/users/{uid}/test-reminder")
+    assert "Email sent." in r.text
+    subject = outbox[0][2]
+    assert "Hoy juegas" in subject and "Jornada 1" in subject  # the pending one, not the latest
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sent_emails").fetchone()[0] == 0
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 1, winner = 'A' "
+                     "WHERE matchday_id = 1")
+    c.post(f"/users/{uid}/test-reminder")  # nothing pending: the latest jornada
+    assert "Jornada 2" in outbox[-1][2]
+
+
 def test_super_admin_sends_a_test_email(locked, monkeypatch):
     with db.connect() as conn:
         orgs.set_superadmin(conn, "julio", "super")
