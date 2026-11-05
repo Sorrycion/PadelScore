@@ -19,31 +19,40 @@
   </form>
 </details>
 {% if orgs %}
-<ul class="cards">
+<input type="search" class="table-search" data-filter="orgs" placeholder="{{ _('filter_search') }}" aria-label="{{ _('filter_search') }}">
+<p class="muted"><span data-filter-count="orgs">{{ orgs|length }}</span> / {{ orgs|length }}</p>
+<div class="scroll">
+<table class="data-table" id="orgs" data-filterable>
+  <thead><tr>
+    <th>{{ _("org_name") }}</th><th></th><th>🔗</th><th>{{ _("admin_user") }}</th><th>{{ _("admin_password") }}</th>
+    <th title="{{ _('nav_tournaments') }}">🏆</th><th title="{{ _('nav_players') }}">👥</th>
+  </tr></thead>
+  <tbody>
   {% for o in orgs %}
-  <li class="card org-card">
-    <div class="name">🏢 {{ o.name }}{% if org and org.id == o.id %} <span class="tag">✅ {{ _("current_org") }}</span>{% endif %}</div>
-    <div class="muted">🔗 <a href="/{{ o.slug }}">{{ request.url.netloc }}/{{ o.slug }}</a></div>
-    <div class="meta muted">🏆 {{ o.tournaments }} · 👥 {{ o.players }}</div>
-    <dl class="creds">
-      <dt>{{ _("admin_user") }}</dt><dd><code>{{ o.admin_user }}</code></dd>
-      <dt>{{ _("admin_password") }}</dt>
-      <dd>{% if o.admin_password_plain %}<code>{{ o.admin_password_plain }}</code>{% else %}<span class="muted">{{ _("password_unknown") }}</span>{% endif %}</dd>
-    </dl>
-    <div class="inline">
-      <form method="post" action="/orgs/{{ o.id }}/enter"><button type="submit">{{ _("enter") }}</button></form>
-    </div>
-    <details>
-      <summary>✏️ {{ _("change_admin") }}</summary>
-      <form method="post" action="/orgs/{{ o.id }}/admin" class="stack">
-        <label>{{ _("admin_user") }} <input name="admin_user" value="{{ o.admin_user }}" autocomplete="off" autocapitalize="off" required></label>
-        <label>{{ _("new_admin_password") }} <input name="admin_password" autocomplete="off" autocapitalize="off" placeholder="{{ _('keep_password') }}"></label>
-        <button type="submit" class="secondary">{{ _("save") }}</button>
-      </form>
-    </details>
-  </li>
+  <tr>
+    <td><strong>🏢 {{ o.name }}</strong>{% if org and org.id == o.id %}<br><span class="tag">✅ {{ _("current_org") }}</span>{% endif %}</td>
+    <td class="row-actions">
+      <form method="post" action="/orgs/{{ o.id }}/enter"><button type="submit" class="small">{{ _("enter") }}</button></form>
+      <details>
+        <summary title="{{ _('change_admin') }}">✏️</summary>
+        <form method="post" action="/orgs/{{ o.id }}/admin" class="stack">
+          <label>{{ _("admin_user") }} <input name="admin_user" value="{{ o.admin_user }}" autocomplete="off" autocapitalize="off" required></label>
+          <label>{{ _("new_admin_password") }} <input name="admin_password" autocomplete="off" autocapitalize="off" placeholder="{{ _('keep_password') }}"></label>
+          <button type="submit" class="secondary">{{ _("save") }}</button>
+        </form>
+      </details>
+    </td>
+    <td><a href="/{{ o.slug }}">/{{ o.slug }}</a></td>
+    <td><code>{{ o.admin_user }}</code></td>
+    <td>{% if o.admin_password_plain %}<code>{{ o.admin_password_plain }}</code>{% else %}<span class="muted">{{ _("password_unknown") }}</span>{% endif %}</td>
+    <td>{{ o.tournaments }}</td>
+    <td>{{ o.players }}</td>
+  </tr>
   {% endfor %}
-</ul>
+  </tbody>
+</table>
+</div>
+<script src="/static/table-filter.js?v={{ css_version }}" defer></script>
 {% else %}
 <p class="empty">{{ _("no_orgs") }}</p>
 {% endif %}

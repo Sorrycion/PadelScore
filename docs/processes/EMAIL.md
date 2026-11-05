@@ -99,6 +99,36 @@ sequenceDiagram
 - **Without the settings** below, nothing is sent: the task answers
   `{"enabled": false}` and `/orgs` says email is off.
 
+## 📬 The email log (admins)
+
+Every email the app tries to send goes through `main.deliver()`, which calls
+`mailer.send()` and writes a row in **`email_log`** (`sql/predeployment/0008_email_log.sql`),
+sent or not:
+
+- the time (UTC) and the **league day**;
+- the organization, the account and its address;
+- the **kind**: recap, reminder, test-recap, test-reminder or test;
+- the jornada, the subject;
+- the **status**: sent, failed, or throttled (Azure's limit), with Azure's error.
+
+**📬 Emails** (`/<slug>/emails`, admins; linked next to 🔑 Cuentas) shows one day of it:
+← → or a date picker, the day's totals per status, filters by status and kind, and a
+text filter. An organization admin sees its organization's emails. Rows that failed are
+tinted.
+
+```mermaid
+flowchart LR
+    A["send_due (hourly) · test buttons"] --> D["deliver()"]
+    D --> M["mailer.send → Azure"]
+    M -- "202" --> L1["email_log: sent"]
+    M -- "429" --> L2["email_log: throttled + error"]
+    M -- "other" --> L3["email_log: failed + error"]
+    L1 & L2 & L3 --> P["📬 /nene/emails?day=…&status=…&kind=…"]
+```
+
+`sent_emails` stays as it was: it's what keeps each recap or reminder from going twice.
+`email_log` is the history.
+
 ## Azure's sending limits, and how the job keeps under them
 
 With the free **Azure-managed domain**, ACS allows **5 emails a minute and 10 an hour

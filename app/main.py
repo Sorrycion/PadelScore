@@ -160,6 +160,11 @@ templates.env.globals.update(
     TIER_KEYS={1: "tier_bronze", 2: "tier_silver", 3: "tier_gold"},
     RULE_ICONS={"liga_amigos": "🏅", "americano": "🇺🇸", "mexicano": "🇲🇽", "manual": "✍️"},
     COUNTRIES=countries.COUNTRIES, DEFAULT_COUNTRY=countries.DEFAULT,
+    EMAIL_KIND_KEYS={"recap": "email_kind_recap", "reminder": "email_kind_reminder",
+                     "test-recap": "email_kind_test_recap",
+                     "test-reminder": "email_kind_test_reminder", "test": "email_kind_test"},
+    EMAIL_STATUS_KEYS={"sent": "email_status_sent", "failed": "email_status_failed",
+                       "throttled": "email_status_throttled"},
     chance_of=lambda m: chance_of(m),  # defined below
     # Changes whenever the stylesheet does, so phones don't keep an old cached copy.
     css_version=hashlib.sha256(b"".join(
@@ -1056,14 +1061,14 @@ def account_test_email(request: Request, user_id: int):
             "ORDER BY d.played_on DESC, d.number DESC LIMIT 1",
             (org_id(), player["id"])).fetchone()
         recap = latest and jornada_recap(conn, latest["id"], player["id"], "es")
-        name = user["display_name"] or user["username"]
         if recap:
-            ok = mailer.send(user["email"], name, *recap_email(
-                request, auth.current_org(request), recap, user, email_extras(conn, recap)))
+            ok = deliver(conn, user, "test-recap", *recap_email(
+                request, auth.current_org(request), recap, user, email_extras(conn, recap)),
+                org=org_id(), matchday_id=latest["id"])
         else:
             _ = translator("es")
-            ok = mailer.send(user["email"], name, str(_("test_email_subject")),
-                             str(_("test_email_body")), f"<p>{_('test_email_body')}</p>")
+            ok = deliver(conn, user, "test", str(_("test_email_subject")),
+                         str(_("test_email_body")), f"<p>{_('test_email_body')}</p>", org=org_id())
     return redirect("/users?mail=sent" if ok else f"/users?error={mail_error()}")
 
 
@@ -2090,6 +2095,20 @@ def recaps_due(conn):
               (today - timedelta(days=1)).isoformat())).fetchall()
 
 
+def deliver(conn, user, kind, subject, text, html, org=None, matchday_id=None):
+    """Send one email to an account (mailer.send) and log the attempt, sent or not, in
+    email_log (📬 Emails). `kind`: recap, reminder, test-recap, test-reminder or test."""
+    ok = mailer.send(user["email"], user["display_name"] or user["username"], subject, text, html)
+    status = "sent" if ok else ("throttled" if mailer.last_status == mailer.THROTTLED else "failed")
+    conn.execute(
+        "INSERT INTO email_log (day, organization_id, user_id, address, kind, matchday_id, "
+        "subject, status, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (league_today().isoformat(), org, user["id"], user["email"], kind, matchday_id,
+         str(subject), status, None if ok else mailer.last_error))
+    conn.commit()
+    return ok
+
+
 def mail_error():
     """The error key for a failed email: Azure's sending limit, or anything else."""
     return "err_mail_throttled" if mailer.last_status == mailer.THROTTLED else "err_mail_failed"
@@ -2127,7 +2146,7 @@ def send_due(request, kinds):
                     continue
                 if out["sent"] + out["failed"]:
                     time.sleep(mailer.pause())
-                if mailer.send(user["email"], user["display_name"] or user["username"], *email):
+                if deliver(conn, user, kind, *email, org=org["id"], matchday_id=due["matchday_id"]):
                     conn.execute("INSERT INTO sent_emails (kind, user_id, matchday_id) "
                                  "VALUES (?, ?, ?)", (kind, user["id"], due["matchday_id"]))
                     conn.commit()  # each one counts, even if a later one fails
@@ -2136,6 +2155,41 @@ def send_due(request, kinds):
                     out["failed"] += 1
                     out["throttled"] = mailer.last_status == mailer.THROTTLED
     return out
+
+
+EMAIL_KINDS = ("recap", "reminder", "test-recap", "test-reminder", "test")
+EMAIL_STATUSES = ("sent", "failed", "throttled")
+
+
+def local_time(sent_at):
+    """'HH:MM' in the league's time zone, from email_log.sent_at (UTC)."""
+    when = datetime.fromisoformat(sent_at) + timedelta(
+        hours=float(os.environ.get("LEAGUE_UTC_OFFSET", "-6")))
+    return when.strftime("%H:%M")
+
+
+@app.get("/emails", response_class=HTMLResponse, dependencies=EDIT)
+def emails_page(request: Request, day: str | None = None, status: str = "", kind: str = ""):
+    """📬 Emails (admins): every email this organization's accounts got (or didn't) on one
+    league day, with how it went; filtered by status and kind."""
+    day = parse_date(day or "") or league_today().isoformat()
+    status = status if status in EMAIL_STATUSES else ""
+    kind = kind if kind in EMAIL_KINDS else ""
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT e.*, u.username, u.display_name FROM email_log e "
+            "LEFT JOIN users u ON u.id = e.user_id WHERE e.organization_id = ? AND e.day = ? "
+            "AND (? = '' OR e.status = ?) AND (? = '' OR e.kind = ?) ORDER BY e.id DESC",
+            (org_id(), day, status, status, kind, kind)).fetchall()
+        counts = dict(conn.execute(
+            "SELECT status, COUNT(*) FROM email_log WHERE organization_id = ? AND day = ? "
+            "GROUP BY status", (org_id(), day)).fetchall())
+    shown = date.fromisoformat(day)
+    return templates.TemplateResponse(request, "emails.html", {
+        "rows": [{**r, "time": local_time(r["sent_at"])} for r in rows], "day": day,
+        "status": status, "kind": kind, "counts": counts,
+        "prev_day": (shown - timedelta(days=1)).isoformat(),
+        "next_day": (shown + timedelta(days=1)).isoformat()})
 
 
 @app.post("/tasks/send-emails")
@@ -2302,8 +2356,9 @@ def send_test_reminder(request, conn, user, player_id, tournament_id=None):
     data = jornada and reminder_data(conn, jornada, player_id)
     if not data:
         return "err_no_jornada_yet"
-    ok = mailer.send(user["email"], user["display_name"] or user["username"],
-                     *reminder_email(request, auth.current_org(request), data, user))
+    ok = deliver(conn, user, "test-reminder",
+                 *reminder_email(request, auth.current_org(request), data, user),
+                 org=org_id(), matchday_id=jornada)
     return "sent" if ok else mail_error()
 
 
@@ -2373,9 +2428,10 @@ def email_player_recap(request: Request, tournament_id: int, player_id: int):
         recap = latest and jornada_recap(conn, latest["id"], player_id, "es")
         if not recap:
             return redirect(f"{back}?error=err_no_recap_yet#players")
-        ok = mailer.send(user["email"], user["display_name"] or user["username"],
-                         *recap_email(request, auth.current_org(request), recap, user,
-                                      email_extras(conn, recap)))
+        ok = deliver(conn, user, "test-recap",
+                     *recap_email(request, auth.current_org(request), recap, user,
+                                  email_extras(conn, recap)),
+                     org=org_id(), matchday_id=latest["id"])
     return redirect(f"{back}?mail=sent#players" if ok else f"{back}?error={mail_error()}#players")
 
 
@@ -2389,9 +2445,10 @@ def test_email(request: Request):
     if not mailer.enabled():
         return redirect("/orgs?error=err_mail_off")
     _ = translator("es")
-    ok = mailer.send(user["email"], user["display_name"] or user["username"],
-                     str(_("test_email_subject")), str(_("test_email_body")),
-                     f"<p>{_('test_email_body')}</p>")
+    org = auth.current_org(request)
+    with db.connect() as conn:
+        ok = deliver(conn, user, "test", str(_("test_email_subject")), str(_("test_email_body")),
+                     f"<p>{_('test_email_body')}</p>", org=org["id"] if org else None)
     return redirect("/orgs?mail=sent" if ok else f"/orgs?error={mail_error()}")
 
 

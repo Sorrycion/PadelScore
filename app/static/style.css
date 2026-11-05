@@ -62,6 +62,20 @@ ol.install-steps svg { width: 100%; max-width: 360px; height: auto; display: blo
 #install-button { margin: 4px 0 8px; }
 .install-link { display: none; }  /* only in the phone menu, and not once installed */
 .install-banner { display: none; }
+/* Admin tables (🔑 Cuentas, ⭐ Organizaciones, 📬 Emails), filtered by table-filter.js. */
+.data-table { width: 100%; border-collapse: collapse; background: var(--card); font-size: .9rem; }
+.data-table th, .data-table td { padding: 8px 10px; border-bottom: 1px solid var(--border);
+                                 text-align: left; vertical-align: top; }
+.data-table th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.data-table tr[hidden] { display: none; }
+.data-table .row-actions { display: flex; gap: 6px; align-items: flex-start; white-space: nowrap; }
+.data-table .row-actions form { margin: 0; }
+.data-table .row-actions details form { margin-top: 8px; min-width: 14rem; white-space: normal; }
+.data-table .status-failed td, .data-table .status-throttled td { background: rgba(200, 49, 42, .06); }
+.data-table .small, .button.small { padding: 4px 10px; font-size: .9rem; }
+.data-table .muted.small { font-size: .75rem; }
+input.table-search { width: 100%; max-width: 24rem; margin: 4px 0; }
+.inline.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
 .account-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .account-actions form.inline { margin: 0; }  /* phones only, see below */
 fieldset.replace-points { border: 0; padding: 0; margin: 0 0 12px; display: grid; gap: 6px; }

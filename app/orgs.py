@@ -25,7 +25,7 @@ from .users import check_password, hash_password  # noqa: F401 (used by older ca
 
 # The app's own first path segments: an organization's slug can't be one of them.
 SECTIONS = ("standings", "tournaments", "players", "matchdays", "matches", "medals",
-            "courts", "users")  # pages of one organization: /<slug>/<section>/...
+            "courts", "users", "emails")  # pages of one organization: /<slug>/<section>/...
 RESERVED = {"static", "enter", "login", "logout", "lang", "rules", "orgs", "me", "health",
             "signup", "join", "sw.js", "r", "install", "tasks", "unsubscribe", "welcome",
             *SECTIONS}
