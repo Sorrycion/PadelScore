@@ -990,7 +990,7 @@ def account_test_email(request: Request, user_id: int):
             _ = translator("es")
             ok = mailer.send(user["email"], name, str(_("test_email_subject")),
                              str(_("test_email_body")), f"<p>{_('test_email_body')}</p>")
-    return redirect("/users?mail=sent" if ok else "/users?error=err_mail_failed")
+    return redirect("/users?mail=sent" if ok else f"/users?error={mail_error()}")
 
 
 @app.get("/users/{user_id}", response_class=HTMLResponse, dependencies=EDIT)
@@ -2016,33 +2016,73 @@ def recaps_due(conn):
               (today - timedelta(days=1)).isoformat())).fetchall()
 
 
-@app.post("/tasks/send-recaps")
-def send_recaps(request: Request):
-    """Called every morning by GitHub Actions (.github/workflows/daily-emails.yml): emails
-    each account the recap of the jornada it played (recaps_due), once. The header
-    X-Task-Token must match the app setting TASKS_TOKEN; otherwise it doesn't exist."""
+def mail_error():
+    """The error key for a failed email: Azure's sending limit, or anything else."""
+    return "err_mail_throttled" if mailer.last_status == mailer.THROTTLED else "err_mail_failed"
+
+
+def build_due_email(request, conn, kind, org, due, user):
+    """(subject, text, HTML) of a due reminder or recap (inside its organization), or None
+    when there's nothing to say any more."""
+    if kind == "reminder":
+        data = reminder_data(conn, due["matchday_id"], due["player_id"])
+        return data and reminder_email(request, org, data, user)
+    recap = jornada_recap(conn, due["matchday_id"], due["player_id"], "es")
+    return recap and recap_email(request, org, recap, user, email_extras(conn, recap))
+
+
+def send_due(request, kinds):
+    """Send the due emails of these kinds ("reminder" first, then "recap"), at most
+    mailer.per_run() of them, mailer.pause() seconds apart, for Azure's limits. If Azure
+    answers 429 (over its limit) it stops: nothing more is marked sent, and the next
+    hourly run carries on. Returns the counts."""
+    out = {"sent": 0, "failed": 0, "left": 0, "throttled": False}
+    budget = mailer.per_run()
+    with db.connect() as conn:
+        for kind in kinds:
+            for due in (reminders_due if kind == "reminder" else recaps_due)(conn):
+                if out["throttled"] or out["sent"] + out["failed"] >= budget:
+                    out["left"] += 1
+                    continue
+                org = conn.execute("SELECT * FROM organizations WHERE id = ?",
+                                   (due["organization_id"],)).fetchone()
+                user = users.get(conn, due["user_id"])
+                email = in_org(org["id"], lambda: build_due_email(request, conn, kind, org,
+                                                                  due, user))
+                if email is None:
+                    continue
+                if out["sent"] + out["failed"]:
+                    time.sleep(mailer.pause())
+                if mailer.send(user["email"], user["display_name"] or user["username"], *email):
+                    conn.execute("INSERT INTO sent_emails (kind, user_id, matchday_id) "
+                                 "VALUES (?, ?, ?)", (kind, user["id"], due["matchday_id"]))
+                    conn.commit()  # each one counts, even if a later one fails
+                    out["sent"] += 1
+                else:
+                    out["failed"] += 1
+                    out["throttled"] = mailer.last_status == mailer.THROTTLED
+    return out
+
+
+@app.post("/tasks/send-emails")
+def send_emails(request: Request):
+    """Called every hour from 9:00 to 17:00 (Mexico) by GitHub Actions
+    (.github/workflows/daily-emails.yml): today's game-day reminders first, then the recaps
+    of the last days' jornadas, a few per run (send_due). The header X-Task-Token must
+    match the app setting TASKS_TOKEN; otherwise it doesn't exist."""
     require_task_token(request)
     if not mailer.enabled():
         return {"enabled": False, "sent": 0, "failed": 0}
-    sent = failed = 0
-    with db.connect() as conn:
-        for due in recaps_due(conn):
-            org = conn.execute("SELECT * FROM organizations WHERE id = ?",
-                               (due["organization_id"],)).fetchone()
-            recap = in_org(org["id"], lambda: jornada_recap(
-                conn, due["matchday_id"], due["player_id"], "es"))
-            user = users.get(conn, due["user_id"])
-            if recap is None:
-                continue
-            extras = in_org(org["id"], lambda: email_extras(conn, recap))
-            if mailer.send(user["email"], user["display_name"] or user["username"],
-                           *recap_email(request, org, recap, user, extras)):
-                conn.execute("INSERT INTO sent_emails (kind, user_id, matchday_id) "
-                             "VALUES ('recap', ?, ?)", (user["id"], due["matchday_id"]))
-                sent += 1
-            else:
-                failed += 1
-    return {"enabled": True, "sent": sent, "failed": failed}
+    return {"enabled": True, **send_due(request, ("reminder", "recap"))}
+
+
+@app.post("/tasks/send-recaps")
+def send_recaps(request: Request):
+    """Only the recaps (send_due); the hourly job uses /tasks/send-emails."""
+    require_task_token(request)
+    if not mailer.enabled():
+        return {"enabled": False, "sent": 0, "failed": 0}
+    return {"enabled": True, **send_due(request, ("recap",))}
 
 
 def org_rates(conn):
@@ -2155,29 +2195,11 @@ def reminders_due(conn):
 
 @app.post("/tasks/send-reminders")
 def send_reminders(request: Request):
-    """Called every morning by GitHub Actions with the recaps: emails everyone who plays
-    today their game-day reminder (reminders_due), once."""
+    """Only today's game-day reminders (send_due); the hourly job uses /tasks/send-emails."""
     require_task_token(request)
     if not mailer.enabled():
         return {"enabled": False, "sent": 0, "failed": 0}
-    sent = failed = 0
-    with db.connect() as conn:
-        for due in reminders_due(conn):
-            org = conn.execute("SELECT * FROM organizations WHERE id = ?",
-                               (due["organization_id"],)).fetchone()
-            data = in_org(org["id"], lambda: reminder_data(conn, due["matchday_id"],
-                                                           due["player_id"]))
-            user = users.get(conn, due["user_id"])
-            if data is None:
-                continue
-            if mailer.send(user["email"], user["display_name"] or user["username"],
-                           *reminder_email(request, org, data, user)):
-                conn.execute("INSERT INTO sent_emails (kind, user_id, matchday_id) "
-                             "VALUES ('reminder', ?, ?)", (user["id"], due["matchday_id"]))
-                sent += 1
-            else:
-                failed += 1
-    return {"enabled": True, "sent": sent, "failed": failed}
+    return {"enabled": True, **send_due(request, ("reminder",))}
 
 
 def next_jornada(conn, player_id, tournament_id=None):
@@ -2207,7 +2229,7 @@ def send_test_reminder(request, conn, user, player_id, tournament_id=None):
         return "err_no_jornada_yet"
     ok = mailer.send(user["email"], user["display_name"] or user["username"],
                      *reminder_email(request, auth.current_org(request), data, user))
-    return "sent" if ok else "err_mail_failed"
+    return "sent" if ok else mail_error()
 
 
 @app.post("/users/{user_id}/test-reminder", dependencies=EDIT)
@@ -2279,7 +2301,7 @@ def email_player_recap(request: Request, tournament_id: int, player_id: int):
         ok = mailer.send(user["email"], user["display_name"] or user["username"],
                          *recap_email(request, auth.current_org(request), recap, user,
                                       email_extras(conn, recap)))
-    return redirect(f"{back}?mail=sent#players" if ok else f"{back}?error=err_mail_failed#players")
+    return redirect(f"{back}?mail=sent#players" if ok else f"{back}?error={mail_error()}#players")
 
 
 @app.post("/orgs/test-email", dependencies=SUPER)
@@ -2295,7 +2317,7 @@ def test_email(request: Request):
     ok = mailer.send(user["email"], user["display_name"] or user["username"],
                      str(_("test_email_subject")), str(_("test_email_body")),
                      f"<p>{_('test_email_body')}</p>")
-    return redirect("/orgs?mail=sent" if ok else "/orgs?error=err_mail_failed")
+    return redirect("/orgs?mail=sent" if ok else f"/orgs?error={mail_error()}")
 
 
 @app.get("/matchdays/{matchday_id}/recap", response_class=HTMLResponse)

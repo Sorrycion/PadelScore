@@ -23,9 +23,10 @@ library only).
   same numbers: a bar on each **pending set** of a jornada and on its result page,
   and "🎯 Probabilidad de ganarle a X" on ⚔️ Cara a cara.
 
-- **The jornada recap**, the morning after. A daily GitHub Actions job
-  (`.github/workflows/daily-emails.yml`, 9:00 Mexico time) calls
-  `POST /tasks/send-recaps`. That emails every account that:
+- **The jornada recap**, the morning after. A GitHub Actions job
+  (`.github/workflows/daily-emails.yml`, every hour 9:00-17:00 Mexico time) calls
+  `POST /tasks/send-emails`, which sends the due reminders and then the recaps (see the
+  limits below). That emails every account that:
   - played a jornada in the last 3 days (up to yesterday);
   - has an email, and has recaps on (the default);
   - has **all its sets of that jornada played** (otherwise it waits for the next
@@ -97,6 +98,36 @@ sequenceDiagram
 - **Language:** Spanish (accounts don't keep a language yet).
 - **Without the settings** below, nothing is sent: the task answers
   `{"enabled": false}` and `/orgs` says email is off.
+
+## Azure's sending limits, and how the job keeps under them
+
+With the free **Azure-managed domain**, ACS allows **5 emails a minute and 10 an hour
+for the whole subscription**. A custom domain allows 30 a minute and 100 an hour, and
+more on request. Over the limit, ACS answers **429**. That's what happened on 2026-11-05:
+the morning run sent 10 recaps, and the test buttons failed for the rest of that hour.
+
+```mermaid
+flowchart LR
+    C["GitHub Actions, every hour<br/>9:00-17:00 Mexico"] --> T["POST /tasks/send-emails"]
+    T --> R["today's reminders first,<br/>then the recaps due"]
+    R --> P["at most MAIL_PER_RUN (9),<br/>MAIL_PAUSE (13 s) apart"]
+    P -- "202" --> S["sent_emails: done"]
+    P -- "429 Azure's limit" --> X["stop: nothing more marked,<br/>the next hour carries on"]
+```
+
+- **`send_due`** (in `main.py`) sends reminders, then recaps, up to `MAIL_PER_RUN` per run
+  (default 9: one left each hour for the admins' test buttons). There are
+  `MAIL_PAUSE` seconds between emails (default 13: under 5 a minute). It records each
+  one as it goes. On a 429 it stops, and the rest wait for the next hourly run.
+- **Capacity:** 9 runs a day × 9 = about 80 emails a day. A jornada's reminders go out
+  between 9:00 and about 11:00 if 20 people play.
+- **Test buttons:** on a 429 they say "Azure no dejó enviarlo: … 10 emails por hora…"
+  (`err_mail_throttled`).
+- **With a custom domain** (about US$10/year), raise the app settings, e.g.
+  `MAIL_PER_RUN=90` and `MAIL_PAUSE=2`. The sender can then be "PadelScore".
+- **App logs:** `mailer.send` prints why Azure refused an email. To keep those lines,
+  turn on App Service → App Service logs → Application logging (Filesystem). They go
+  to `/home/LogFiles/*_default_docker.log`.
 
 ## Setup (once, by the owner)
 

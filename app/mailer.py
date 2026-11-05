@@ -9,6 +9,11 @@ Without them, sending is off: send() returns False and nothing leaves the app.
 
 Requests are signed with the access key (HMAC-SHA256, ACS's "HMAC authentication"),
 so only the standard library is needed.
+
+Azure's limits: with its free Azure-managed domain, 5 emails a minute and 10 an hour
+for the whole subscription (a custom domain: 30 a minute, 100 an hour). Over them ACS
+answers 429. So batches go at a pace (MAIL_PAUSE seconds between emails) and in chunks
+(MAIL_PER_RUN per hourly run), both app settings; see docs/processes/EMAIL.md.
 """
 import base64
 import hashlib
@@ -21,6 +26,19 @@ from email.utils import formatdate
 from urllib.parse import urlsplit
 
 API = "/emails:send?api-version=2023-03-31"
+THROTTLED = 429  # ACS: over the sending limits
+last_status = None  # HTTP status of the last failed send (None: sent, off, or no answer)
+
+
+def per_run():
+    """How many emails one run of the daily job may send (Azure-managed domain: 10 an hour,
+    so 9 leaves one for the admins' test buttons)."""
+    return int(os.environ.get("MAIL_PER_RUN", "9"))
+
+
+def pause():
+    """Seconds between two emails of a batch (13 keeps under 5 a minute)."""
+    return float(os.environ.get("MAIL_PAUSE", "13"))
 
 
 def settings():
@@ -59,6 +77,8 @@ def message(sender, to, name, subject, text, html):
 def send(to, name, subject, text, html):
     """Send one email. True when ACS accepted it, False when email is off or it failed
     (the reason goes to the app's log)."""
+    global last_status
+    last_status = None
     config = settings()
     if config is None:
         return False
@@ -70,6 +90,8 @@ def send(to, name, subject, text, html):
         with urllib.request.urlopen(request, timeout=20) as response:
             return response.status == 202
     except (urllib.error.URLError, TimeoutError) as e:
+        if isinstance(e, urllib.error.HTTPError):
+            last_status = e.code
         detail = e.read().decode(errors="replace")[:300] if isinstance(e, urllib.error.HTTPError) else e
         print(f"mailer: sending to {to} failed: {detail}", flush=True)
         return False
