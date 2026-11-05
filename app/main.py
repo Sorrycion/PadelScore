@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import os
+import re
 import time
 import unicodedata
 from collections import Counter
@@ -56,10 +57,56 @@ def league_today():
 VERSION = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "dev"
 
 
+SECTION_LINK = re.compile(rb'((?:href|action)=")(/(?:%s)(?=[/"?#]))'
+                          % "|".join(orgs.SECTIONS).encode())
+
+
+def in_section(path):
+    """Whether a path is a page of one organization (/tournaments/4, /players...)."""
+    return path.lstrip("/").split("/", 1)[0].split("?", 1)[0] in orgs.SECTIONS
+
+
+def keep_inside(send, prefix, cookie=None):
+    """Wrap an ASGI `send` so the response stays inside /<slug>: redirects and the HTML's
+    links (href, form action) to an organization's pages get the prefix. `cookie`: a
+    Set-Cookie header to add (the organization this browser now views)."""
+    held = {}
+
+    async def wrapped(message):
+        if message["type"] == "http.response.start":
+            headers = [(k, prefix + v if k.lower() == b"location" and v.startswith(b"/")
+                        and in_section(v.decode("latin-1")) else v) for k, v in message["headers"]]
+            if cookie:
+                headers.append((b"set-cookie", cookie))
+            message = {**message, "headers": headers}
+            if not dict(headers).get(b"content-type", b"").startswith(b"text/html"):
+                return await send(message)
+            held["start"], held["body"] = message, []
+            return None
+        if message["type"] == "http.response.body" and "start" in held:
+            held["body"].append(message.get("body", b""))
+            if message.get("more_body"):
+                return None
+            body = SECTION_LINK.sub(rb"\1" + prefix + rb"\2", b"".join(held["body"]))
+            start = held["start"]
+            headers = [(k, v) for k, v in start["headers"] if k.lower() != b"content-length"]
+            await send({**start, "headers": headers + [(b"content-length", str(len(body)).encode())]})
+            return await send({"type": "http.response.body", "body": body})
+        return await send(message)
+    return wrapped
+
+
 class OrganizationGate:
-    """Every request works inside the organization this browser entered (auth.py): its
-    queries only see that organization's rows (db.ORG). Without one, pages other than
-    OPEN_PATHS send the browser to choose one."""
+    """Every request works inside one organization: its queries only see that
+    organization's rows (db.ORG).
+
+    - **/<slug>/...** (e.g. /nene/tournaments/4): the organization of the URL. The path
+      goes on without the prefix (/tournaments/4), the browser now views that organization
+      (org cookie), and every link and redirect of the answer keeps the prefix
+      (keep_inside), so browsing stays filtered to it. /<slug> alone is its standings.
+    - Otherwise the one this browser entered (auth.py). A GET of one of its pages without
+      the prefix (an old link) goes to /<slug>/... .
+    Without an organization, pages other than OPEN_PATHS send the browser to choose one."""
 
     def __init__(self, app):
         self.app = app
@@ -67,8 +114,25 @@ class OrganizationGate:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or scope["path"].startswith("/static"):
             return await self.app(scope, receive, send)
+        first, _, rest = scope["path"].lstrip("/").partition("/")
+        by_url = auth.org_from_slug(first) if first and first not in orgs.RESERVED else None
         request = Request(scope)
-        org = auth.org_from_cookie(request)
+        cookie_org = auth.org_from_cookie(request)
+        org = by_url or cookie_org
+        if by_url:
+            scope["path"] = "/" + rest if rest else "/standings"
+            scope["raw_path"] = scope["path"].encode()
+            request = Request(scope)
+            cookie = None
+            if not cookie_org or cookie_org["id"] != by_url["id"]:
+                cookie = (f"{auth.ORG_COOKIE}={auth.org_cookie(by_url)}; Path=/; "
+                          f"Max-Age={auth.COOKIE_MAX_AGE}; HttpOnly; SameSite=lax"
+                          + ("; Secure" if auth.is_https(request) else "")).encode()
+            send = keep_inside(send, f"/{by_url['slug']}".encode(), cookie)
+        elif org and scope["method"] == "GET" and in_section(scope["path"]):
+            query = scope.get("query_string", b"").decode()
+            return await redirect(f"/{org['slug']}{scope['path']}"
+                                  + (f"?{query}" if query else ""))(scope, receive, send)
         scope.setdefault("state", {})["org"] = org
         if org is None and scope["path"] != "/" and not scope["path"].startswith(OPEN_PATHS):
             target = "/orgs" if auth.is_super(request) else \
@@ -485,8 +549,9 @@ def enter(request: Request, name: str = Form(""), next: str = Form("/")):
 
 
 def enter_org(request, org, next_url="/"):
-    """Remember this organization in the browser and go to `next_url`."""
-    response = redirect(next_url)
+    """Remember this organization in the browser and go to `next_url` (inside its URLs,
+    /<slug>/..., when it's one of its pages)."""
+    response = redirect(f"/{org['slug']}{next_url}" if in_section(next_url) else next_url)
     response.set_cookie(auth.ORG_COOKIE, auth.org_cookie(org), **cookie_options(request))
     return response
 
@@ -569,7 +634,8 @@ def orgs_page(request: Request, error: str | None = None, mail: str | None = Non
     one, change its admin or create a new one."""
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT o.id, o.name, u.username AS admin_user, u.password_plain AS admin_password_plain, "
+            "SELECT o.id, o.name, o.slug, u.username AS admin_user, "
+            "u.password_plain AS admin_password_plain, "
             "(SELECT COUNT(*) FROM tournaments t WHERE t.organization_id = o.id) AS tournaments, "
             "(SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id) AS players "
             "FROM organizations o LEFT JOIN users u ON u.id = (SELECT MIN(id) FROM users "
@@ -2174,7 +2240,7 @@ def reminder_email(request, org, data, user):
         rivals = " / ".join(name for _, name in row["rivals"])
         lines.append(f"{i}. {_('reminder_with', name=row['partner'])} vs {rivals}: "
                      f"{_('reminder_chance', n=row['chance'])}")
-    link = f"{site_base(request)}/matchdays/{md['id']}"
+    link = f"{site_base(request)}/{org['slug']}/matchdays/{md['id']}"
     unsubscribe = unsubscribe_url(request, user, "reminders")
     text = "\n".join(lines) + f"\n\n{link}\n\n{_('recap_email_unsubscribe')}: {unsubscribe}"
     html = templates.env.get_template("email_reminder.html").render(

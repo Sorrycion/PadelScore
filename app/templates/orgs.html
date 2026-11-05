@@ -23,6 +23,7 @@
   {% for o in orgs %}
   <li class="card org-card">
     <div class="name">🏢 {{ o.name }}{% if org and org.id == o.id %} <span class="tag">✅ {{ _("current_org") }}</span>{% endif %}</div>
+    <div class="muted">🔗 <a href="/{{ o.slug }}">{{ request.url.netloc }}/{{ o.slug }}</a></div>
     <div class="meta muted">🏆 {{ o.tournaments }} · 👥 {{ o.players }}</div>
     <dl class="creds">
       <dt>{{ _("admin_user") }}</dt><dd><code>{{ o.admin_user }}</code></dd>

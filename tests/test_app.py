@@ -363,7 +363,7 @@ def test_viewing_needs_no_password(locked):
     for url in ["/", "/tournaments", "/tournaments/1", "/matchdays/1", "/players", "/matches", "/rules"]:
         assert locked.get(url).status_code == 200, url
     page = locked.get("/tournaments").text
-    assert "Add tournament" not in page and 'href="/courts"' not in page and "Log in</a>" in page
+    assert "Add tournament" not in page and 'href="/club/courts"' not in page and "Log in</a>" in page
 
 
 @pytest.mark.parametrize("method,url,data", [
@@ -379,6 +379,7 @@ def test_viewing_needs_no_password(locked):
     ("post", "/players/1/delete", {"confirm": "1"}),
 ])
 def test_changes_need_the_password(locked, method, url, data):
+    url = "/club" + url if method == "get" else url  # pages live in /<slug>/...
     r = getattr(locked, method)(url, data=data, follow_redirects=False) if data else \
         getattr(locked, method)(url, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/login")
@@ -509,7 +510,7 @@ def test_new_matchday_is_saved_only_with_its_courts(client):
     client.post("/tournaments", data={"name": "Liga Amigos", "held_on": "2026-10-23"})
     # The tournament page's button opens a draft; nothing is saved yet.
     page = client.get("/tournaments/1").text
-    assert 'action="/tournaments/1/matchdays/new"' in page
+    assert 'action="/club/tournaments/1/matchdays/new"' in page
     r = client.get("/tournaments/1/matchdays/new", params={"played_on": "2026-10-23"})
     assert "New matchday 1" in r.text and "isn't saved yet" in r.text
     assert court_count(r.text) == 2  # 8 players: 2 empty courts; no question on matchday 1
@@ -519,7 +520,8 @@ def test_new_matchday_is_saved_only_with_its_courts(client):
     r = client.post("/tournaments/1/matchdays", data=data)
     assert r.status_code == 200 and str(r.url).endswith("/matchdays/1")
     assert matchday_count() == 1 and pending_count() == 6
-    assert client.get("/courts", follow_redirects=False).headers["location"] == "/matchdays/1/courts"
+    assert client.get("/club/courts", follow_redirects=False).headers["location"] == \
+        "/club/matchdays/1/courts"
 
 
 def test_new_matchday_with_bad_courts_is_not_saved(league):
@@ -812,7 +814,7 @@ def test_jornada_recap_and_its_share_link(league):
         conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 2, winner = 'A'")
         conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 0 WHERE id = 1")
     page = league.get("/matchdays/1").text
-    assert 'href="/matchdays/1/recap"' in page
+    assert 'href="/club/matchdays/1/recap"' in page
     picker = league.get("/matchdays/1/recap").text
     assert "Choose" in picker and ">Ana<" in picker  # the admin isn't a player: pick one
     r = league.get("/matchdays/1/recap?player=1").text
@@ -970,8 +972,8 @@ def test_manual_tournament_sets_are_made_by_hand(league):
     assert "court-pick" not in page and "add each set" in page
     r = league.post("/tournaments/2/matchdays", data={"played_on": "2026-11-01"})
     assert str(r.url).endswith("/matchdays/2") and "Record the first one" in r.text
-    assert league.get("/matchdays/2/courts", follow_redirects=False).headers["location"] == \
-        "/matches/new?matchday=2"
+    assert league.get("/club/matchdays/2/courts", follow_redirects=False).headers["location"] == \
+        "/club/matches/new?matchday=2"
     league.post("/matches", data=set_form((1, 5, 2, 6), 6, 3, court=3, matchday_id=2))
     standings = league.get("/tournaments/2").text
     assert standing_points(standings, "Ana") == 3 and standing_points(standings, "Bea") == -3
@@ -1064,7 +1066,7 @@ def test_player_password_lets_players_enter_results_only(with_players):
     assert page.count('/edit">✏️') == 2 and "Logged in as a player" in page
     assert "Delete" not in page and "Assign courts" not in page and "score-form" not in page
     edit = c.get("/matches/1/edit").text  # a player's Edit page: just the games
-    assert 'action="/matches/1/score"' in edit and 'name="a1"' not in edit
+    assert 'action="/club/matches/1/score"' in edit and 'name="a1"' not in edit
     r = c.post("/matches/1/score", data={"team_a_games": "6", "team_b_games": "4"})
     assert str(r.url).endswith("/matchdays/1#set-1") and "6-4" in r.text
     assert 'value="6"' in c.get("/matches/1/edit").text  # still editable to correct it
@@ -1075,9 +1077,9 @@ def test_player_password_lets_players_enter_results_only(with_players):
 
     # Nothing else: no deleting, no new sets in a Liga, no courts, no tournaments.
     for method, url, data in [("post", "/matches/1/delete", {"x": "1"}),
-                              ("get", "/matches/new", None),
+                              ("get", "/club/matches/new", None),
                               ("post", "/matches", set_form((5, 6, 7, 8), 6, 4)),
-                              ("get", "/matchdays/1/courts", None),
+                              ("get", "/club/matchdays/1/courts", None),
                               ("post", "/tournaments/1/players/1/remove", {"x": "1"}),
                               ("post", "/tournaments/1/player-password", {"password": ""}),
                               ("post", "/players", {"name": "Zed"})]:
@@ -1178,7 +1180,7 @@ def test_standings_page_by_tournament(league):
     new_tournament(league, 4, players=(5, 6, 7, 8), name="Otra copa")  # newer, no sets
     home = league.get("/standings").text
     assert "Standings: <a" in home and "Otra copa</a></h1>" in home   # latest by default
-    assert 'href="/standings?tournament=1"' in home and 'href="/standings?tournament=2"' in home
+    assert 'href="/club/standings?tournament=1"' in home and 'href="/club/standings?tournament=2"' in home
     page = league.get("/standings?tournament=1").text
     assert "Liga Amigos</a></h1>" in page and standing_points(page, "Ana") == 10
     assert "Otra copa</a></h1>" in league.get("/standings?tournament=99").text  # unknown: the latest
@@ -1228,7 +1230,7 @@ def test_admin_replaces_a_player_in_pending_sets_only(league):
     league.post("/matches", data=set_form((1, 2, 3, 4), 6, 3))  # played
     league.post("/matches", data=set_form((1, 3, 2, 4), "", ""))  # pending
     page = league.get("/tournaments/1").text
-    assert 'action="/tournaments/1/players/replace"' in page
+    assert 'action="/club/tournaments/1/players/replace"' in page
     r = league.post("/tournaments/1/players/replace",
                     data={"old_id": "1", "player_name": "Zoe", "create": "1"})
     assert r.status_code == 200
@@ -1304,7 +1306,7 @@ def test_tournament_summary_page(league):
         league.post("/matches", data=set_form((a1, a2, b1, b2), ga, gb))
     league.post("/matches", data=set_form((1, 2, 3, 4), 6, 0))
     page = league.get("/tournaments/1").text
-    assert 'href="/tournaments/1/summary"' in page
+    assert 'href="/club/tournaments/1/summary"' in page
     summary = league.get("/tournaments/1/summary").text
     assert "Tournament summary" in summary and "So far" in summary and "🥇" in summary
     assert "Highlights" in summary and "Longest streak" in summary
@@ -1363,6 +1365,32 @@ def test_visitors_enter_an_organization_first(league):
     league.cookies.delete("org")
     league.cookies.set("org", "1.forged")
     assert league.get("/standings", follow_redirects=False).headers["location"].startswith("/enter")
+
+
+def test_each_organization_has_its_own_urls(league):
+    from app.orgs import slugify
+    assert slugify("Liga Nené") == "liga-nene" and slugify("  Club  ") == "club"
+    assert slugify("Players") == "players-org" and slugify("¡!") == "org"  # reserved, empty
+    with db.connect() as conn:
+        assert conn.execute("SELECT slug FROM organizations WHERE id = 1").fetchone()[0] == "club"
+        other = orgs.create_org(conn, "Otra Liga", "otra-admin", "secreto")
+        assert conn.execute("SELECT slug FROM organizations WHERE id = ?",
+                            (other,)).fetchone()[0] == "otra-liga"
+    # /club alone: its standings; every link and redirect stays inside /club.
+    page = league.get("/club").text
+    assert "Standings" in page and 'href="/club/tournaments"' in page
+    assert 'href="/club/players"' in page and 'href="/"' in page  # home stays the same
+    r = league.get("/tournaments", follow_redirects=False)  # an old link: into /club
+    assert r.status_code == 303 and r.headers["location"] == "/club/tournaments"
+    r = league.post("/club/players", data={"name": "Zed"}, follow_redirects=False)
+    assert r.headers["location"].startswith("/club/players")
+    # Another organization's link shows only it, and the browser now views it.
+    league.cookies.delete("org")
+    page = league.get("/otra-liga/tournaments").text
+    assert "Liga Amigos" not in page and "🏢 Otra Liga" in page
+    assert league.get("/tournaments", follow_redirects=False).headers["location"] == \
+        "/otra-liga/tournaments"
+    assert league.get("/nadie/tournaments", follow_redirects=False).status_code == 404
 
 
 def test_organizations_only_see_their_own_data(league):
@@ -1605,7 +1633,7 @@ def test_tournament_password_offers_an_account_or_guest(with_players):
     r = with_players.post("/login", data={"password": "jugamos", "role": "player"})
     assert "/welcome?t=1" in str(r.url)
     assert "Create account" in r.text and "Continue as a guest" in r.text
-    assert 'href="/tournaments/1"' in r.text  # the guest carries on as before
+    assert 'href="/tournaments/1"' in r.text  # the guest carries on (/welcome isn't in /<slug>)
     # Without the tournament's password there's nothing to claim.
     with_players.cookies.delete("player_1")
     r = with_players.get("/signup?t=1", follow_redirects=False)
@@ -2064,8 +2092,8 @@ def test_admin_emails_a_players_recap_from_the_tournament(with_players, monkeypa
     with db.connect() as conn:
         conn.executemany("INSERT OR IGNORE INTO tournament_players VALUES (1, ?)", [(1,), (2,)])
     page = c.get("/tournaments/1").text
-    assert 'action="/tournaments/1/players/1/email"' in page  # Ana: account with email
-    assert 'action="/tournaments/1/players/2/email"' not in page  # Bea: no account
+    assert 'action="/club/tournaments/1/players/1/email"' in page  # Ana: account with email
+    assert 'action="/club/tournaments/1/players/2/email"' not in page  # Bea: no account
     outbox = email_on(monkeypatch)
     r = c.post("/tournaments/1/players/1/email")
     assert "has no played sets in this tournament yet" in r.text and not outbox
@@ -2091,8 +2119,8 @@ def test_accounts_page_sends_a_test_email(with_players, monkeypatch):
     c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
     monkeypatch.delenv("ACS_CONNECTION_STRING", raising=False)
     page = c.get("/users").text
-    assert 'action="/users/' in page and "/test-email" in page and "Email is off" in page
-    uid = int(re.search(r'action="/users/(\d+)/test-email"', page).group(1))
+    assert 'action="/club/users/' in page and "/test-email" in page and "Email is off" in page
+    uid = int(re.search(r'action="/club/users/(\d+)/test-email"', page).group(1))
     outbox = email_on(monkeypatch)
     r = c.post(f"/users/{uid}/test-email")  # no played sets yet: a plain test message
     assert "Email sent." in r.text and outbox[-1][2] == "✅ PadelScore ya manda emails"
@@ -2133,7 +2161,7 @@ def test_game_day_reminder_email(with_players, monkeypatch):
     assert to == "ana@example.com" and "Hoy juegas" in subject and "Cancha 1" in subject
     assert "Con Bea" in html and "Carlos / Diego" in html and "Con Carlos" in html
     assert "50% de ganar" in html and "primera vez contra Carlos" in html  # no records yet
-    assert "/matchdays/1" in text and "kind=reminders" in html
+    assert "/club/matchdays/1" in text and "kind=reminders" in html  # inside its organization
     assert task().json()["sent"] == 0  # once per jornada
     assert task("/tasks/send-recaps").json()["sent"] == 0  # no recap: nothing played
     # Its unsubscribe link only stops reminders.
@@ -2214,7 +2242,7 @@ def test_admin_emails_a_players_reminder(with_players, monkeypatch):
     c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
     with db.connect() as conn:
         conn.execute("INSERT OR IGNORE INTO tournament_players VALUES (1, 1)")
-    assert 'action="/tournaments/1/players/1/reminder"' in c.get("/tournaments/1").text
+    assert 'action="/club/tournaments/1/players/1/reminder"' in c.get("/tournaments/1").text
     outbox = email_on(monkeypatch)
     r = c.post("/tournaments/1/players/1/reminder")
     assert "Email sent." in r.text and "Hoy juegas" in outbox[0][2]
@@ -2234,7 +2262,7 @@ def test_accounts_page_sends_a_test_reminder(with_players, monkeypatch):
     c.post("/logout")
     c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
     page = c.get("/users").text
-    uid = int(re.search(r'action="/users/(\d+)/test-reminder"', page).group(1))
+    uid = int(re.search(r'action="/club/users/(\d+)/test-reminder"', page).group(1))
     outbox = email_on(monkeypatch)
     r = c.post(f"/users/{uid}/test-reminder")
     assert "Email sent." in r.text
@@ -2510,8 +2538,8 @@ def test_my_summary_is_in_the_menu(with_players):
     signup(c)  # Ana (1)
     page = c.get("/players/1").text
     menu = page.split('class="tabbar"')[1].split("</nav>")[0]
-    assert 'href="/players/1" class="active"' in menu and "My summary" in menu
-    assert 'href="/players" class="active"' not in menu  # not both highlighted
+    assert 'href="/club/players/1" class="active"' in menu and "My summary" in menu
+    assert 'href="/club/players" class="active"' not in menu  # not both highlighted
 
 
 def test_home_has_a_closable_install_banner(client):

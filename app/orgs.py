@@ -14,11 +14,40 @@ dependencies aren't installed (e.g. Azure's Kudu console):
 The first organization created adopts every player and tournament that has none
 (those from before organizations existed).
 """
+import re
 import secrets
 import sys
+import unicodedata
 
 from . import db, users
 from .users import check_password, hash_password  # noqa: F401 (used by older callers)
+
+
+# The app's own first path segments: an organization's slug can't be one of them.
+SECTIONS = ("standings", "tournaments", "players", "matchdays", "matches", "medals",
+            "courts", "users")  # pages of one organization: /<slug>/<section>/...
+RESERVED = {"static", "enter", "login", "logout", "lang", "rules", "orgs", "me", "health",
+            "signup", "join", "sw.js", "r", "install", "tasks", "unsubscribe", "welcome",
+            *SECTIONS}
+
+
+def slugify(name):
+    """An organization's name for its URLs: lowercase ASCII letters and digits, dashes
+    between words ("Liga Nené" -> "liga-nene")."""
+    plain = unicodedata.normalize("NFD", name.casefold())
+    plain = "".join(c for c in plain if not unicodedata.combining(c))
+    slug = re.sub(r"[^a-z0-9]+", "-", plain).strip("-") or "org"
+    return f"{slug}-org" if slug in RESERVED else slug
+
+
+def unique_slug(conn, name, org_id=None):
+    """slugify(name), with -2, -3... if another organization already has it."""
+    base = slug = slugify(name)
+    n = 2
+    while conn.execute("SELECT 1 FROM organizations WHERE slug = ? AND id IS NOT ?",
+                       (slug, org_id)).fetchone():
+        slug, n = f"{base}-{n}", n + 1
+    return slug
 
 
 def create_org(conn, name, admin_user, password):
@@ -31,8 +60,9 @@ def create_org(conn, name, admin_user, password):
     first = conn.execute("SELECT COUNT(*) FROM organizations").fetchone()[0] == 0
     org_id = conn.execute(
         "INSERT INTO organizations (name, admin_user, admin_password, admin_password_plain, "
-        "secret) VALUES (?, ?, ?, ?, ?)",
-        (name, admin_user, hash_password(password), password, secrets.token_hex(32))).lastrowid
+        "secret, slug) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, admin_user, hash_password(password), password, secrets.token_hex(32),
+         unique_slug(conn, name))).lastrowid
     user_id = users.create_user(conn, "org_admin", admin_user, password, organization_id=org_id)
     users.sync_org(conn, user_id)
     if first:
