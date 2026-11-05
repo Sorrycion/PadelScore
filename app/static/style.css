@@ -37,6 +37,8 @@ header.topbar { display: flex; flex-wrap: wrap; align-items: center; justify-con
 .standings .username { color: var(--muted); font-size: .85em; white-space: nowrap; }
 .career-medals { margin: -4px 0 16px; }
 .career-medals img.medal { width: 32px; height: 32px; }
+.share-row { margin: 4px 0 12px; }
+a.button.whatsapp { background: #25d366; color: #fff; }
 ul.upcoming .vs { display: flex; flex-wrap: wrap; gap: 6px; font-weight: 600; margin: 4px 0 8px; }
 .roles { display: flex; gap: 6px; flex-wrap: wrap; }
 .join-card { padding: 14px 18px; margin: 12px 0 4px; }

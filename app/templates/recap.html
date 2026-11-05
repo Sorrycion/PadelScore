@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{% if recap %}{{ recap.player.name }} · {% endif %}{{ _("recap_title") }} · PadelScore{% endblock %}
+{% block head %}
+{% if recap %}
+  {# The preview card WhatsApp (and others) show for the shared link. #}
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="PadelScore">
+  <meta property="og:title" content="{{ recap.player.name }} · {{ recap.tournament.name }} · {{ _('matchday_n', n=recap.matchday.number) }}">
+  <meta property="og:description" content="{{ share.text.split('\n')[1:-1]|join(' · ') }}">
+  <meta property="og:url" content="{{ share.url }}">
+{% endif %}
+{% endblock %}
+{% block content %}
+{# 📲 Mi jornada. Needs: recap (main.jornada_recap, or None), people (who played it, to
+   pick from), chosen, matchday, share (link + WhatsApp text), shared (opened from the
+   public link: no picker), org_name (shared only). #}
+{% if recap %}
+{% set t, md, row = recap.tournament, recap.matchday, recap.row %}
+<p class="eyebrow">{% if shared %}🏢 {{ org_name }} · {{ t.name }}{% else %}<a class="plain" href="/tournaments/{{ t.id }}">{{ t.name }}</a>{% endif %} · {{ _("round_n" if t.rule_code in ROUND_MODES else "matchday_n", n=md.number) }} · 📅 {{ md.played_on }}</p>
+<h1>{{ recap.player.name }}</h1>
+{% else %}
+<h1>📲 {{ _("recap_title") }}</h1>
+{% endif %}
+
+{% if not shared and people %}
+<form method="get" action="/matchdays/{{ matchday.id }}/recap" class="inline h2h-pick">
+  <label>{{ _("player") }}
+    <select name="player" onchange="this.form.submit()">
+      {% if not chosen %}<option value="">{{ _("choose") }}</option>{% endif %}
+      {% for pid, name in people.items() %}<option value="{{ pid }}" {% if pid == chosen %}selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button type="submit">{{ _("show") }}</button></noscript>
+</form>
+{% endif %}
+
+{% if recap %}
+<div class="tiles">
+  {% if row.absent %}
+  <div class="tile"><strong>🚫</strong><span>{{ _("absent") }}</span></div>
+  {% else %}
+  <div class="tile"><strong>{{ row.place or "–" }}{% if row.place %}.º{% endif %}</strong><span>{{ _("court_n", n=recap.court) }}</span></div>
+  {% endif %}
+  <div class="tile"><strong>{{ row.points }}</strong><span>{{ _("pts") }}</span></div>
+  <div class="tile"><strong class="up">{{ row.sets_won }}/{{ row.sets }}</strong><span>{{ _("recap_sets_won") }}</span></div>
+  {% if recap.position %}
+  <div class="tile"><strong>{{ recap.position }}.º{% if recap.moved and recap.moved > 0 %} <small class="up">▲{{ recap.moved }}</small>{% elif recap.moved %} <small class="down">▼{{ -recap.moved }}</small>{% endif %}</strong><span>{{ _("recap_ranking") }}</span></div>
+  {% endif %}
+  {% if recap.next_court %}
+  <div class="tile"><strong>{{ recap.next_court }}</strong><span>{{ _("recap_next_court") }}</span></div>
+  {% endif %}
+  <div class="tile"><strong>{{ recap.medals|length }}</strong><span>{{ _("tab_medals") }}</span></div>
+</div>
+
+<p class="share-row">
+  <a class="button whatsapp" href="{{ share.whatsapp }}" target="_blank" rel="noopener">📲 {{ _("recap_whatsapp") }}</a>
+</p>
+
+{% if recap.medals %}
+<h2>🏅 {{ _("recap_medals") }}</h2>
+<p class="mini-medals career-medals">{% for m in recap.medals %}<img class="medal" src="{{ m.image }}?v={{ css_version }}" alt="{{ m.name }}" title="{{ m.name }}" width="32" height="32">{% endfor %}</p>
+<p class="muted">{{ recap.medals|map(attribute="name")|join(" · ") }}</p>
+{% endif %}
+
+<h2>🎾 {{ _("recap_sets") }}</h2>
+<ul class="matches">{% for m in recap.sets %}{% include "_match_row.html" %}{% endfor %}</ul>
+
+{% if shared %}
+<form method="post" action="/enter" class="inline">
+  <input type="hidden" name="name" value="{{ org_name }}">
+  <input type="hidden" name="next" value="/tournaments/{{ t.id }}">
+  <button type="submit" class="secondary">🏆 {{ _("recap_see_tournament") }}</button>
+</form>
+{% endif %}
+{% elif chosen %}
+<p class="empty">{{ _("recap_not_played") }}</p>
+{% endif %}
+{% endblock %}

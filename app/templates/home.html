@@ -22,6 +22,14 @@
 </section>
 {% endif %}
 
+{% if latest %}
+<section class="card join-card">
+  <h2>📲 {{ _("recap_latest") }}</h2>
+  <p class="muted">{{ latest.tournament }} · {{ _("matchday_short", n=latest.matchday) }} · 📅 {{ latest.played_on }}</p>
+  {{ go(latest.org_name, "/matchdays/%d/recap?player=%d"|format(latest.matchday_id, latest.player_id), "📲 " ~ _("recap_title")) }}
+</section>
+{% endif %}
+
 <h2>⏳ {{ _("my_upcoming_sets") }}</h2>
 {% if upcoming %}
 <ul class="cards upcoming">
