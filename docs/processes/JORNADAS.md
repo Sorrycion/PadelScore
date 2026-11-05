@@ -30,7 +30,20 @@ flowchart TD
   are deleted.
 - **Absent player** (🚫 next to the name in the court table): a substitute plays in
   their place, but the absent player scores 0 that day and goes last on the court.
-  Tap again to mark them present.
+  Tap again to mark them present. **They stay in the tournament:** the next jornada's
+  suggested courts include them (as last of their court, they move down), even if
+  they were removed from the tournament's list in the meantime.
+- **Who can be chosen on a court:** the tournament's list plus anyone the suggestion
+  already placed. **Saving a jornada puts all its players on the list** (when the
+  tournament keeps one), so the list never misses someone who's playing.
+
+```mermaid
+flowchart LR
+    A["Jornada 1: Bruno 🚫 absent<br/>(0 points, last on his court)"] --> R["Bruno removed from the list<br/>(e.g. a substitute took his place)"]
+    R --> S["Jornada 2 suggestion:<br/>Bruno moves down one court"]
+    S --> P["courts form: Bruno shown and chosen<br/>(list + players already placed)"]
+    P --> L["save: Bruno back on the list"]
+```
 - **Replace** (next to the name in the court table): opens the replace page. The new
   player takes the place in pending sets and in the tournament list. See
   [Tournaments](TOURNAMENTS.md).
