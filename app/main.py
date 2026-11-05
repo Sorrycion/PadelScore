@@ -10,7 +10,7 @@ from urllib.parse import quote, urlencode
 
 import markdown
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -39,7 +39,7 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 # Pages that work before entering an organization (and "/" itself: the login, or the
 # account's tournaments in every organization).
 OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me",
-              "/health", "/signup", "/join")
+              "/health", "/signup", "/join", "/sw.js")
 # The commit being served: the deploy pipeline writes it to app/VERSION ("dev" locally).
 VERSION = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "dev"
 
@@ -1005,6 +1005,14 @@ def unlink_user_player(request: Request, user_id: int):
         if player:
             users.unlink_player(conn, player["id"])
     return user_action(request, user_id, change)
+
+
+@app.get("/sw.js")
+def service_worker():
+    """The installed app's service worker (app/static/sw.js). It's served from the root
+    so it covers the whole site, and never cached, so a new version takes over soon."""
+    return FileResponse(BASE / "static" / "sw.js", media_type="text/javascript",
+                        headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/health")

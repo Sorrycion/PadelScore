@@ -45,6 +45,9 @@ ul.upcoming .vs { display: flex; flex-wrap: wrap; gap: 6px; font-weight: 600; ma
 .guest-login { margin-top: 14px; }
 .guest-login > summary { cursor: pointer; color: var(--muted); }
 .guest-login form.stack { margin-bottom: 0; }
+.install-card { padding: 14px 18px; }
+.install-card p { margin-top: 0; }
+.install-card ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 fieldset.replace-points { border: 0; padding: 0; margin: 0 0 12px; display: grid; gap: 6px; }
 fieldset.replace-points legend { font-weight: 600; margin-bottom: 4px; }
 label.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }

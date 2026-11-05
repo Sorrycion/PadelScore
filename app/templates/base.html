@@ -4,6 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#6aa5ff">
+  {# Installable app (PWA): "Add to Home Screen" opens it full screen, with its icon. #}
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="PadelScore">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>{% block title %}PadelScore{% endblock %}</title>
   {# A relative link: behind Azure's HTTPS front end url_for() would build an http:// URL,
      which browsers block on an https:// page. #}
@@ -19,6 +27,10 @@
       flags.rel = "stylesheet";
       flags.href = "https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap&text=%F0%9F%87%BA%F0%9F%87%B8%F0%9F%87%B2%F0%9F%87%BD";
       document.head.appendChild(flags);
+    }
+    // The installed app's offline page (app/static/sw.js); pages still come from the network.
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () { navigator.serviceWorker.register("/sw.js"); });
     }
   </script>
 </head>

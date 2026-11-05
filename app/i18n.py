@@ -558,6 +558,18 @@ TEXT = {
     "change_password": {"es": "Cambiar contraseña", "en": "Change password"},
     "saved": {"es": "Guardado.", "en": "Saved."},
     "my_profile": {"es": "Mi perfil", "en": "My profile"},
+    "install_title": {"es": "PadelScore en tu pantalla de inicio",
+                      "en": "PadelScore on your home screen"},
+    "install_hint": {"es": "Instálala como app: se abre a pantalla completa, con su ícono, "
+                           "sin la barra del navegador.",
+                     "en": "Install it as an app: it opens full screen, with its icon, "
+                           "without the browser bar."},
+    "install_iphone": {"es": "en Safari, toca Compartir ⬆️ y luego «Agregar a inicio».",
+                       "en": "in Safari, tap Share ⬆️, then \"Add to Home Screen\"."},
+    "install_android": {"es": "en Chrome, abre el menú ⋮ y toca «Instalar app» o «Agregar a "
+                              "la pantalla principal».",
+                        "en": "in Chrome, open the ⋮ menu and tap \"Install app\" or \"Add "
+                              "to Home screen\"."},
     "my_summary": {"es": "Mi resumen", "en": "My summary"},
     "my_tournaments": {"es": "Mis torneos", "en": "My tournaments"},
     "no_my_tournaments": {"es": "Todavía no juegas ningún torneo.",
