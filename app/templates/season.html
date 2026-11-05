@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ _("season_title") }} · {{ tournament.name }} · PadelScore{% endblock %}
+{% block content %}
+{# 🏁 A tournament's summary. Needs: tournament, standings, podium (positions 1-3),
+   matchdays (how many), hl (stats.season) and medals (catalog rows with "holders"). #}
+<p class="eyebrow"><a class="plain" href="/tournaments/{{ tournament.id }}">{{ RULE_ICONS.get(tournament.rule_code, "") }} {{ tournament.name }}</a></p>
+<h1>{{ _("season_title") }}</h1>
+<p class="muted">{% if tournament.ended %}{{ _("season_final") }}{% else %}{{ _("season_so_far") }}{% endif %} · {{ _("n_matchdays", n=matchdays) }} · 👥 {{ standings|length }}</p>
+
+{% if not standings %}
+<p class="empty">{{ _("no_results") }}</p>
+{% else %}
+<h2>🏆 {{ _("podium") }}</h2>
+<ol class="podium">
+  {% for r in podium %}
+  <li class="card place-{{ r.position }}">
+    <span class="medal-glyph" aria-hidden="true">{{ ["🥇", "🥈", "🥉"][r.position - 1] }}</span>
+    <a class="plain name" href="/players/{{ r.id }}">{{ r.name }}</a>
+    <span class="muted">{{ _("n_points", n=r.points) }}</span>
+  </li>
+  {% endfor %}
+</ol>
+
+<h2>{{ _("highlights") }}</h2>
+<ul class="cards highlight-cards">
+  {% for key, icon, row, value in [
+       ("hl_best_day", "🎯", hl.best_day, hl.best_day and _("best_day_value", points=hl.best_day.points, n=hl.best_day.number)),
+       ("hl_streak", "🔥", hl.streak, hl.streak and _("n_wins", n=hl.streak.value)),
+       ("hl_sets_won", "💪", hl.sets_won, hl.sets_won and _("n_wins", n=hl.sets_won.sets_won)),
+       ("hl_diff", "📈", hl.diff, hl.diff and "+%d"|format(hl.diff.diff)),
+       ("hl_court1", "👑", hl.court1, hl.court1 and _("n_matchdays", n=hl.court1.value))] %}
+  {% if row %}
+  <li class="card highlight">
+    <span class="icon" aria-hidden="true">{{ icon }}</span>
+    <div><div class="muted">{{ _(key) }}</div>
+      <a class="plain name" href="/players/{{ row.id }}">{{ row.name }}</a>
+      <div class="muted">{{ value }}</div></div>
+  </li>
+  {% endif %}
+  {% endfor %}
+  {% if hl.pair %}
+  <li class="card highlight">
+    <span class="icon" aria-hidden="true">🤝</span>
+    <div><div class="muted">{{ _("hl_pair") }}</div>
+      <span class="name">{% for p in hl.pair.players %}<a class="plain" href="/players/{{ p.id }}">{{ p.name }}</a>{% if loop.first %} + {% endif %}{% endfor %}</span>
+      <div class="muted">{{ _("n_wins", n=hl.pair.won) }} · {{ _("n_sets", n=hl.pair.played) }}</div></div>
+  </li>
+  {% endif %}
+</ul>
+{% if hl.ever_present %}
+<p class="muted">📋 {{ _("ever_present") }}: {% for r in hl.ever_present %}<a class="plain" href="/players/{{ r.id }}">{{ r.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% endif %}
+
+{% if medals %}
+<h2>🏅 {{ _("season_medals") }}</h2>
+<ul class="cards season-medals">
+  {% for m in medals %}
+  <li class="card">
+    <img class="medal" src="{{ m.image }}?v={{ css_version }}" alt="" width="40" height="40">
+    <div><strong>{{ m.name }}</strong>
+      <div class="muted">{% for r in m.holders %}<a class="plain" href="/players/{{ r.id }}/medals">{{ r.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</div></div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<p><a href="/tournaments/{{ tournament.id }}">{{ _("standings") }} →</a></p>
+{% endif %}
+{% endblock %}

@@ -146,6 +146,50 @@ def rolling_win_pct(sets, pid, window=10):
     return out
 
 
+def season(results, standings, sets, liga=False):
+    """A tournament's highlights for its summary page.
+
+    results, standings: scoring.tournament_results() of the tournament; sets: its played
+    sets, oldest first. Each highlight is None when nobody stands out (e.g. no sets).
+    """
+    plays = lambda s, pid: pid in (s["a1_id"], s["a2_id"], s["b1_id"], s["b2_id"])  # noqa: E731
+    best = lambda rows, key: max(rows, key=lambda r: r[key], default=None)  # noqa: E731
+    out = {}
+    days = [{"id": r["id"], "name": r["name"], "points": pts, "number": n}
+            for r in standings for n, pts in r["by_matchday"].items()]
+    top_day = best(days, "points")
+    out["best_day"] = top_day if top_day and top_day["points"] > 0 else None
+    runs = [{"id": r["id"], "name": r["name"],
+             "value": streaks([s for s in sets if plays(s, r["id"])], r["id"])["best_win"]}
+            for r in standings]
+    top_run = best(runs, "value")
+    out["streak"] = top_run if top_run and top_run["value"] >= 2 else None
+    pairs = defaultdict(lambda: {"won": 0, "played": 0})
+    for s in sets:
+        for team, (a, b) in TEAMS.items():
+            key = tuple(sorted(((s[a + "_id"], s[a]), (s[b + "_id"], s[b]))))
+            pairs[key]["played"] += 1
+            pairs[key]["won"] += s["winner"] == team
+    pair = max(pairs.items(), key=lambda kv: (kv[1]["won"], -kv[1]["played"]), default=None)
+    out["pair"] = ({"players": [{"id": i, "name": n} for i, n in pair[0]], **pair[1]}
+                   if pair and pair[1]["won"] >= 2 else None)
+    for key, field in (("sets_won", "sets_won"), ("diff", "diff")):
+        row = best(standings, field)
+        out[key] = row if row and row[field] > 0 else None
+    on_one = Counter()
+    for md in results if liga else ():
+        for r in md["courts"].get(1, []):
+            if r["sets"] and not r["absent"]:
+                on_one[(r["id"], r["name"])] += 1
+    king = on_one.most_common(1)
+    out["court1"] = ({"id": king[0][0][0], "name": king[0][0][1], "value": king[0][1]}
+                     if king and len(results) > 1 else None)
+    played_days = sum(1 for md in results if any(md["courts"].values()))
+    out["ever_present"] = [r for r in standings
+                           if played_days > 1 and r["played"] == played_days]
+    return out
+
+
 def by_month(sets):
     """[(YYYY-MM, sets played)] in order."""
     counts = Counter(str(s["played_on"])[:7] for s in sets)

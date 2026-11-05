@@ -1100,6 +1100,31 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
         })
 
 
+@app.get("/tournaments/{tournament_id}/summary", response_class=HTMLResponse)
+def tournament_summary(request: Request, tournament_id: int):
+    """🏁 Resumen del torneo: the podium, the season's highlights and the medals won in
+    the tournament. Final once it has ended; "so far" while it's going."""
+    lang = get_lang(request)
+    with db.connect() as conn:
+        tournament = get_tournament(conn, tournament_id)
+        results, standings = load_results(conn, tournament_id)
+        sets = [s for s in reversed(set_rows(conn, tournament_id=tournament_id))
+                if is_played(s)]
+        won = tournament_medals(conn, tournament_id, standings, lang)
+        catalog = medal_types(conn, lang)
+    holders = {}
+    for row in standings:
+        for medal in won.get(row["id"], []):
+            holders.setdefault(medal["code"], []).append(row)
+    return templates.TemplateResponse(request, "season.html", {
+        "tournament": tournament, "standings": standings,
+        "podium": [r for r in standings if r["position"] <= 3],
+        "matchdays": len(results),
+        "hl": stats.season(results, standings, sets, tournament["rule_code"] == "liga_amigos"),
+        "medals": [{**m, "holders": holders[m["code"]]} for m in catalog if m["code"] in holders],
+    })
+
+
 @app.post("/tournaments/{tournament_id}/players", dependencies=EDIT)
 def add_tournament_player(tournament_id: int, player_name: str = Form(""),
                           create: str = Form("")):

@@ -6,7 +6,7 @@
   <div>
     <p class="eyebrow"><a class="plain" href="/rules#{{ tournament.rule_code }}">{{ RULE_ICONS.get(tournament.rule_code, "") }} {{ tournament.rule_type }}</a></p>
     <h1>{{ tournament.name }}</h1>
-    <div class="muted">📅 {{ tournament.held_on }}{% if tournament.ended %} · {{ _("tournament_ended") }}{% endif %}</div>
+    <div class="muted">📅 {{ tournament.held_on }}{% if tournament.ended %} · {{ _("tournament_ended") }}{% endif %}{% if results %} · <a href="/tournaments/{{ tournament.id }}/summary">{{ _("season_link") }}</a>{% endif %}</div>
   </div>
   <div class="stats">
     {% if round_mode and tournament.points_per_match %}<div><strong>{{ tournament.points_per_match }}</strong> 🎯</div>{% endif %}
