@@ -6,6 +6,7 @@ import time
 import unicodedata
 from collections import Counter
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import quote, urlencode
@@ -87,6 +88,7 @@ templates.env.globals.update(
     TIER_KEYS={1: "tier_bronze", 2: "tier_silver", 3: "tier_gold"},
     RULE_ICONS={"liga_amigos": "🏅", "americano": "🇺🇸", "mexicano": "🇲🇽", "manual": "✍️"},
     COUNTRIES=countries.COUNTRIES, DEFAULT_COUNTRY=countries.DEFAULT,
+    chance_of=lambda m: chance_of(m),  # defined below
     # Changes whenever the stylesheet does, so phones don't keep an old cached copy.
     css_version=hashlib.sha256(b"".join(
         f.read_bytes() for f in sorted((BASE / "static").rglob("*")) if f.is_file())).hexdigest()[:10],
@@ -404,6 +406,7 @@ def guest_home(request, conn):
             return row, [s for s in set_rows(conn, tournament_id=t["id"])
                          if s["team_a_games"] is None]
         row, pending = in_org(org["id"], work)
+        pending = in_org(org["id"], lambda: [{**s, "chance": chance_of(s)} for s in pending])
         tournaments.append(home_tournament(row, org, "guest"))
         upcoming += [{**s, "org_name": org["name"]} for s in pending]
     return (*by_date(tournaments, upcoming), None)
@@ -830,7 +833,8 @@ def my_summary(conn, player):
                 tournaments.append({**t, "me": me})
         played = [s for s in sets if is_played(s)]
         return {"player": player, "tournaments": tournaments,
-                "pending": [s for s in sets if s["team_a_games"] is None],
+                "pending": [{**s, "chance": chance_of(s)} for s in sets
+                            if s["team_a_games"] is None],
                 "recent": [s for s in sets if s["team_a_games"] is not None][:5],
                 "totals": stats.totals(played, player["id"]),
                 "medals": player_awards(conn, player["id"])}
@@ -1369,7 +1373,6 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
             "next_number": results[-1]["number"] + 1 if results[-1]["id"] == matchday_id else None,
             "next_date": (date.fromisoformat(matchday["played_on"]) + timedelta(days=7)).isoformat(),
             "in_matchday": True,
-            "chances": set_chances(conn, sets),
             "recap_players": md_players(result),
             "scorer": auth.can_score(request, tournament),
         })
@@ -2047,14 +2050,27 @@ def org_rates(conn):
     return stats.player_rates([s for s in set_rows(conn) if is_played(s)])
 
 
-def set_chances(conn, sets):
-    """{set id: % pair A wins} for the pending sets among `sets`, from the records."""
-    pending = [s for s in sets if not is_played(s)]
-    if not pending:
-        return {}
-    rates = org_rates(conn)
-    return {s["id"]: round(100 * stats.win_probability(
-        rates, (s["a1_id"], s["a2_id"]), (s["b1_id"], s["b2_id"]))) for s in pending}
+RATES = ContextVar("rates", default=None)  # this request's {organization id: records}
+
+
+def chance_of(m):
+    """The % chance that pair A wins this set while it's pending (None once played), for
+    every place that shows a set. Each organization's records (org_rates) are worked
+    out once per request. A set that already carries a "chance" (built inside another
+    organization, e.g. the home page's next sets) keeps it."""
+    if is_played(m):
+        return None
+    if "chance" in m.keys():
+        return m["chance"]
+    cache = RATES.get()
+    if cache is None:
+        cache = {}
+        RATES.set(cache)
+    if org_id() not in cache:
+        with db.connect() as conn:
+            cache[org_id()] = org_rates(conn)
+    return round(100 * stats.win_probability(cache[org_id()], (m["a1_id"], m["a2_id"]),
+                                             (m["b1_id"], m["b2_id"])))
 
 
 def plays(s, pid):
@@ -2504,8 +2520,7 @@ def edit_match_page(request: Request, match_id: int, error: str | None = None):
         row = next(s for s in set_rows(conn, matchday_id=match["matchday_id"])
                    if s["id"] == match_id)
         return templates.TemplateResponse(request, "match_score.html", {
-            "m": row, "tournament": tournament, "error": error,
-            "chances": set_chances(conn, [row])})
+            "m": row, "tournament": tournament, "error": error})
 
 
 @app.post("/matches/{match_id}")

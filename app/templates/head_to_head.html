@@ -29,7 +29,7 @@
 {% if chance is not none %}
 <section class="card chart-card h2h-chance">
   <p><strong>🎯 {{ _("h2h_chance", name=other.name) }}: {{ chance }}%</strong></p>
-  <div class="chance"><span class="a">{{ chance }}%</span><span class="bar" aria-hidden="true"><span style="width: {{ chance }}%"></span></span><span class="b">{{ 100 - chance }}%</span></div>
+  {% include "_chance.html" %}
   <p class="muted">{{ _("chance_hint") }}</p>
 </section>
 {% endif %}

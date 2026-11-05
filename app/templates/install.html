@@ -26,6 +26,7 @@
 {% if os == "android" %}
 <section class="card install-card" id="install-android">
   <h2>🤖 Android</h2>
+  <p class="error" id="install-samsung" hidden>⚠️ {{ _("install_samsung") }}</p>
   <button type="button" id="install-button" hidden>📲 {{ _("install_now") }}</button>
   <p class="muted" id="install-android-hint">{{ _("install_android_steps") }}</p>
   <ol class="install-steps">
@@ -115,6 +116,11 @@
     // Android tab (Chrome): keep the browser's install offer and open it from our button.
     var offer = null, button = document.getElementById("install-button");
     if (!button) return;
+    // Samsung Internet builds its own Android package for an installed site, which Google
+    // Play Protect blocks on recent Android ("designed for an older version"): use Chrome.
+    if (/SamsungBrowser/.test(navigator.userAgent)) {
+      document.getElementById("install-samsung").hidden = false;
+    }
     window.addEventListener("beforeinstallprompt", function (event) {
       event.preventDefault();
       offer = event;

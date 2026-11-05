@@ -91,6 +91,9 @@ flowchart LR
   app runs installed, `display-mode: standalone`). It has two tabs, **🤖 Android** (the
   first one, `/install`) and **🍎 iPhone** (`/install?os=iphone`). They're links, so they
   work without JavaScript and each can be shared:
+  - **Samsung Internet:** the page warns to use Chrome. Samsung builds its own Android
+    package for an installed site, and Google Play Protect blocks it on recent Android
+    ("app no segura… versión anterior de Android"). Nothing in the app can change that.
   - **Android:** Chrome's `beforeinstallprompt` event is kept, and the **Instalar** button
     opens Chrome's own install dialog. Without it, the drawn ⋮ → "Instalar app" steps
     show.

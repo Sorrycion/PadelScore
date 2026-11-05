@@ -50,9 +50,16 @@ flowchart LR
 
 ## 🎯 Chances on pending sets
 
-Before its result is entered, each set on the jornada page (and on its result page)
-shows each pair's chance of winning, as a bar: for example "58% · 42%". It comes from
+**Every pending set, wherever it shows**, has each pair's chance of winning: a bar with
+pair A on the left in **blue** and pair B on the right in **red** (for example "58% ·
+42%"). That covers the jornada page, Sets (`/matches`), a player's page, the standings
+page, the result page, and the next sets on the home page and on `/me`. It comes from
 the records of the four players ([STATS.md](STATS.md)). Played sets don't show it.
+
+Code: `chance_of(m)` (a template global) works out each organization's records once per
+request and caches them in the request's context. `_chance.html` draws the bar. Lists
+that mix organizations (home, `/me`) work it out inside each organization and carry it
+as `chance`.
 
 ## 📲 Mi jornada (recap and WhatsApp)
 

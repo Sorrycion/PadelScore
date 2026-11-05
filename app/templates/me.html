@@ -61,6 +61,7 @@
         <button type="submit" class="go">{{ m.tournament }} · {{ _("matchday_short", n=m.matchday) }} · {{ _("court_n", n=m.court) }}</button>
       </form>
       <span class="muted">{{ m.a1 }} / {{ m.a2 }} vs {{ m.b1 }} / {{ m.b2 }}</span>
+      {% set chance = m.chance %}{% if chance is not none %}{% include "_chance.html" %}{% endif %}
     </li>
     {% endfor %}
   </ul>

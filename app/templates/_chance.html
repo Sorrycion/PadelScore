@@ -1,0 +1,7 @@
+{# A pending set's chances (main.chance_of): pair A on the left in blue, pair B on the
+   right in red, as in the set card. Needs: chance (% pair A wins). #}
+<div class="chance" title="{{ _('chance_hint') }}">
+  <span class="a">{{ chance }}%</span>
+  <span class="bar" aria-hidden="true"><span style="width: {{ chance }}%"></span></span>
+  <span class="b">{{ 100 - chance }}%</span>
+</div>

@@ -2170,6 +2170,41 @@ def test_pending_sets_show_each_pairs_chances(league):
     assert "Chance of beating Diego in a set: 80%" in r  # against 1:2, so 4:1 → 80%
 
 
+def test_every_pending_set_shows_its_chances(with_players):
+    c = with_players  # sets 1 and 2 of jornada 1 are pending
+    for url in ("/matches", "/players/1", "/matchdays/1", "/standings?tournament=1"):
+        assert 'class="chance"' in c.get(url).text, url
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # Ana: her home and profile list her pending sets with their chances
+    assert c.get("/").text.count('class="chance"') == 2
+    assert c.get("/me").text.count('class="chance"') >= 2
+    with db.connect() as conn:  # once played, no chances
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 2, winner = 'A'")
+    assert 'class="chance"' not in c.get("/matches").text
+    assert 'class="chance"' not in c.get("/").text
+
+
+def test_chances_follow_new_results(with_players):
+    c = with_players
+    with db.connect() as conn:  # Ana + Bea against Elena + Fer, nobody has played yet
+        new = conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
+                           "VALUES (1, 2, 1, 2, 5, 6)").lastrowid
+
+    def chance():
+        card = c.get("/matches").text.split(f'id="set-{new}"')[1].split("</li>")[0]
+        return re.search(r'<span class="a">(\d+)%</span>', card).group(1)
+    assert chance() == "50"
+    with db.connect() as conn:  # Ana and Bea win a set together: they become favorites
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 1, winner = 'A' "
+                     "WHERE id = 1")
+    assert int(chance()) > 50  # worked out again for this page, not kept from the last
+
+
+def test_install_page_warns_samsung_internet(client):
+    page = client.get("/install").text
+    assert 'id="install-samsung" hidden' in page and "SamsungBrowser" in page
+
+
 def test_admin_emails_a_players_reminder(with_players, monkeypatch):
     c = with_players
     c.post("/login", data={"password": "jugamos", "role": "player"})
