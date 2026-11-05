@@ -2108,9 +2108,15 @@ def test_install_page_in_the_menu(client):
     client.cookies.clear()  # no organization nor login needed
     r = client.get("/install", follow_redirects=False)
     assert r.status_code == 200
-    assert "beforeinstallprompt" in r.text and 'id="install-button"' in r.text  # Android
-    assert 'id="install-iphone"' in r.text and r.text.count("<svg") >= 4  # iPhone, drawn
-    assert "Agregar a inicio" in r.text  # Spanish by default
+    # Two tabs; Android is the first one.
+    assert 'href="/install?os=android" class="active"' in r.text
+    assert "beforeinstallprompt" in r.text and 'id="install-button"' in r.text
+    assert 'id="install-iphone"' not in r.text
+    r = client.get("/install?os=iphone")
+    assert 'href="/install?os=iphone" class="active"' in r.text
+    assert 'id="install-iphone"' in r.text and r.text.count("<svg") >= 3  # drawn steps
+    assert 'id="install-button"' not in r.text and "Agregar a inicio" in r.text
+    assert 'class="active"' in client.get("/install?os=nope").text.split("os=android")[1][:20]
 
 
 def test_health_reports_the_version_and_migrations(client):

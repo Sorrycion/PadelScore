@@ -1014,9 +1014,11 @@ def unlink_user_player(request: Request, user_id: int):
 
 
 @app.get("/install", response_class=HTMLResponse)
-def install_page(request: Request):
-    """📲 Install the app: a button on Android, drawn steps for iPhone (install.html)."""
-    return templates.TemplateResponse(request, "install.html", {})
+def install_page(request: Request, os: str = "android"):
+    """📲 Install the app, in tabs: Android (the first one; a button) and iPhone (drawn
+    steps). See install.html."""
+    return templates.TemplateResponse(request, "install.html", {
+        "os": "iphone" if os == "iphone" else "android"})
 
 
 @app.get("/sw.js")

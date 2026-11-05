@@ -85,13 +85,14 @@ flowchart LR
 - **`/sw.js`** is a route (an open path) so the service worker's scope is the whole site.
   Bump `CACHE` in `sw.js` when `offline.html` changes.
 - **📲 Instalar app** (`/install`, an open path, in the ☰ menu on phones; hidden once the
-  app runs installed, `display-mode: standalone`):
+  app runs installed, `display-mode: standalone`). It has two tabs, **🤖 Android** (the
+  first one, `/install`) and **🍎 iPhone** (`/install?os=iphone`). They're links, so they
+  work without JavaScript and each can be shared:
   - **Android:** Chrome's `beforeinstallprompt` event is kept, and the **Instalar** button
     opens Chrome's own install dialog. Without it, the drawn ⋮ → "Instalar app" steps
     show.
   - **iPhone:** Safari has no install API, so the page shows 3 drawn steps (Compartir →
     Agregar a inicio → Agregar). They're inline SVG in the page's colors and language.
-    An iPhone sees its section first.
 - **Banner** at the top of the home page (and of the login when it's the home page):
   "📲 Instala la app en tu teléfono" → `/install`, with ✕ to close it for good in that
   browser (`localStorage`). Phones only, never inside the installed app
