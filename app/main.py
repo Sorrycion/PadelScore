@@ -949,11 +949,43 @@ def linked_player(conn, user_id):
 
 
 @app.get("/users", response_class=HTMLResponse, dependencies=EDIT)
-def users_page(request: Request):
+def users_page(request: Request, error: str | None = None, mail: str | None = None):
     with db.connect() as conn:
         rows = [{**u, "player": linked_player(conn, u["id"])}
                 for u in managed_users(conn, request)]
-    return templates.TemplateResponse(request, "users.html", {"accounts": rows})
+    return templates.TemplateResponse(request, "users.html", {
+        "accounts": rows, "error": error, "mail_sent": mail == "sent",
+        "mail_enabled": mailer.enabled()})
+
+
+@app.post("/users/{user_id}/test-email", dependencies=EDIT)
+def account_test_email(request: Request, user_id: int):
+    """📧 Probar email on 🔑 Cuentas: email this account, now, the recap of its player's
+    latest jornada in this organization (or, without one, a plain test message). Not
+    recorded, so the morning email still goes."""
+    with db.connect() as conn:
+        user = managed_user(conn, request, user_id)
+        if not user["email"]:
+            return redirect("/users?error=err_no_player_email")
+        if not mailer.enabled():
+            return redirect("/users?error=err_mail_off")
+        player = linked_player(conn, user_id)
+        latest = player and conn.execute(
+            "SELECT d.id FROM matchdays d JOIN tournaments t ON t.id = d.tournament_id "
+            "JOIN matches m ON m.matchday_id = d.id WHERE t.organization_id = ? "
+            "AND ? IN (m.a1, m.a2, m.b1, m.b2) AND m.team_a_games IS NOT NULL "
+            "ORDER BY d.played_on DESC, d.number DESC LIMIT 1",
+            (org_id(), player["id"])).fetchone()
+        recap = latest and jornada_recap(conn, latest["id"], player["id"], "es")
+        name = user["display_name"] or user["username"]
+        if recap:
+            ok = mailer.send(user["email"], name, *recap_email(
+                request, auth.current_org(request), recap, user, email_extras(conn, recap)))
+        else:
+            _ = translator("es")
+            ok = mailer.send(user["email"], name, str(_("test_email_subject")),
+                             str(_("test_email_body")), f"<p>{_('test_email_body')}</p>")
+    return redirect("/users?mail=sent" if ok else "/users?error=err_mail_failed")
 
 
 @app.get("/users/{user_id}", response_class=HTMLResponse, dependencies=EDIT)

@@ -3,6 +3,9 @@
 {% block content %}
 <h1>🔑 {{ _("nav_users") }}</h1>
 <p class="muted">{{ _("users_hint") }}</p>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+{% if mail_sent %}<p class="saved">✅ {{ _("recap_email_sent") }}</p>{% endif %}
+{% if not mail_enabled %}<p class="muted">📧 {{ _("err_mail_off") }}</p>{% endif %}
 {% if accounts %}
 <ul class="cards">
   {% for u in accounts %}
@@ -16,7 +19,15 @@
       {% if u.first_name or u.last_name %}<dt>{{ _("full_name") }}</dt><dd>{{ u.first_name or "" }} {{ u.last_name or "" }}</dd>{% endif %}
       {% if u.player %}<dt>{{ _("player") }}</dt><dd><a class="plain" href="/players/{{ u.player.id }}">{{ u.player.name }}</a></dd>{% endif %}
     </dl>
-    <div><a class="button secondary" href="/users/{{ u.id }}">{{ _("edit") }}</a></div>
+    <div class="inline account-actions">
+      <a class="button secondary" href="/users/{{ u.id }}">{{ _("edit") }}</a>
+      {% if u.email %}
+      <form method="post" action="/users/{{ u.id }}/test-email" class="inline"
+            onsubmit="return confirm('{{ _('confirm_test_email', name=u.display_name or u.username) }}')">
+        <button type="submit" class="secondary">📧 {{ _("test_email") }}</button>
+      </form>
+      {% endif %}
+    </div>
   </li>
   {% endfor %}
 </ul>

@@ -2082,6 +2082,28 @@ def test_admin_emails_a_players_recap_from_the_tournament(with_players, monkeypa
     assert r.headers["location"].startswith("/login")  # admins only
 
 
+def test_accounts_page_sends_a_test_email(with_players, monkeypatch):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # Ana (1), ana@example.com
+    c.post("/logout")
+    c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
+    monkeypatch.delenv("ACS_CONNECTION_STRING", raising=False)
+    page = c.get("/users").text
+    assert 'action="/users/' in page and "/test-email" in page and "Email is off" in page
+    uid = int(re.search(r'action="/users/(\d+)/test-email"', page).group(1))
+    outbox = email_on(monkeypatch)
+    r = c.post(f"/users/{uid}/test-email")  # no played sets yet: a plain test message
+    assert "Email sent." in r.text and outbox[-1][2] == "✅ PadelScore ya manda emails"
+    with db.connect() as conn:
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 3, winner = 'A' "
+                     "WHERE id = 1")
+    c.post(f"/users/{uid}/test-email")  # now the recap of her latest jornada
+    assert "Liga Amigos" in outbox[-1][2] and "Clasificación del torneo" in outbox[-1][4]
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sent_emails").fetchone()[0] == 0
+
+
 def test_super_admin_sends_a_test_email(locked, monkeypatch):
     with db.connect() as conn:
         orgs.set_superadmin(conn, "julio", "super")
