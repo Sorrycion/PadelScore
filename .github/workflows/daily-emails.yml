@@ -1,13 +1,15 @@
-# Every hour from 9:00 to 17:00 (Mexico): ask the live app to email today's game-day
-# reminders, then the recaps of the last days' jornadas (POST /tasks/send-emails), a few
-# per run: Azure's free domain allows 10 emails an hour. See docs/processes/EMAIL.md. Azure App Service F1 can't run
+# Every hour, all day (from 00:00 in Mexico): ask the live app to email today's game-day
+# reminders, then the recaps of the last days' jornadas (POST /tasks/send-emails), as many
+# as Azure's free domain allows per hour (10); the next hours carry on until all are sent.
+# Runs with nothing to send take seconds (the repository is public: Actions are free).
+# See docs/processes/EMAIL.md. Azure App Service F1 can't run
 # scheduled jobs, so GitHub calls it. The app checks the X-Task-Token header against its
 # TASKS_TOKEN app setting; the same value is the repository secret TASKS_TOKEN.
 name: Daily emails
 
 on:
   schedule:
-    - cron: "0 15-23 * * *"   # 15:00-23:00 UTC = 9:00-17:00 in Mexico City (UTC-6 all year)
+    - cron: "0 * * * *"   # every hour; 06:00 UTC = 00:00 in Mexico City (UTC-6 all year)
   workflow_dispatch:       # "Run workflow" by hand, e.g. to try it
 
 permissions: {}

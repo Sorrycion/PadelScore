@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app import db, orgs, users
 from app.i18n import LANGS, TEXT
-from app.main import app
+from app.main import app, league_today
 from app.scoring import (ScoreError, check_set, court_moves, court_rotation, court_table,
                          next_courts, tournament_results)
 
@@ -2012,7 +2012,7 @@ def test_jornada_recaps_are_emailed_the_next_day_once(with_players, monkeypatch)
     signup(c)  # Ana, ana@example.com
     with db.connect() as conn:
         conn.execute("UPDATE matchdays SET played_on = ?",
-                     ((date.today() - timedelta(days=1)).isoformat(),))
+                     ((league_today() - timedelta(days=1)).isoformat(),))
         conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 0, winner = 'A' "
                      "WHERE id = 1")  # a 6-0: the Zapatero medal
 
@@ -2123,7 +2123,7 @@ def test_game_day_reminder_email(with_players, monkeypatch):
     c.post("/login", data={"password": "jugamos", "role": "player"})
     signup(c)  # Ana (1), ana@example.com: sets 1 (with Bea) and 2 (with Carlos), pending
     with db.connect() as conn:
-        conn.execute("UPDATE matchdays SET played_on = ?", (date.today().isoformat(),))
+        conn.execute("UPDATE matchdays SET played_on = ?", (league_today().isoformat(),))
 
     def task(path="/tasks/send-reminders", token="tarea-secreta"):
         return c.post(path, headers={"X-Task-Token": token}, follow_redirects=False)
@@ -2248,13 +2248,27 @@ def test_accounts_page_sends_a_test_reminder(with_players, monkeypatch):
     assert "Jornada 2" in outbox[-1][2]
 
 
+def test_today_is_the_leagues_not_the_servers(monkeypatch):
+    import app.main as main
+    from datetime import datetime, timezone
+
+    class Late(datetime):  # 01:30 UTC on the 6th is still 19:30 on the 5th in Mexico
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 11, 6, 1, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(main, "datetime", Late)
+    assert main.league_today().isoformat() == "2026-11-05"
+    monkeypatch.setenv("LEAGUE_UTC_OFFSET", "0")
+    assert main.league_today().isoformat() == "2026-11-06"
+
+
 def test_hourly_job_paces_and_stops_at_azures_limit(with_players, monkeypatch):
     from datetime import date
     from app import mailer
     outbox = email_on(monkeypatch)
     c = with_players
     with db.connect() as conn:  # two accounts play today, both with sets to play
-        conn.execute("UPDATE matchdays SET played_on = ?", (date.today().isoformat(),))
+        conn.execute("UPDATE matchdays SET played_on = ?", (league_today().isoformat(),))
         for pid, name in ((1, "ana"), (2, "bea")):
             uid = users.create_user(conn, "player", name, "clave-larga",
                                     email=f"{name}@example.com")

@@ -24,7 +24,7 @@ library only).
   and "🎯 Probabilidad de ganarle a X" on ⚔️ Cara a cara.
 
 - **The jornada recap**, the morning after. A GitHub Actions job
-  (`.github/workflows/daily-emails.yml`, every hour 9:00-17:00 Mexico time) calls
+  (`.github/workflows/daily-emails.yml`, every hour, all day, from 00:00 Mexico time) calls
   `POST /tasks/send-emails`, which sends the due reminders and then the recaps (see the
   limits below). That emails every account that:
   - played a jornada in the last 3 days (up to yesterday);
@@ -108,7 +108,7 @@ the morning run sent 10 recaps, and the test buttons failed for the rest of that
 
 ```mermaid
 flowchart LR
-    C["GitHub Actions, every hour<br/>9:00-17:00 Mexico"] --> T["POST /tasks/send-emails"]
+    C["GitHub Actions, every hour<br/>all day (from 00:00 Mexico)"] --> T["POST /tasks/send-emails"]
     T --> R["today's reminders first,<br/>then the recaps due"]
     R --> P["at most MAIL_PER_RUN (9),<br/>MAIL_PAUSE (13 s) apart"]
     P -- "202" --> S["sent_emails: done"]
@@ -119,8 +119,13 @@ flowchart LR
   (default 9: one left each hour for the admins' test buttons). There are
   `MAIL_PAUSE` seconds between emails (default 13: under 5 a minute). It records each
   one as it goes. On a 429 it stops, and the rest wait for the next hourly run.
-- **Capacity:** 9 runs a day × 9 = about 80 emails a day. A jornada's reminders go out
-  between 9:00 and about 11:00 if 20 people play.
+- **Capacity:** 24 runs a day × 9 = about 200 emails a day (the user's choice, 2026-11-05:
+  it's free, so send from midnight, hour after hour, until all are out). A jornada's
+  reminders go out from 00:00, and with 20 players they're all out by about 02:00.
+- **"Today" is Mexico's** (`league_today()`, app setting `LEAGUE_UTC_OFFSET`, default -6).
+  The server runs on UTC, which is already tomorrow from 18:00 in Mexico. Without it,
+  "¡Hoy juegas!" would go out the evening before, and the new jornada's date would
+  default to tomorrow.
 - **Test buttons:** on a 429 they say "Azure no dejó enviarlo: … 10 emails por hora…"
   (`err_mail_throttled`).
 - **With a custom domain** (about US$10/year), raise the app settings, e.g.
