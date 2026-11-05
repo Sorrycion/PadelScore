@@ -1,0 +1,14 @@
+{# The cell phone inputs: country (dialing code) and number. Needs: country, number
+   (the saved values, or None) and lang. Optional: an empty number saves no phone. #}
+<fieldset class="phone-fields">
+  <legend>{{ _("phone") }}</legend>
+  <div class="phone-row">
+    <select name="phone_country" aria-label="{{ _('phone_country') }}" autocomplete="tel-country-code">
+      {% for code, dial, es, en in COUNTRIES %}
+      <option value="{{ code }}" {% if (country or DEFAULT_COUNTRY) == code %}selected{% endif %}>{{ es if lang == "es" else en }} (+{{ dial }})</option>
+      {% endfor %}
+    </select>
+    <input type="tel" name="phone" value="{{ number or '' }}" inputmode="tel" autocomplete="tel-national" placeholder="55 1234 5678" aria-label="{{ _('phone_number') }}">
+  </div>
+  <p class="muted">{{ _("phone_hint") }}</p>
+</fieldset>

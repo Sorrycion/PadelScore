@@ -15,10 +15,13 @@ import hashlib
 import hmac
 import secrets
 
+from .countries import DIAL
+
 ROLES = ("super", "org_admin", "player")
 ITERATIONS = 200_000
 MIN_PASSWORD = 8  # for player accounts; admins' passwords are set by other admins
-FIELDS = ("username", "email", "first_name", "last_name", "display_name")
+FIELDS = ("username", "email", "first_name", "last_name", "display_name", "phone_country",
+          "phone")
 
 
 class UserError(ValueError):
@@ -46,6 +49,10 @@ def clean(fields):
     out = {k: " ".join((fields.get(k) or "").split()) or None for k in FIELDS if k in fields}
     if out.get("username"):
         out["username"] = out["username"].replace(" ", "")
+    if "phone" in out:  # just the digits (spaces, dashes, dots, parentheses go); no phone,
+        out["phone"] = "".join(c for c in out["phone"] or "" if c.isdigit()) or None
+        if not out["phone"]:  # no country either
+            out["phone_country"] = None
     return out
 
 
@@ -56,6 +63,10 @@ def check_fields(conn, fields, user_id=None):
         raise UserError("err_username_invalid")
     if email is not None and ("@" not in email or " " in email):
         raise UserError("err_email_invalid")
+    phone = fields.get("phone")
+    if phone is not None and (fields.get("phone_country") not in DIAL
+                              or not 6 <= len(phone) <= 14):
+        raise UserError("err_phone_invalid")
     for column, value, error in (("username", username, "err_username_taken"),
                                  ("email", email, "err_email_taken")):
         if value and conn.execute(f"SELECT 1 FROM users WHERE {column} = ? AND id IS NOT ?",

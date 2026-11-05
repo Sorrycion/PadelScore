@@ -23,6 +23,7 @@
   <p class="muted">{{ _("display_name_hint") }}</p>
   <label>{{ _("username") }} <input name="username" value="{{ form.username or '' }}" autocomplete="username" autocapitalize="off" required></label>
   <label>{{ _("email") }} <input type="email" name="email" value="{{ form.email or '' }}" autocomplete="email" required></label>
+  {% with country=form.phone_country, number=form.phone %}{% include "_phone_fields.html" %}{% endwith %}
   <label>{{ _("password") }} <input type="password" name="password" autocomplete="new-password" minlength="8" required></label>
   <label>{{ _("password_again") }} <input type="password" name="password2" autocomplete="new-password" minlength="8" required></label>
   <button type="submit">{{ _("create_account") }}</button>

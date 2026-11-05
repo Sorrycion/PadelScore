@@ -64,6 +64,13 @@ ol.install-steps svg { width: 100%; max-width: 360px; height: auto; display: blo
 .install-banner { display: none; }  /* phones only, see below */
 fieldset.replace-points { border: 0; padding: 0; margin: 0 0 12px; display: grid; gap: 6px; }
 fieldset.replace-points legend { font-weight: 600; margin-bottom: 4px; }
+fieldset.phone-fields { border: 0; padding: 0; margin: 0; min-width: 0; background: none;
+                        box-shadow: none; }  /* part of the form, not a card of its own */
+fieldset.phone-fields legend { padding: 0; margin-bottom: 4px; font-weight: 400; }
+fieldset.phone-fields .phone-row { clear: both; display: grid; gap: 8px;  /* below the floated legend */
+                                   grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); }
+fieldset.phone-fields .phone-row > * { width: 100%; }
+fieldset.phone-fields p { margin: 6px 0 0; font-size: .85rem; }
 label.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
 label.check input { width: auto; margin-top: 3px; }
 .brand { font-weight: 800; font-size: 1.15rem; color: var(--text); text-decoration: none; }

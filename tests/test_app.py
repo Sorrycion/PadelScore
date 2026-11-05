@@ -1902,6 +1902,46 @@ def test_joining_a_tournament_picks_an_existing_player_or_me(with_players):
                             "AND player_id = 1").fetchone()
 
 
+def test_accounts_have_a_cell_phone_with_its_country(with_players):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    r = signup(c, phone_country="MX", phone="55 1234-5678")
+    with db.connect() as conn:
+        u = conn.execute("SELECT * FROM users WHERE username = 'analo'").fetchone()
+        assert (u["phone_country"], u["phone"]) == ("MX", "5512345678")
+    me = c.get("/me").text
+    assert "📱 +52 5512345678" in me and 'value="5512345678"' in me
+    assert '<option value="MX" selected>México (+52)</option>' in me or \
+        '<option value="MX" selected>Mexico (+52)</option>' in me
+    base = {"username": "analo", "email": "ana@example.com", "display_name": "Ana L"}
+    assert "isn't valid" in c.post("/me", data={**base, "phone_country": "MX",
+                                                  "phone": "123"}).text
+    assert "isn't valid" in c.post("/me", data={**base, "phone_country": "XX",
+                                                  "phone": "5512345678"}).text
+    c.post("/me", data={**base, "phone_country": "US", "phone": "(415) 555-0100"})
+    with db.connect() as conn:
+        u = conn.execute("SELECT * FROM users WHERE username = 'analo'").fetchone()
+        assert (u["phone_country"], u["phone"]) == ("US", "4155550100")
+    c.post("/me", data={**base, "phone_country": "US", "phone": ""})  # no phone: no country
+    with db.connect() as conn:
+        u = conn.execute("SELECT * FROM users WHERE username = 'analo'").fetchone()
+        assert (u["phone_country"], u["phone"]) == (None, None)
+
+
+def test_admins_see_and_edit_the_cell_phone(client):
+    with db.connect() as conn:
+        uid = users.create_user(conn, "player", "zoe", "clave-larga", email="z@example.com",
+                                phone_country="ES", phone="612345678")
+        pid = conn.execute("INSERT INTO players (organization_id, name) VALUES (1, 'Zoe')").lastrowid
+        users.link_player(conn, uid, pid)  # an account of this organization's players
+    page = client.get("/users").text
+    assert 'href="tel:+34612345678"' in page and "+34 612345678" in page
+    client.post(f"/users/{uid}", data={"username": "zoe", "email": "z@example.com",
+                                       "phone_country": "MX", "phone": "3312345678"})
+    with db.connect() as conn:
+        assert users.get(conn, uid)["phone"] == "3312345678"
+
+
 def test_the_profile_needs_an_account(client):
     client.cookies.delete("user")
     assert client.get("/me", follow_redirects=False).headers["location"].startswith("/login")

@@ -25,7 +25,8 @@ run '{"command":"ls -l /home/data","dir":"/home"}'
 ```
 
 **Never print** `users.password`, `users.password_plain`, `secret`, or the old
-`organizations.admin_password*` columns. To check that a password still works, compare it
+`organizations.admin_password*` columns. Phones (`users.phone`) are personal data: count
+them if needed, don't list them. To check that a password still works, compare it
 in Python and print only True or False.
 
 ## Back up first (before any write)
@@ -39,8 +40,8 @@ Check that the copy exists with `ls -l` before going on. The pipeline makes
 
 ## Running Python from the repo on Kudu (migrations, accounts)
 
-`app/__init__.py`, `app/db.py`, `app/migrate.py`, `app/users.py` and `app/orgs.py` only
-need the standard library.
+`app/__init__.py`, `app/db.py`, `app/migrate.py`, `app/users.py`, `app/countries.py`
+(users.py imports it) and `app/orgs.py` only need the standard library.
 
 1. Upload the files you need:
    `curl -X PUT -H "Authorization: Bearer $T" -H "If-Match: *" --data-binary @<file> "$K/api/vfs/<tmpdir>/<file>"`.

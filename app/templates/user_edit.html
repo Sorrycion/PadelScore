@@ -9,6 +9,7 @@
 <form method="post" action="/users/{{ account.id }}" class="stack card">
   <label>{{ _("username") }} <input name="username" value="{{ account.username }}" autocomplete="off" autocapitalize="off" required></label>
   <label>{{ _("email") }} <input type="email" name="email" value="{{ account.email or '' }}" autocomplete="off" {% if account.role == "player" %}required{% endif %}></label>
+  {% with country=account.phone_country, number=account.phone %}{% include "_phone_fields.html" %}{% endwith %}
   <label>{{ _("first_name") }} <input name="first_name" value="{{ account.first_name or '' }}" autocomplete="off"></label>
   <label>{{ _("last_name") }} <input name="last_name" value="{{ account.last_name or '' }}" autocomplete="off"></label>
   <label>{{ _("display_name") }} <input name="display_name" value="{{ account.display_name or '' }}" autocomplete="off"></label>

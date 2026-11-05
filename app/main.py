@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import auth, charts, db, medals, migrate, orgs, rounds, stats, users
+from . import auth, charts, countries, db, medals, migrate, orgs, rounds, stats, users
 from .auth import LoginRequired, require_editor, require_super
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
 from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
@@ -77,11 +77,14 @@ EDIT = [Depends(require_editor)]  # routes that change data need the organizatio
 SUPER = [Depends(require_super)]  # managing organizations needs a super admin
 MANUAL = "manual"  # rule type whose sets are all made by hand
 templates.env.filters["pick_player"] = lambda p: {"id": p["id"], "name": p["name"]}
+templates.env.filters["phone"] = lambda u: countries.phone_display(u["phone_country"], u["phone"])
+templates.env.filters["phone_link"] = lambda u: countries.phone_link(u["phone_country"], u["phone"])
 templates.env.globals.update(
     ROUND_MODES=ROUND_MODES, MANUAL=MANUAL,
     ROLE_KEYS={"super": "role_super", "org_admin": "role_org_admin", "player": "role_player"},
     TIER_KEYS={1: "tier_bronze", 2: "tier_silver", 3: "tier_gold"},
     RULE_ICONS={"liga_amigos": "🏅", "americano": "🇺🇸", "mexicano": "🇲🇽", "manual": "✍️"},
+    COUNTRIES=countries.COUNTRIES, DEFAULT_COUNTRY=countries.DEFAULT,
     # Changes whenever the stylesheet does, so phones don't keep an old cached copy.
     css_version=hashlib.sha256(b"".join(
         f.read_bytes() for f in sorted((BASE / "static").rglob("*")) if f.is_file())).hexdigest()[:10],
@@ -738,13 +741,15 @@ def signup_page(request: Request, t: int | None = None):
 def signup(request: Request, t: str = Form(""), who: str = Form(""),
            first_name: str = Form(""), last_name: str = Form(""),
            display_name: str = Form(""), username: str = Form(""), email: str = Form(""),
+           phone_country: str = Form(""), phone: str = Form(""),
            password: str = Form(""), password2: str = Form("")):
     """Make a player account. From a tournament (`t`), also claim one of its players, or
     a new player ("new") who joins it; the display name becomes the player's name, so
     the tables show it. Without `t`, just the account: it joins tournaments later with
     their passwords (/join)."""
     form = {"who": who, "first_name": first_name, "last_name": last_name,
-            "display_name": display_name, "username": username, "email": email}
+            "display_name": display_name, "username": username, "email": email,
+            "phone_country": phone_country, "phone": phone}
     t = opt_int(t)
     with db.connect() as conn:
         tournament = guest_tournament(request, conn, t) if t else None
@@ -767,7 +772,8 @@ def signup(request: Request, t: str = Form(""), who: str = Form(""),
             try:
                 user_id = users.create_user(conn, "player", username, password, email=email,
                                             first_name=first_name, last_name=last_name,
-                                            display_name=display)
+                                            display_name=display, phone=phone,
+                                            phone_country=phone_country)
             except users.UserError as e:
                 error = str(e)
         if error:
@@ -863,7 +869,8 @@ def me_page(request: Request, error: str | None = None, saved: str | None = None
 @app.post("/me")
 def update_me(request: Request, username: str = Form(""), email: str = Form(""),
               first_name: str = Form(""), last_name: str = Form(""),
-              display_name: str = Form("")):
+              display_name: str = Form(""), phone_country: str = Form(""),
+              phone: str = Form("")):
     """Change your own details. A new display name renames your players too (if no one
     else in their organization has it)."""
     user = auth.current_user(request)
@@ -878,7 +885,8 @@ def update_me(request: Request, username: str = Form(""), email: str = Form(""),
             return redirect("/me?error=err_player_exists")
         try:
             users.update_user(conn, user["id"], username=username, email=email,
-                              first_name=first_name, last_name=last_name, display_name=display)
+                              first_name=first_name, last_name=last_name, display_name=display,
+                              phone_country=phone_country, phone=phone)
         except users.UserError as e:
             return redirect(f"/me?error={e}")
         for p in mine:
@@ -971,10 +979,12 @@ def user_action(request, user_id, change):
 @app.post("/users/{user_id}", dependencies=EDIT)
 def update_user(request: Request, user_id: int, username: str = Form(""),
                 email: str = Form(""), first_name: str = Form(""), last_name: str = Form(""),
-                display_name: str = Form("")):
+                display_name: str = Form(""), phone_country: str = Form(""),
+                phone: str = Form("")):
     return user_action(request, user_id, lambda conn, u: users.update_user(
         conn, u["id"], username=username, email=email, first_name=first_name,
-        last_name=last_name, display_name=display_name))
+        last_name=last_name, display_name=display_name, phone_country=phone_country,
+        phone=phone))
 
 
 @app.post("/users/{user_id}/password", dependencies=EDIT)

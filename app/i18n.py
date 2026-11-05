@@ -684,6 +684,17 @@ TEXT = {
                              "en": "Type a username without spaces or \"@\"."},
     "err_username_taken": {"es": "Ese usuario ya existe.", "en": "That username is taken."},
     "err_email_invalid": {"es": "Ese email no es válido.", "en": "That email isn't valid."},
+    "phone": {"es": "📱 Celular", "en": "📱 Cell phone"},
+    "phone_country": {"es": "País (lada)", "en": "Country (code)"},
+    "phone_number": {"es": "Número", "en": "Number"},
+    "phone_hint": {"es": "Opcional. Elige el país y escribe el número sin la lada del país. "
+                         "Solo lo ven tú y los administradores.",
+                   "en": "Optional. Choose the country and type the number without the "
+                         "country code. Only you and the admins see it."},
+    "err_phone_invalid": {"es": "Ese celular no es válido: elige el país y escribe de 6 a 14 "
+                                "dígitos.",
+                          "en": "That cell phone isn't valid: choose the country and type 6 "
+                                "to 14 digits."},
     "err_email_taken": {"es": "Ya hay una cuenta con ese email.",
                         "en": "There's already an account with that email."},
     "err_email_required": {"es": "Los jugadores necesitan un email.",
