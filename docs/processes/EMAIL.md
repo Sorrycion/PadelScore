@@ -35,6 +35,9 @@ library only).
   Email apps ignore stylesheets and most don't show SVG. So it's plain HTML with inline
   styles and tables, the charts are HTML bars and squares, and the medals are their
   emoji (`medals.ICONS`, the same list that draws their images).
+- **📧 Probar email** on **🔑 Cuentas** (`/users`, admins), on each account with an email:
+  sends that account, right away, the recap of its player's latest jornada in this
+  organization, or a plain test message if it has none. It isn't recorded.
 - **📧 Probar email** on `/orgs` (super admins) sends a test email to your own address.
 - **📧 next to a player** in a tournament's player list (admins; only players whose
   account has an email): emails that player, right away, the recap of their latest

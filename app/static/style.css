@@ -61,7 +61,9 @@ ol.install-steps li span::before { content: counter(step) ". "; font-weight: 700
 ol.install-steps svg { width: 100%; max-width: 360px; height: auto; display: block; }
 #install-button { margin: 4px 0 8px; }
 .install-link { display: none; }  /* only in the phone menu, and not once installed */
-.install-banner { display: none; }  /* phones only, see below */
+.install-banner { display: none; }
+.account-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.account-actions form.inline { margin: 0; }  /* phones only, see below */
 fieldset.replace-points { border: 0; padding: 0; margin: 0 0 12px; display: grid; gap: 6px; }
 fieldset.replace-points legend { font-weight: 600; margin-bottom: 4px; }
 fieldset.phone-fields { border: 0; padding: 0; margin: 0; min-width: 0; background: none;
