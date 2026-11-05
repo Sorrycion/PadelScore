@@ -46,6 +46,11 @@ It's live at https://padelscore-sorrycion.azurewebsites.net (repo `Sorrycion/Pad
 - **Every user-visible text** goes in `app/i18n.py` in both `es` and `en`. A test checks
   every `_("key")`.
 - The user often adds requests mid-task: fold them into the work in progress.
+- **Organization URLs:** an organization's pages live under `/<slug>/…` (`/nene/players/2`).
+  Write routes and template links **without** the prefix (`/players/2`): the gate adds
+  it to links and redirects (`orgs.SECTIONS`). A new section of organization pages goes
+  in `orgs.SECTIONS` and `orgs.RESERVED`. Tests use the fixture organization `club`
+  (`/club/...`).
 - **Every PR documents itself** (the user's rule, 2026-10-30). Before opening any PR,
   in the same branch:
 

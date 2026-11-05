@@ -60,6 +60,13 @@ def unsubscribe_token(user) -> str:
     return _sign(user, f"unsubscribe:{user['id']}")[:20]
 
 
+def org_from_slug(slug: str):
+    """The organization with this slug (the first part of its URLs), or None."""
+    with db.connect() as conn:
+        return conn.execute("SELECT * FROM organizations WHERE slug = ? COLLATE NOCASE",
+                            (slug,)).fetchone()
+
+
 def org_from_cookie(request: Request):
     """The organization this browser entered, or None."""
     org_id, _, token = request.cookies.get(ORG_COOKIE, "").partition(".")

@@ -40,8 +40,8 @@ sequenceDiagram
     participant R as Route
     participant A as auth.py
     participant D as SQLite
-    B->>G: GET /tournaments/5 (cookies: org, user, player_5)
-    G->>D: organization from the signed org cookie
+    B->>G: GET /nene/tournaments/5 (cookies: org, user, player_5)
+    G->>D: organization from the slug "nene" (else the signed org cookie)
     alt no organization (and not an open path)
         G-->>B: 303 → /enter (super admins → /orgs)
     end
@@ -51,6 +51,10 @@ sequenceDiagram
     R-->>B: Jinja page (i18n, auth context, css_version)
 ```
 
+- **Organization URLs:** an organization's pages live under its slug, `/<slug>/…`
+  (`/nene/tournaments/4`). The gate takes the organization from the URL, strips the
+  prefix, and adds it back to every link and redirect (`keep_inside`). Routes and
+  templates are written without it. See [ORGANIZATIONS.md](ORGANIZATIONS.md).
 - **Open paths** (no organization needed): `/` (the login, or an account's home across
   organizations), `/enter`, `/login`, `/logout`, `/static`, `/lang`, `/rules`, `/orgs`,
   `/me`, `/health`, `/signup` (an account with no tournament), `/join` (a tournament's
