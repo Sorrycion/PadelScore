@@ -1,0 +1,75 @@
+"""Send email through Azure Communication Services (ACS), with its REST API.
+
+Configured by two app settings (environment variables), both set in Azure:
+- ACS_CONNECTION_STRING: the Communication Services resource's connection string,
+  "endpoint=https://<name>.communication.azure.com/;accesskey=<base64 key>".
+- MAIL_SENDER: the address mail comes from, e.g. "DoNotReply@<id>.azurecomm.net"
+  (the Azure-managed domain linked to that resource).
+Without them, sending is off: send() returns False and nothing leaves the app.
+
+Requests are signed with the access key (HMAC-SHA256, ACS's "HMAC authentication"),
+so only the standard library is needed.
+"""
+import base64
+import hashlib
+import hmac
+import json
+import os
+import urllib.error
+import urllib.request
+from email.utils import formatdate
+from urllib.parse import urlsplit
+
+API = "/emails:send?api-version=2023-03-31"
+
+
+def settings():
+    """(endpoint, access key, sender), or None when email isn't configured."""
+    conn = os.environ.get("ACS_CONNECTION_STRING", "")
+    sender = os.environ.get("MAIL_SENDER", "")
+    parts = dict(p.split("=", 1) for p in conn.split(";") if "=" in p)
+    endpoint, key = parts.get("endpoint", "").rstrip("/"), parts.get("accesskey", "")
+    return (endpoint, key, sender) if endpoint and key and sender else None
+
+
+def enabled():
+    return settings() is not None
+
+
+def signed_headers(endpoint, key, body, date=None):
+    """The headers of an ACS request signed with its access key."""
+    host = urlsplit(endpoint).netloc
+    date = date or formatdate(usegmt=True)
+    content_hash = base64.b64encode(hashlib.sha256(body).digest()).decode()
+    to_sign = f"POST\n{API}\n{date};{host};{content_hash}"
+    signature = base64.b64encode(hmac.new(base64.b64decode(key), to_sign.encode(),
+                                          hashlib.sha256).digest()).decode()
+    return {"Content-Type": "application/json", "x-ms-date": date,
+            "x-ms-content-sha256": content_hash,
+            "Authorization": "HMAC-SHA256 SignedHeaders=x-ms-date;host;x-ms-content-sha256"
+                             f"&Signature={signature}"}
+
+
+def message(sender, to, name, subject, text, html):
+    return {"senderAddress": sender,
+            "recipients": {"to": [{"address": to, "displayName": name or to}]},
+            "content": {"subject": subject, "plainText": text, "html": html}}
+
+
+def send(to, name, subject, text, html):
+    """Send one email. True when ACS accepted it, False when email is off or it failed
+    (the reason goes to the app's log)."""
+    config = settings()
+    if config is None:
+        return False
+    endpoint, key, sender = config
+    body = json.dumps(message(sender, to, name, subject, text, html)).encode()
+    request = urllib.request.Request(endpoint + API, data=body, method="POST",
+                                     headers=signed_headers(endpoint, key, body))
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return response.status == 202
+    except (urllib.error.URLError, TimeoutError) as e:
+        detail = e.read().decode(errors="replace")[:300] if isinstance(e, urllib.error.HTTPError) else e
+        print(f"mailer: sending to {to} failed: {detail}", flush=True)
+        return False

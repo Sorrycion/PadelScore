@@ -4,6 +4,11 @@
 <h1>⭐ {{ _("nav_orgs") }}</h1>
 <p class="muted">{{ _("orgs_hint") }}</p>
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+{% if mail_sent %}<p class="saved">✅ {{ _("mail_sent") }}</p>{% endif %}
+<form method="post" action="/orgs/test-email" class="inline">
+  <button type="submit" class="secondary">📧 {{ _("test_email") }}</button>
+  <span class="muted">{{ _("test_email_hint") if mail_enabled else _("err_mail_off") }}</span>
+</form>
 <details class="create">
   <summary class="button">{{ _("create_org") }}</summary>
   <form method="post" action="/orgs" class="stack card">

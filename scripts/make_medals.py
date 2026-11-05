@@ -7,35 +7,13 @@ Run it again after changing a medal:
 
     python scripts/make_medals.py
 """
+import sys
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "app" / "static" / "medals"
 
-MEDALS = {  # code: icon of the situation
-    # 🥇 glory
-    "campeon": "🥇", "subcampeon": "🥈", "tercero": "🥉",
-    "racha": "🔥",          # Bien prendido
-    "perfecta": "💯",       # Jornada perfecta
-    "rey_pista": "👑",      # Rey de la cancha
-    "escalador": "🧗",      # Pa' arriba
-    "rosco": "👞",          # Zapatero: le pusiste zapato (6-0)
-    "muro": "🧱",           # La Muralla
-    "infarto": "💓",        # De infarto (7-6)
-    "pareja_oro": "🤝",     # Dupla dorada
-    "asistencia": "📋",     # Asistencia perfecta
-    "veterano": "🐺",       # Colmilludo
-    # ⚔️ rivalry
-    "rival": "⚔️",          # El Clásico
-    "verdugo": "👨‍👦",        # Es su papá
-    # 🤡 shame (a joke)
-    "gafe": "🧂",           # Salado
-    "comio_rosco": "🥾",    # Le pusieron zapato (0-6)
-    "farolillo": "🕳️",      # Sotanero
-    "jornada_negra": "🌧️",  # Jornada pa' olvidar
-    "paracaidas": "📉",     # Cuesta abajo
-    "bestia_negra": "🍼",   # Ya tiene papá
-    "fantasma": "👻",       # Se lo tragó la tierra
-}
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.medals import ICONS as MEDALS  # noqa: E402  (code: icon of the situation)
 
 
 def svg(code, icon):

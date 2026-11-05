@@ -13,6 +13,7 @@ It's live at https://padelscore-sorrycion.azurewebsites.net (repo `Sorrycion/Pad
    area. Each has diagrams:
    - ORGANIZATIONS, USERS, TOURNAMENTS, JORNADAS, SETS
    - STATS, MEDALS
+   - EMAIL: recap emails the morning after (Azure Communication Services)
    - DEPLOY
    - ARCHITECTURE: modules and the request flow
 3. Use the project skills in `.claude/skills/`:

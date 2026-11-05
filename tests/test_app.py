@@ -1942,6 +1942,160 @@ def test_admins_see_and_edit_the_cell_phone(client):
         assert users.get(conn, uid)["phone"] == "3312345678"
 
 
+# --- Email (Azure Communication Services) ------------------------------------------------
+
+FAKE_KEY = b"k" * 32
+FAKE_ACS = ("endpoint=https://padel-test.communication.azure.com/;accesskey="
+            + __import__("base64").b64encode(FAKE_KEY).decode())
+
+
+def test_mailer_signs_and_sends_to_acs(monkeypatch):
+    import base64
+    import hashlib
+    import hmac as hm
+    import json
+    from app import mailer
+    monkeypatch.delenv("ACS_CONNECTION_STRING", raising=False)
+    assert not mailer.enabled() and mailer.send("a@example.com", "A", "s", "t", "h") is False
+    monkeypatch.setenv("ACS_CONNECTION_STRING", FAKE_ACS)
+    monkeypatch.setenv("MAIL_SENDER", "DoNotReply@test.azurecomm.net")
+    sent = {}
+
+    class Reply:
+        status = 202
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(request, timeout):
+        sent.update(url=request.full_url, headers=dict(request.headers), body=request.data)
+        return Reply()
+    monkeypatch.setattr(mailer.urllib.request, "urlopen", fake_urlopen)
+    assert mailer.send("ana@example.com", "Ana", "Hola", "texto", "<p>html</p>") is True
+    assert sent["url"] == ("https://padel-test.communication.azure.com/emails:send"
+                           "?api-version=2023-03-31")
+    body = json.loads(sent["body"])
+    assert body["senderAddress"] == "DoNotReply@test.azurecomm.net"
+    assert body["recipients"]["to"] == [{"address": "ana@example.com", "displayName": "Ana"}]
+    assert body["content"] == {"subject": "Hola", "plainText": "texto", "html": "<p>html</p>"}
+    h = {k.lower(): v for k, v in sent["headers"].items()}
+    digest = base64.b64encode(hashlib.sha256(sent["body"]).digest()).decode()
+    assert h["x-ms-content-sha256"] == digest
+    to_sign = (f"POST\n/emails:send?api-version=2023-03-31\n{h['x-ms-date']};"
+               f"padel-test.communication.azure.com;{digest}")
+    signature = base64.b64encode(
+        hm.new(FAKE_KEY, to_sign.encode(), hashlib.sha256).digest()).decode()
+    assert h["authorization"] == ("HMAC-SHA256 SignedHeaders=x-ms-date;host;x-ms-content-sha256"
+                                  f"&Signature={signature}")
+
+
+def email_on(monkeypatch):
+    """Email configured, with app.mailer.send recording instead of sending."""
+    from app import mailer
+    monkeypatch.setenv("ACS_CONNECTION_STRING", FAKE_ACS)
+    monkeypatch.setenv("MAIL_SENDER", "DoNotReply@test.azurecomm.net")
+    monkeypatch.setenv("TASKS_TOKEN", "tarea-secreta")
+    outbox = []
+    monkeypatch.setattr(mailer, "send", lambda *args: outbox.append(args) or True)
+    return outbox
+
+
+def test_jornada_recaps_are_emailed_the_next_day_once(with_players, monkeypatch):
+    from datetime import date, timedelta
+    outbox = email_on(monkeypatch)
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # Ana, ana@example.com
+    with db.connect() as conn:
+        conn.execute("UPDATE matchdays SET played_on = ?",
+                     ((date.today() - timedelta(days=1)).isoformat(),))
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 0, winner = 'A' "
+                     "WHERE id = 1")  # a 6-0: the Zapatero medal
+
+    def task(token="tarea-secreta"):
+        return c.post("/tasks/send-recaps", headers={"X-Task-Token": token},
+                      follow_redirects=False)
+    assert task("nope").status_code == 404
+    assert task().json() == {"enabled": True, "sent": 0, "failed": 0}  # a set still to play
+    with db.connect() as conn:
+        conn.execute("UPDATE matches SET team_a_games = 3, team_b_games = 6, winner = 'B' "
+                     "WHERE id = 2")
+    assert task().json()["sent"] == 1
+    to, name, subject, text, html = outbox[0]
+    assert to == "ana@example.com" and name == "Ana L" and "Liga Amigos" in subject
+    assert "/r/1/1/1/" in text and "https://wa.me/?text=" in html and "Ana L" in html
+    assert "Clasificación del torneo" in html and "Tu torneo" in html  # standings, totals
+    assert "Puntos por jornada" in html and "Tus últimos sets" in html  # the charts
+    assert "Tus medallas del torneo" in html and "👞" in html and "Zapatero" in html
+    assert "¡nueva!" in html and "<svg" not in html  # won that day; emoji, not images
+    assert task().json()["sent"] == 0  # only once
+    # The unsubscribe link works without logging in; /me turns recaps back on.
+    link = re.search(r"(/unsubscribe/\d+/[0-9a-f]+)", html).group(1)
+    c.cookies.clear()
+    assert c.get(link[:-2] + "00").status_code == 404
+    assert c.get(link).status_code == 200
+    with db.connect() as conn:
+        assert conn.execute("SELECT email_recaps FROM users WHERE username = 'analo'"
+                            ).fetchone()[0] == 0
+
+
+def test_profile_switches_recap_emails(with_players):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)
+    assert 'name="email_recaps" value="1" checked' in c.get("/me").text  # on by default
+    base = {"username": "analo", "email": "ana@example.com", "display_name": "Ana L"}
+    c.post("/me", data=base)  # unchecked
+    assert 'name="email_recaps" value="1" checked' not in c.get("/me").text
+    c.post("/me", data={**base, "email_recaps": "1"})
+    assert 'name="email_recaps" value="1" checked' in c.get("/me").text
+
+
+def test_admin_emails_a_players_recap_from_the_tournament(with_players, monkeypatch):
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # Ana (1) has an account with an email
+    c.post("/logout")
+    c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
+    with db.connect() as conn:
+        conn.executemany("INSERT OR IGNORE INTO tournament_players VALUES (1, ?)", [(1,), (2,)])
+    page = c.get("/tournaments/1").text
+    assert 'action="/tournaments/1/players/1/email"' in page  # Ana: account with email
+    assert 'action="/tournaments/1/players/2/email"' not in page  # Bea: no account
+    outbox = email_on(monkeypatch)
+    r = c.post("/tournaments/1/players/1/email")
+    assert "has no played sets in this tournament yet" in r.text and not outbox
+    with db.connect() as conn:
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 3, winner = 'A' "
+                     "WHERE id = 1")
+    r = c.post("/tournaments/1/players/1/email")
+    assert "Email sent." in r.text and outbox[0][0] == "ana@example.com"
+    assert "Clasificación del torneo" in outbox[0][4]
+    assert "no account with an email" in c.post("/tournaments/1/players/2/email").text
+    with db.connect() as conn:  # only a test: the morning email still goes
+        assert conn.execute("SELECT COUNT(*) FROM sent_emails").fetchone()[0] == 0
+    c.post("/logout")
+    r = c.post("/tournaments/1/players/1/email", follow_redirects=False)
+    assert r.headers["location"].startswith("/login")  # admins only
+
+
+def test_super_admin_sends_a_test_email(locked, monkeypatch):
+    with db.connect() as conn:
+        orgs.set_superadmin(conn, "julio", "super")
+    locked.post("/login", data={"username": "julio", "password": "super", "role": "account"})
+    assert "Your account has no email" in locked.post("/orgs/test-email").text
+    with db.connect() as conn:
+        conn.execute("UPDATE users SET email = 'julio@example.com' WHERE username = 'julio'")
+    monkeypatch.delenv("ACS_CONNECTION_STRING", raising=False)
+    assert "Email is off" in locked.post("/orgs/test-email").text
+    outbox = email_on(monkeypatch)
+    assert "Test email sent" in locked.post("/orgs/test-email").text
+    assert outbox[0][0] == "julio@example.com"
+
+
 def test_the_profile_needs_an_account(client):
     client.cookies.delete("user")
     assert client.get("/me", follow_redirects=False).headers["location"].startswith("/login")

@@ -34,10 +34,17 @@
 
 {% if participants or editor %}
 <h2 id="players">{{ _("tournament_players") }}</h2>
+{% if mail_sent %}<p class="saved">✅ {{ _("recap_email_sent") }}</p>{% endif %}
 {% if participants %}
 <ul class="chips">
   {% for p in participants %}
   <li><a class="plain" href="/players/{{ p.id }}">👤 {{ p.name }}</a>
+    {% if editor and p.id in emailable %}
+    <form method="post" action="/tournaments/{{ tournament.id }}/players/{{ p.id }}/email" class="chip-remove"
+          onsubmit="return confirm('{{ _('confirm_email_recap', name=p.name) }}')">
+      <button type="submit" class="link" title="{{ _('email_recap_now') }}" aria-label="{{ _('email_recap_now') }}: {{ p.name }}">📧</button>
+    </form>
+    {% endif %}
     {% if editor %}
     <form method="post" action="/tournaments/{{ tournament.id }}/players/{{ p.id }}/remove" class="chip-remove"
           onsubmit="return confirm('{{ _('confirm_remove_player') }}')">

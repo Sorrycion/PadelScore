@@ -24,6 +24,7 @@ flowchart TD
     STATS --> MEDALS
     CHARTS[charts.py<br/>inline SVG] --> web
     I18N[i18n.py<br/>es / en texts] --> web
+    MAIL[mailer.py<br/>Azure email REST — stdlib] --> web
     SQL[(sql/predeployment/*.sql)] --> MIG
 ```
 
@@ -53,7 +54,9 @@ sequenceDiagram
 - **Open paths** (no organization needed): `/` (the login, or an account's home across
   organizations), `/enter`, `/login`, `/logout`, `/static`, `/lang`, `/rules`, `/orgs`,
   `/me`, `/health`, `/signup` (an account with no tournament), `/join` (a tournament's
-  password, from the home page), `/r/` (a jornada recap's signed share link). The standings of an organization are at `/standings`.
+  password, from the home page), `/r/` (a jornada recap's signed share link), `/install`,
+  `/tasks/` (the daily email job, guarded by a token) and `/unsubscribe/` (signed links
+  in emails). The standings of an organization are at `/standings`.
 - **Calculated, not stored:** standings, statistics and medals are always worked out
   from the sets. Only sets, absences and the lists are stored.
 - **Pages that span organizations** run their queries per organization with
@@ -131,3 +134,5 @@ erDiagram
 | Laptop | `uvicorn app.main:app --reload` on `padelscore.db`. It migrates on start |
 | GitHub Actions | Tests on every PR; on `main`: tests, backup, pre-deployment SQL, deploy, `/health` check ([DEPLOY.md](DEPLOY.md)) |
 | Azure App Service F1 | gunicorn + uvicorn worker, one instance (SQLite must not be shared) |
+| GitHub Actions, daily 9:00 MX | `daily-emails.yml` calls `/tasks/send-recaps` ([EMAIL.md](EMAIL.md)) |
+| Azure Communication Services | Sends the emails (`ACS_CONNECTION_STRING`, `MAIL_SENDER` app settings) |
