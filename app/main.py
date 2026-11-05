@@ -1149,11 +1149,16 @@ def replace_player_page(request: Request, tournament_id: int, pid: int,
 @app.post("/tournaments/{tournament_id}/players/replace", dependencies=EDIT)
 def replace_tournament_player(tournament_id: int, old_id: int = Form(0),
                               player_name: str = Form(""), create: str = Form(""),
-                              next: str = Form("")):
+                              points: str = Form("keep"), next: str = Form("")):
     """Put another player (found by name, or new with `create`) in place of one of the
-    tournament: in its list and in its sets not played yet. Sets already played, and
-    their points, stay with the player who leaves. With `next` (the replace page),
-    errors go back to that page and success goes to `next`."""
+    tournament: in its list and in its sets not played yet. `points` says what happens
+    to the sets already played in this tournament:
+    - "keep": they, and their points, stay with the player who leaves; the new one
+      starts from zero;
+    - "move": they go to the new player too (with the absences), who takes the
+      leaving player's whole place in the tournament: points, history and medals.
+    With `next` (the replace page), errors go back to that page and success goes to
+    `next`."""
     name = clean_name(player_name)
     back = f"/tournaments/{tournament_id}"
     done = f"{back}#players"
@@ -1174,16 +1179,24 @@ def replace_tournament_player(tournament_id: int, old_id: int = Form(0),
             return fail("err_unknown_player")
         if new_id == old_id:
             return fail("err_replace_same")
-        pending = ("team_a_games IS NULL AND matchday_id IN "
-                   "(SELECT id FROM matchdays WHERE tournament_id = ?)")
+        move = points == "move"
+        pending = (("" if move else "team_a_games IS NULL AND ") +
+                   "matchday_id IN (SELECT id FROM matchdays WHERE tournament_id = ?)")
         if new_id and conn.execute(
                 f"SELECT 1 FROM matches WHERE {pending} AND ? IN (a1, a2, b1, b2) "
                 "AND ? IN (a1, a2, b1, b2)", (tournament_id, old_id, new_id)).fetchone():
-            return fail("err_replace_conflict")
+            return fail("err_replace_conflict_all" if move else "err_replace_conflict")
         new_id = new_id or player_id(conn, name)
         for col in ("a1", "a2", "b1", "b2"):
             conn.execute(f"UPDATE matches SET {col} = ? WHERE {col} = ? AND {pending}",
                          (new_id, old_id, tournament_id))
+        if move:  # the absences of those matchdays too: the points follow the sets
+            days = "matchday_id IN (SELECT id FROM matchdays WHERE tournament_id = ?)"
+            conn.execute(f"INSERT OR IGNORE INTO absences (matchday_id, player_id) "
+                         f"SELECT matchday_id, ? FROM absences WHERE player_id = ? AND {days}",
+                         (new_id, old_id, tournament_id))
+            conn.execute(f"DELETE FROM absences WHERE player_id = ? AND {days}",
+                         (old_id, tournament_id))
         conn.execute("DELETE FROM tournament_players WHERE tournament_id = ? AND player_id = ?",
                      (tournament_id, old_id))
         conn.execute("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "

@@ -9,6 +9,11 @@
       data-create="{{ _('create_player_option', name='{name}') }}">
   <input type="hidden" name="old_id" value="{{ player.id }}">
   <input type="hidden" name="next" value="{{ next }}">
+  <fieldset class="replace-points">
+    <legend>{{ _("replace_points") }}</legend>
+    <label class="check"><input type="radio" name="points" value="keep" checked> {{ _("replace_keep") }}</label>
+    <label class="check"><input type="radio" name="points" value="move"> {{ _("replace_move") }}</label>
+  </fieldset>
   <label>{{ _("replace_with") }}
     <input name="player_name" class="picker-input" autocomplete="off" required
            placeholder="{{ _('search_player') }}">

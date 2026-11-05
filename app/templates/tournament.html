@@ -76,6 +76,11 @@
       {% for p in participants %}<option value="{{ p.id }}">👤 {{ p.name }}</option>{% endfor %}
     </select>
   </label>
+  <fieldset class="replace-points">
+    <legend>{{ _("replace_points") }}</legend>
+    <label class="check"><input type="radio" name="points" value="keep" checked> {{ _("replace_keep") }}</label>
+    <label class="check"><input type="radio" name="points" value="move"> {{ _("replace_move") }}</label>
+  </fieldset>
   <label>{{ _("replace_with") }}
     <input name="player_name" class="picker-input" autocomplete="off" required
            placeholder="{{ _('search_player') }}">

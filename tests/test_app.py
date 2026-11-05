@@ -1212,6 +1212,40 @@ def test_admin_replaces_a_player_in_pending_sets_only(league):
         assert error in league.post("/tournaments/1/players/replace", data=data).text
 
 
+def test_replacing_can_move_the_points_to_the_new_player(league):
+    league.post("/tournaments/1/players", data={"player_name": "Ana"})
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 3))  # played
+    league.post("/matches", data=set_form((1, 3, 2, 4), "", ""))  # pending
+    league.post("/matchdays/1/absent/1")
+    league.post("/matchdays/1/absent/1")  # present again: no absence to move
+    page = league.get("/tournaments/1").text
+    assert 'name="points" value="keep" checked' in page and 'value="move"' in page
+    assert 'name="points" value="move"' in league.get(
+        "/tournaments/1/players/1/replace?next=/matchdays/1").text
+    before = standing_points(league.get("/tournaments/1").text, "Ana")
+    # Diego played with Ana: he can't take her points.
+    r = league.post("/tournaments/1/players/replace",
+                    data={"old_id": "1", "player_name": "Diego", "points": "move"})
+    assert "can't take over their points" in r.text
+    r = league.post("/tournaments/1/players/replace",
+                    data={"old_id": "1", "player_name": "Zoe", "create": "1", "points": "move"})
+    with db.connect() as conn:
+        zoe = conn.execute("SELECT id FROM players WHERE name = 'Zoe'").fetchone()[0]
+        assert [s[0] for s in conn.execute("SELECT a1 FROM matches ORDER BY id")] == [zoe, zoe]
+    standings = league.get("/tournaments/1").text
+    assert standing_points(standings, "Zoe") == before and ">Ana<" not in standings
+
+
+def test_replacing_with_moved_points_moves_absences(league):
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 3))
+    league.post("/matchdays/1/absent/1")
+    league.post("/tournaments/1/players/replace",
+                data={"old_id": "1", "player_name": "Hugo", "points": "move"})
+    with db.connect() as conn:
+        assert [tuple(r) for r in conn.execute("SELECT matchday_id, player_id FROM absences")] \
+            == [(1, 8)]
+
+
 def test_ended_tournaments_go_to_the_past_tab(league):
     league.post("/tournaments", data={"name": "Copa", "held_on": "2026-11-01"})  # id 2
     league.post("/tournaments/1/ended", data={"ended": "1"})
