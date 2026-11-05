@@ -7,7 +7,7 @@ import unicodedata
 from collections import Counter
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote, urlencode
 
@@ -44,6 +44,14 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me",
               "/health", "/signup", "/join", "/sw.js", "/r/", "/install",
               "/tasks/", "/unsubscribe/")
+def league_today():
+    """Today where the league plays: UTC plus LEAGUE_UTC_OFFSET hours (app setting; Mexico
+    City is -6 all year since 2022). The server runs on UTC, which is already tomorrow
+    from 18:00 in Mexico: "hoy juegas" and the new jornada's date must not jump ahead."""
+    offset = float(os.environ.get("LEAGUE_UTC_OFFSET", "-6"))
+    return (datetime.now(timezone.utc) + timedelta(hours=offset)).date()
+
+
 # The commit being served: the deploy pipeline writes it to app/VERSION ("dev" locally).
 VERSION = (BASE / "VERSION").read_text().strip() if (BASE / "VERSION").exists() else "dev"
 
@@ -1112,7 +1120,7 @@ def tournaments_page(request: Request, error: str | None = None, past: str = "")
             "rule_types": all_rule_types(conn),
             "players": all_players(conn),
             "players_json": [{"id": p["id"], "name": p["name"]} for p in all_players(conn)],
-            "today": date.today().isoformat(),
+            "today": league_today().isoformat(),
         })
 
 
@@ -1168,7 +1176,7 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
                 "SELECT p.id FROM players p JOIN users u ON u.id = p.user_id "
                 "WHERE p.organization_id = ? AND u.email IS NOT NULL", (org_id(),))},
             "mail_sent": mail == "sent",
-            "today": date.today().isoformat(),
+            "today": league_today().isoformat(),
             "error": error,
         })
 
@@ -1577,7 +1585,7 @@ def new_matchday_page(request: Request, tournament_id: int, played_on: str = "",
     the courts. Nothing is saved here."""
     with db.connect() as conn:
         tournament = get_tournament(conn, tournament_id)
-        played_on = parse_date(played_on or date.today().isoformat())
+        played_on = parse_date(played_on or league_today().isoformat())
         if played_on is None:
             return redirect(f"/tournaments/{tournament_id}?error=err_invalid_date")
         number = next_number(conn, tournament_id)
@@ -1996,7 +2004,7 @@ def recaps_due(conn):
     of a jornada played in the last 3 days (up to yesterday). Only accounts with an email
     AND a player (the jornada's players joined to their account); recaps on; all its
     sets of that jornada played; not emailed yet."""
-    today = date.today()
+    today = league_today()
     return conn.execute(
         """
         SELECT DISTINCT d.id AS matchday_id, p.id AS player_id, u.id AS user_id,
@@ -2066,9 +2074,10 @@ def send_due(request, kinds):
 
 @app.post("/tasks/send-emails")
 def send_emails(request: Request):
-    """Called every hour from 9:00 to 17:00 (Mexico) by GitHub Actions
+    """Called every hour, all day (from 00:00 Mexico), by GitHub Actions
     (.github/workflows/daily-emails.yml): today's game-day reminders first, then the recaps
-    of the last days' jornadas, a few per run (send_due). The header X-Task-Token must
+    of the last days' jornadas, as many as Azure's hourly limit allows (send_due); the
+    next hours carry on until all are sent. The header X-Task-Token must
     match the app setting TASKS_TOKEN; otherwise it doesn't exist."""
     require_task_token(request)
     if not mailer.enabled():
@@ -2190,7 +2199,7 @@ def reminders_due(conn):
           AND NOT EXISTS (SELECT 1 FROM sent_emails s WHERE s.kind = 'reminder'
                           AND s.user_id = u.id AND s.matchday_id = d.id)
         ORDER BY d.id, u.id
-        """, (date.today().isoformat(),)).fetchall()
+        """, (league_today().isoformat(),)).fetchall()
 
 
 @app.post("/tasks/send-reminders")
