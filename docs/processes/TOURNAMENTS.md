@@ -60,6 +60,24 @@ flowchart LR
     Q -- "Pasan al nuevo jugador" --> M["every set of the tournament + absences + list → Charly<br/>Charly has Bruno's points"]
 ```
 
+## 🏁 Summary (Resumen del torneo)
+
+`/tournaments/{id}/summary`, linked as "🏁 Resumen" under the tournament's name once it
+has a jornada. It says "Resultado final" when the tournament has ended and "Hasta
+ahora" while it's going, and shows:
+
+```mermaid
+flowchart LR
+    R["load_results: matchdays + standings"] --> S["stats.season()"]
+    P["the tournament's played sets"] --> S
+    S --> H["highlights: best jornada · longest streak · most sets won ·<br/>best games difference · most often on court 1 (Liga) ·<br/>pair of the tournament · never missed a jornada"]
+    R --> D["podium: positions 1-3 (ties share)"]
+    M["tournament_medals()"] --> X["the tournament's medals and who won them"]
+```
+
+A highlight only shows when someone stands out (e.g. a streak of 2+ wins, a pair with 2+
+wins together). Everything is calculated from the sets, like the standings.
+
 ## Ending (Terminar torneo)
 
 - **Who:** only an admin. Visitors and players don't see the button.

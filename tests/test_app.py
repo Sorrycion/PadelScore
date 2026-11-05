@@ -1246,6 +1246,42 @@ def test_replacing_with_moved_points_moves_absences(league):
             == [(1, 8)]
 
 
+def test_season_highlights():
+    from app.stats import season
+    sets = [a_set(1, 2, 3, 4, 6, 3), a_set(1, 2, 5, 6, 6, 4), a_set(3, 5, 1, 2, 2, 6)]
+    standings = [
+        {"id": 1, "name": "P1", "points": 20, "diff": 9, "sets_won": 3, "played": 2,
+         "by_matchday": {1: 8, 2: 12}, "position": 1},
+        {"id": 3, "name": "P3", "points": 5, "diff": -7, "sets_won": 0, "played": 1,
+         "by_matchday": {1: 5}, "position": 2}]
+    results = [{"courts": {1: [{"id": 1, "name": "P1", "sets": 3, "absent": False}]}},
+               {"courts": {1: [{"id": 1, "name": "P1", "sets": 3, "absent": False}]}}]
+    hl = season(results, standings, sets, liga=True)
+    assert hl["best_day"] == {"id": 1, "name": "P1", "points": 12, "number": 2}
+    assert hl["streak"]["id"] == 1 and hl["streak"]["value"] == 3
+    assert [p["id"] for p in hl["pair"]["players"]] == [1, 2] and hl["pair"]["won"] == 3
+    assert hl["sets_won"]["id"] == 1 and hl["diff"]["id"] == 1
+    assert hl["court1"] == {"id": 1, "name": "P1", "value": 2}
+    assert [r["id"] for r in hl["ever_present"]] == [1]
+    assert season([], [], [])["best_day"] is None
+
+
+def test_tournament_summary_page(league):
+    for (a1, a2, b1, b2), ga, gb in ROTATION:
+        league.post("/matches", data=set_form((a1, a2, b1, b2), ga, gb))
+    league.post("/matches", data=set_form((1, 2, 3, 4), 6, 0))
+    page = league.get("/tournaments/1").text
+    assert 'href="/tournaments/1/summary"' in page
+    summary = league.get("/tournaments/1/summary").text
+    assert "Tournament summary" in summary and "So far" in summary and "🥇" in summary
+    assert "Highlights" in summary and "Longest streak" in summary
+    assert "The tournament's medals" in summary and "Shutout" in summary
+    league.post("/tournaments/1/ended", data={"ended": "1"})
+    assert "Final result" in league.get("/tournaments/1/summary").text
+    league.post("/tournaments", data={"name": "Copa", "held_on": "2026-11-01"})
+    assert "No results in this tournament yet" in league.get("/tournaments/2/summary").text
+
+
 def test_ended_tournaments_go_to_the_past_tab(league):
     league.post("/tournaments", data={"name": "Copa", "held_on": "2026-11-01"})  # id 2
     league.post("/tournaments/1/ended", data={"ended": "1"})
