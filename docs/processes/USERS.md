@@ -140,8 +140,15 @@ above). A guest's tournament password still offers the three choices.
 
 - **Who can claim:** only a browser that has the tournament's password can claim one of
   its players, and only players nobody has claimed yet.
-- **Signup asks for:** first and last name, display name, username, email, and a
-  password of at least 8 characters, entered twice.
+- **Signup asks for:** first and last name, display name, username, email, an optional
+  **cell phone**, and a password of at least 8 characters, entered twice.
+- **📱 Cell phone** (`sql/predeployment/0004_users_phone.sql`): the country, picked from
+  a list with its dialing code (`app/countries.py`, México +52 first), and the number.
+  The account keeps the country's ISO code (`phone_country`, e.g. `MX`; several
+  countries share +1) and only the number's digits (`phone`, 6 to 14). Spaces, dashes,
+  dots and parentheses are dropped, and an empty number removes the phone. It's shown
+  as `+52 5512345678` and only to the account (on `/me`) and its admins (on 🔑 Cuentas,
+  as a `tel:` link). Editable on `/me` and on the admin's account page.
 - **The display name is the league name:** it renames the claimed player, unless
   another player of that organization already has that name.
 - **A player account** scores in its tournaments without the tournament password.

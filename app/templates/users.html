@@ -12,6 +12,7 @@
     <dl class="creds">
       <dt>{{ _("username") }}</dt><dd><code>{{ u.username }}</code></dd>
       {% if u.email %}<dt>{{ _("email") }}</dt><dd>{{ u.email }}</dd>{% endif %}
+      {% if u.phone %}<dt>{{ _("phone") }}</dt><dd><a href="{{ u|phone_link }}">{{ u|phone }}</a></dd>{% endif %}
       {% if u.first_name or u.last_name %}<dt>{{ _("full_name") }}</dt><dd>{{ u.first_name or "" }} {{ u.last_name or "" }}</dd>{% endif %}
       {% if u.player %}<dt>{{ _("player") }}</dt><dd><a class="plain" href="/players/{{ u.player.id }}">{{ u.player.name }}</a></dd>{% endif %}
     </dl>
