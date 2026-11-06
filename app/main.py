@@ -912,7 +912,8 @@ def account_home(conn, user):
                 found[t["id"]]["me"] = t["me"]
             else:
                 found[t["id"]] = home_tournament(t, org, "player", t["me"])
-        upcoming += [{**s, "org_name": org["name"]} for s in summary["pending"]]
+        upcoming += [{**s, "org_name": org["name"], "org_slug": player["org_slug"]}
+                     for s in summary["pending"]]
         latest += [{**s, "org_name": org["name"], "player_id": player["id"]}
                    for s in summary["recent"][:1]]
     tournaments, upcoming = by_date(list(found.values()), upcoming)
@@ -1355,7 +1356,7 @@ def signup(request: Request, t: str = Form(""), who: str = Form(""),
 def my_players(conn, user_id):
     """The account's players, one per organization, with their organization."""
     return conn.execute(
-        "SELECT p.*, o.name AS org_name FROM players p JOIN organizations o "
+        "SELECT p.*, o.name AS org_name, o.slug AS org_slug FROM players p JOIN organizations o "
         "ON o.id = p.organization_id WHERE p.user_id = ? ORDER BY o.name", (user_id,)).fetchall()
 
 
@@ -3549,9 +3550,10 @@ def delete_match(match_id: int):
 
 @app.post("/matches/{match_id}/score")
 def save_score(request: Request, match_id: int, team_a_games: str = Form(""),
-               team_b_games: str = Form("")):
+               team_b_games: str = Form(""), back: str = Form("")):
     """Enter (or clear) the games of a set, from its Edit page or the boxes of its card
-    on the jornada page: editors and the set's players."""
+    (jornada page; home page, back=home): editors and the set's players."""
+    home = back == "home"
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
         auth.require_set_scorer(request, tournament_of(conn, match["matchday_id"]), match)
@@ -3566,4 +3568,4 @@ def save_score(request: Request, match_id: int, team_a_games: str = Form(""),
             return redirect(f"{edit}?error=err_set")
         conn.execute("UPDATE matches SET team_a_games = ?, team_b_games = ?, winner = ? "
                      "WHERE id = ?", (a, b, winner, match_id))
-    return redirect(f"{back}#set-{match_id}")
+    return redirect("/" if home else f"{back}#set-{match_id}")

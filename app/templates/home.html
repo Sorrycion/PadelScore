@@ -39,10 +39,21 @@
     <div class="meta muted">📅 {{ m.played_on }} · {{ m.tournament }} · {{ _("round_short" if m.rule_code in ROUND_MODES else "matchday_short", n=m.matchday) }} · {{ _("court_n", n=m.court) }}{% if tournaments|map(attribute="org_id")|unique|list|length > 1 %} · 🏢 {{ m.org_name }}{% endif %}</div>
     <div class="vs"><span>{{ m.a1 }} / {{ m.a2 }}</span><span class="muted">vs</span><span>{{ m.b1 }} / {{ m.b2 }}</span></div>
     {% set chance = m.chance %}{% if chance is not none %}{% include "_chance.html" %}{% endif %}
+    {% if account and m.org_slug and m.rule_code != LADDER %}
+    {# The account's own set: type the games here (score-inline.js saves it and comes
+       back home); the form goes to its organization's URL. #}
+    <form class="home-score" method="post" action="/{{ m.org_slug }}/matches/{{ m.id }}/score" data-score-inline>
+      <input type="hidden" name="back" value="home">
+      {% for side, team in (("a", _("team_a")), ("b", _("team_b"))) %}
+      <span class="score-edit"><input class="score-box editable" type="number" name="team_{{ side }}_games" min="0" inputmode="numeric" placeholder="–" aria-label="{{ team }} · {{ _('games_legend') }}" title="{{ _('score_inline_hint') }}"><span class="pencil" aria-hidden="true">✏️</span></span>
+      {% endfor %}
+    </form>
+    {% endif %}
     {{ go(m.org_name, "/matches/%d/edit"|format(m.id), "✏️ " ~ _("enter_result")) }}
   </li>
   {% endfor %}
 </ul>
+{% if account %}<script src="/static/score-inline.js?v={{ css_version }}" defer></script>{% endif %}
 {% else %}<p class="empty">{{ _("no_pending_sets") }}</p>{% endif %}
 
 <h2>🏆 {{ _("my_tournaments") }}</h2>

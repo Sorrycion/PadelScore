@@ -1902,6 +1902,15 @@ def test_home_lists_the_accounts_tournaments_and_next_sets_by_date(with_players)
     upcoming = page.split("My next sets")[1].split("My tournaments")[0]
     assert upcoming.index("2026-10-23") < upcoming.index("2026-11-06")  # by date
     assert "/matches/1/edit" in upcoming and "/matches/2/edit" not in upcoming  # played
+    # Its score boxes, right there: saved in its organization, back home.
+    assert 'action="/club/matches/1/score" data-score-inline' in upcoming
+    assert 'class="pencil"' in upcoming and "score-inline.js" in page
+    r = c.post("/club/matches/1/score", data={"team_a_games": "6", "team_b_games": "2",
+                                              "back": "home"})
+    assert str(r.url).endswith("/") and "My next sets" in r.text
+    with db.connect() as conn:
+        assert tuple(conn.execute("SELECT team_a_games, team_b_games FROM matches "
+                                  "WHERE id = 1").fetchone()) == (6, 2)
 
 
 def test_home_of_an_admin_and_of_a_guest(with_players):

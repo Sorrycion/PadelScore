@@ -37,8 +37,10 @@ flowchart TD
   posts to `/matches/{id}/score` and returns to the jornada. Both games are required.
   A tie is allowed (no winner).
 - **Players find their sets** on the home page (`/`): "⏳ Mis próximos sets" lists the
-  pending sets of every tournament they play, oldest date first, each with a link to
-  enter its result.
+  pending sets of every tournament they play, oldest date first. For an account, each
+  has the same editable ✏️ boxes (the user asked, 2026-11-06): the form posts to the
+  set's own organization (`/<slug>/matches/{id}/score`, `back=home`) and the page comes
+  back to the home page. Escalafón matches and guests keep only ✏️ Resultado.
 - **The set form** (`/matches/new`, `/matches/{id}/edit`) checks:
   - 4 different players, all from this organization;
   - a jornada of this organization;
