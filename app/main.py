@@ -2352,7 +2352,7 @@ def jornada_summary(conn, matchday_id, lang):
         "highlights": highlights,
         "courts": by_court(sets, rates_before),
         "evolution": {"numbers": numbers, "players": evolution,
-                      "first": str(_("pdf_start")), "last": short(n)},
+                      "labels": [str(_("pdf_start"))] + [short(k) for k in numbers]},
         "next": upcoming_sets and {
             "label": str(_(label_key, n=n + 1)), "played_on": upcoming["played_on"],
             "courts": by_court(upcoming_sets, org_rates(conn))},

@@ -831,10 +831,11 @@ TEXT = {
                 "en": "The winners had a {n}% chance"},
     "pdf_evolution": {"es": "Así van los puntos, jornada a jornada",
                       "en": "The points, matchday by matchday"},
-    "pdf_evolution_note": {"es": "Los puntos acumulados de cada jugador (en azul), sobre los de "
-                                 "todos los demás (en gris). Todos en la misma escala.",
-                           "en": "Each player's total points (blue) over everyone else's "
-                                 "(gray). All on the same scale."},
+    "pdf_evolution_note": {"es": "Los puntos acumulados de cada jugador, jornada a jornada. Cada "
+                                 "uno tiene su color, su tipo de línea y su forma de punto: búscalo "
+                                 "en la leyenda.",
+                           "en": "Each player's total points, matchday by matchday. Each one has "
+                                 "their own color, line style and point shape: see the legend."},
     "pdf_next": {"es": "Próxima", "en": "Next"},
     "pdf_start": {"es": "Inicio", "en": "Start"},
     "pdf_next_note": {"es": "La probabilidad de ganar de cada pareja (azul y rojo), según los "

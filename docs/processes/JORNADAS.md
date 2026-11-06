@@ -116,9 +116,11 @@ jornada page has one for itself. The PDF (`GET /<slug>/matchdays/<id>/summary.pd
    records of the earlier sets only.
 3. **Sets y resultados** by court: pair A blue, pair B red, winners in bold, and the
    chance the winners had.
-4. **Así van los puntos:** one small chart per player (by position): their total
-   points from 0 at the start ("Inicio", so there's a line from the first jornada) and
-   after each jornada in blue, everyone else's in gray, all on the same scale.
+4. **Así van los puntos:** one chart with every player's total points from 0 at the
+   start ("Inicio", so there's a line from the first jornada) and after each jornada.
+   Each player has their own color, line style and point shape (`report.look`: 8 colors,
+   then dashed, then dotted; circle, square, triangle, diamond), and a legend by
+   position with their total.
 5. **Próxima jornada**, if it already has sets: each set with each pair's chance now
    (blue and red bar).
 
