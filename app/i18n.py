@@ -835,6 +835,7 @@ TEXT = {
                            "en": "Each player's total points (blue) over everyone else's "
                                  "(gray). All on the same scale."},
     "pdf_next": {"es": "Próxima", "en": "Next"},
+    "pdf_start": {"es": "Inicio", "en": "Start"},
     "pdf_next_note": {"es": "La probabilidad de ganar de cada pareja (azul y rojo), según los "
                             "resultados de todos hasta hoy.",
                       "en": "Each pair's chance of winning (blue and red), from everyone's "
