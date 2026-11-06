@@ -286,57 +286,122 @@ def highlights(pdf, data, _):
             pdf.set_xy(pdf.l_margin, y + h + 3)
 
 
+# One look per player in the points chart: 8 colors, then the same colors dashed, then
+# dotted; the point shape changes too. (color i % 8, line i // 8) never repeats.
+SERIES = [(69, 104, 245), (200, 49, 42), (31, 157, 85), (224, 138, 0), (142, 68, 173),
+          (0, 151, 167), (216, 27, 96), (121, 85, 72)]
+LINES = (None, (1.8, 1.0), (0.4, 0.8))  # solid, dashed, dotted (dash, gap in mm)
+SHAPES = ("circle", "square", "triangle", "diamond")
+
+
+def look(i):
+    """(color, dash, shape) of the i-th player of the chart."""
+    return SERIES[i % len(SERIES)], LINES[(i // len(SERIES)) % len(LINES)], SHAPES[i % len(SHAPES)]
+
+
+def marker(pdf, shape, x, y, r):
+    """A point of the chart, in the current fill color with a white edge."""
+    pdf.set_draw_color(255, 255, 255)
+    pdf.set_line_width(0.2)
+    if shape == "circle":
+        pdf.circle(x, y, r, style="DF")
+    elif shape == "square":
+        pdf.rect(x - r * 0.9, y - r * 0.9, r * 1.8, r * 1.8, style="DF")
+    elif shape == "triangle":
+        pdf.polygon([(x, y - r * 1.2), (x - r * 1.15, y + r * 0.85), (x + r * 1.15, y + r * 0.85)],
+                    style="DF")
+    else:
+        pdf.polygon([(x, y - r * 1.3), (x + r * 1.1, y), (x, y + r * 1.3), (x - r * 1.1, y)],
+                    style="DF")
+
+
+def line(pdf, points, color, dash, width=0.6):
+    pdf.set_draw_color(*color)
+    pdf.set_line_width(width)
+    if dash:
+        pdf.set_dash_pattern(dash=dash[0], gap=dash[1])
+    pdf.polyline(points)
+    pdf.set_dash_pattern()
+
+
+def nice_step(top):
+    """A round step for about 4 gridlines up to `top`."""
+    for step in (1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500):
+        if top / step <= 5:
+            return step
+    return 1000
+
+
 def evolution(pdf, data, _):
-    """Small multiples: one panel per player (by position), their total points from 0
-    at the start and after each jornada in blue over everyone else's in gray, all on the same scale."""
+    """One chart with every player's total points from 0 at the start and after each
+    jornada: each player with their own color, line style and point shape (look()), and
+    a legend by position under it."""
     evo = data["evolution"]
     if not evo["numbers"]:
         return
-    section(pdf, _("pdf_evolution"), _("pdf_evolution_note"), keep=33)
-    per_row, gap, ph = 4, 3, 30
-    pw = (pdf.epw - gap * (per_row - 1)) / per_row
-    every = [p["values"] for p in evo["players"]]
+    players = evo["players"]
+    per_row = 3
+    legend_h = 5.2 * -(-len(players) // per_row)
+    chart_h = 92
+    section(pdf, _("pdf_evolution"), _("pdf_evolution_note"), keep=chart_h + legend_h + 4)
+    x0, y0 = pdf.l_margin, pdf.get_y()
+    left, bottom = 10, 8  # room for the y and x labels
+    cx, cy, cw, ch = x0 + left, y0 + 2, pdf.epw - left - 4, chart_h - bottom - 2
+    every = [p["values"] for p in players]
     lo = min(0, min(min(v) for v in every))
     hi = max(1, max(max(v) for v in every))
-    n = len(evo["numbers"]) + 1  # the points start at 0, before the first jornada
-    for i, p in enumerate(evo["players"]):
+    step = nice_step(hi - lo)
+    lo, hi = step * (lo // step), step * -(-hi // step)
+    n = len(evo["labels"])
+
+    def at(k, v):
+        return (cx + cw * k / (n - 1), cy + ch - ch * (v - lo) / (hi - lo))
+
+    # Grid, y values and x labels.
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(*MUTED)
+    for v in range(int(lo), int(hi) + 1, step):
+        _x, y = at(0, v)
+        pdf.set_draw_color(*(GRAY_LINE if v == 0 else LINE))
+        pdf.set_line_width(0.4 if v == 0 else 0.2)
+        pdf.line(cx, y, cx + cw, y)
+        pdf.set_xy(x0, y - 2)
+        pdf.cell(left - 2, 4, str(v), align="R")
+    for k, label in enumerate(evo["labels"]):
+        x, _y = at(k, lo)
+        pdf.set_draw_color(*SOFT)
+        pdf.set_line_width(0.2)
+        pdf.line(x, cy, x, cy + ch)
+        pdf.set_xy(x - 8, cy + ch + 1.5)
+        pdf.cell(16, 4, latin(label), align="C")
+    # Last place first, so the leaders' lines end up on top.
+    for i in reversed(range(len(players))):
+        color, dash, shape = look(i)
+        points = [at(k, v) for k, v in enumerate(players[i]["values"])]
+        line(pdf, points, color, dash)
+        pdf.set_fill_color(*color)
+        for x, y in points[1:]:
+            marker(pdf, shape, x, y, 0.95)
+    # The legend: position, name and total, with each player's line and point.
+    pdf.set_xy(x0, y0 + chart_h + 1)
+    col_w = pdf.epw / per_row
+    for i, p in enumerate(players):
         if i % per_row == 0:
-            room(pdf, ph + gap)
+            room(pdf, 5.2)
             y = pdf.get_y()
-        x = pdf.l_margin + (i % per_row) * (pw + gap)
-        pdf.set_fill_color(*SOFT)
-        pdf.rect(x, y, pw, ph, style="F", round_corners=True, corner_radius=2)
-        pdf.set_xy(x + 1.8, y + 1.2)
-        pdf.set_font("Helvetica", "B", 8)
+        x = x0 + (i % per_row) * col_w
+        color, dash, shape = look(i)
+        line(pdf, [(x + 0.5, y + 2.6), (x + 8.5, y + 2.6)], color, dash, width=0.7)
+        pdf.set_fill_color(*color)
+        marker(pdf, shape, x + 4.5, y + 2.6, 1.0)
+        pdf.set_xy(x + 10, y)
+        pdf.set_font("Helvetica", "", 8.5)
         pdf.set_text_color(*INK)
-        pdf.cell(pw - 14, 4, fit(pdf, f"{p['position']}. {p['name']}", pw - 15))
-        pdf.set_font("Helvetica", "B", 8)
-        pdf.set_text_color(*ACCENT)
-        pdf.set_xy(x + pw - 13, y + 1.2)
-        pdf.cell(11.2, 4, str(p["values"][-1]), align="R")
-        cx, cy, cw, ch = x + 3, y + 7, pw - 6, ph - 12
-
-        def point(k, v):
-            return (cx + cw * k / (n - 1), cy + ch - ch * (v - lo) / (hi - lo))
-
-        pdf.set_line_width(0.25)
-        pdf.set_draw_color(*GRAY_LINE)
-        for other in every:
-            pdf.polyline([point(k, v) for k, v in enumerate(other)])
-        pdf.set_line_width(0.7)
-        pdf.set_draw_color(*ACCENT)
-        mine = [point(k, v) for k, v in enumerate(p["values"])]
-        pdf.polyline(mine)
-        pdf.set_fill_color(*ACCENT)
-        pdf.circle(*mine[-1], 0.9, style="F")
-        pdf.set_font("Helvetica", "", 6)
-        pdf.set_text_color(*MUTED)
-        pdf.set_xy(cx - 1, y + ph - 3.2)
-        pdf.cell(8, 2.6, latin(evo["first"]))
-        pdf.set_xy(cx + cw - 7, y + ph - 3.2)
-        pdf.cell(8, 2.6, latin(evo["last"]), align="R")
-        if i % per_row == per_row - 1 or i == len(evo["players"]) - 1:
-            pdf.set_xy(pdf.l_margin, y + ph + gap)
+        pdf.cell(col_w - 11, 5.2, fit(pdf, f"{p['position']}. {p['name']} ({p['values'][-1]})",
+                                      col_w - 12))
+        if i % per_row == per_row - 1 or i == len(players) - 1:
+            pdf.set_xy(x0, y + 5.2)
+    pdf.ln(2)
 
 
 def build(data, _):
