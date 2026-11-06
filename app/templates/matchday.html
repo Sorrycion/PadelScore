@@ -19,9 +19,11 @@
 </div>
 {% set current = matchday.id %}
 {% include "_matchday_tabs.html" %}
-{% if tournament.rule_code == MANUAL and scorer %}
+{% if can_add_friendly %}
+<p class="inline"><a class="button" href="/friendlies/new?date={{ matchday.played_on }}">{{ _("new_friendly") }}</a></p>
+{% elif tournament.rule_code == MANUAL and scorer %}
 <p class="inline"><a class="button" href="/matches/new?matchday={{ matchday.id }}">{{ _("new_set") }}</a></p>
-{% elif editor and tournament.rule_code not in (REY, LADDER) and rounds|length <= 1 %}
+{% elif editor and tournament.rule_code not in (REY, LADDER, AMISTOSOS) and rounds|length <= 1 %}
 <p class="inline"><a class="button" href="/matchdays/{{ matchday.id }}/courts">{{ _("assign_courts") }}</a></p>
 {% endif %}
 {% if scorer and not editor %}<p class="muted">{{ _("player_mode_note") }}</p>{% endif %}
@@ -69,7 +71,7 @@
   {% endfor %}
 </ul>
 {% endif %}
-{% if editor and next_number and tournament.rule_code != LADDER %}
+{% if editor and next_number and tournament.rule_code not in (LADDER, AMISTOSOS) %}
 <form method="get" action="/tournaments/{{ tournament.id }}/matchdays/new" class="inline next-matchday">
   {% if liga %}<input type="hidden" name="move" value="{{ move }}">{% endif %}
   <input type="date" name="played_on" value="{{ next_date if liga else matchday.played_on }}" aria-label="{{ _('date') }}" required>
@@ -85,6 +87,7 @@
 {% elif tournament.rule_code == RETAS %}<p class="muted">{{ _("retas_note") }}</p>
 {% elif tournament.rule_code == REY %}<p class="muted">{{ _("rey_cancha_note") }}</p>
 {% elif tournament.rule_code == LADDER %}<p class="muted">{{ _("escalafon_note") }}</p>
+{% elif tournament.rule_code == AMISTOSOS %}<p class="muted">{{ _("amistosos_note") }}</p>
 {% else %}
 <p class="muted">ℹ️ {{ _("places_note", url="/rules") }}</p>
 {% endif %}

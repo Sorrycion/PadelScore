@@ -10,7 +10,7 @@ framework: only a small player picker (`app/static/picker.js`).
 flowchart TD
     subgraph web["app/main.py (routes, queries, templates)"]
         GATE[OrganizationGate middleware]
-        ROUTES[routes: tournaments, jornadas, sets, players,<br/>accounts, profile, stats, medals, orgs, health]
+        ROUTES[routes: tournaments, jornadas, sets, friendlies, players,<br/>accounts, profile, stats, medals, orgs, health]
     end
     AUTH[auth.py<br/>cookies, roles, can_score] --> web
     USERS[users.py<br/>accounts, hashing — stdlib] --> AUTH
@@ -71,7 +71,8 @@ sequenceDiagram
   organization) and `/me`, which lists an account's players everywhere and adds them up
   (`career`).
 - **Navigation:** Inicio, 🙋 Mi resumen (the account's player in this organization,
-  `my_player` from `auth_context`), Clasificación, Torneos, Sets, Jugadores, Reglamento.
+  `my_player` from `auth_context`), Clasificación, Torneos, Sets, 🤝 Amistosos
+  (`/friendlies`, an organization section in `orgs.SECTIONS`), Jugadores, Reglamento.
   On wide screens the sections are a row of pills under the header. On
   phones (640 px or less) they fold, with the account links and the language, into a
   ☰ menu. It's a hidden checkbox (`#menu-toggle`) and CSS, with no JavaScript.

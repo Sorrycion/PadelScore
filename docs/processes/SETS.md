@@ -55,6 +55,7 @@ flowchart TD
 | Liga de amigos | Nothing per set by itself. When the court's 3 sets are played: place points 9 / 6 / 4 / 3 + 1 per set won |
 | Americano / Mexicano | The games (points) their pair won |
 | Manual individual | The games difference: 6-3 gives +3 to the winners and −3 to the losers; totals can be negative |
+| 🤝 Amistosos | 1 per set won (0 for a loss or a tie); friendlies are recorded on `/friendlies/new` (TOURNAMENTS.md) |
 
 An absent player scores 0 for that jornada, whatever their substitute did.
 

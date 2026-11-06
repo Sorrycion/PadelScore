@@ -16,6 +16,9 @@ every set they played; see rounds.py for how rounds are drawn.
 Manual individual: each player scores the games difference of every set they played
 (won - lost), so a 6-3 gives +3 and -3; totals can be negative.
 
+Amistosos (friendlies): 1 point per set won, 0 for a loss or a tie. The table also
+shows sets lost, the win % and the games difference.
+
 A set whose games are not entered yet (pending) gives nothing. A player marked absent
 on a matchday keeps their place in the sets (a substitute plays for them) but scores
 0 and goes last: a substitute can't earn points for the player they replace.
@@ -91,7 +94,7 @@ def court_table(sets, position, absent=frozenset(), places=False, seed=0,
             for key in (side.lower() + "1", side.lower() + "2"):
                 r = stats.setdefault(m[key + "_id"], {
                     "id": m[key + "_id"], "name": m[key],
-                    "points": 0, "diff": 0, "sets": 0, "sets_won": 0,
+                    "points": 0, "diff": 0, "sets": 0, "sets_won": 0, "sets_lost": 0,
                     "absent": m[key + "_id"] in absent, "place": None,
                 })
                 if not played:
@@ -102,6 +105,7 @@ def court_table(sets, position, absent=frozenset(), places=False, seed=0,
                 r["points"] += 0 if places else pts
                 r["diff"] += d
                 r["sets_won"] += m["winner"] == side
+                r["sets_lost"] += m["winner"] not in (None, side)
     unranked = len(position) + 1
     if not places:
         return sorted(stats.values(), key=lambda r: (
@@ -161,14 +165,16 @@ def tournament_results(matchdays, places=False, score=games_points):
                 if not r["sets"]:  # only pending sets so far
                     continue
                 t = totals.setdefault(r["id"], {"id": r["id"], "name": r["name"], "points": 0,
-                                                "diff": 0, "sets_won": 0, "played": 0,
-                                                "by_matchday": {}})
+                                                "diff": 0, "sets_won": 0, "sets_lost": 0,
+                                                "sets": 0, "played": 0, "by_matchday": {}})
                 if md["number"] not in t["by_matchday"]:
                     t["by_matchday"][md["number"]] = 0
                     t["played"] += not r["absent"]
                 t["by_matchday"][md["number"]] += r["points"]
                 t["points"] += r["points"]
                 t["sets_won"] += r["sets_won"]
+                t["sets_lost"] += r["sets_lost"]
+                t["sets"] += r["sets"]
                 t["diff"] += r["diff"]
         results.append({**md, "courts": courts})
     return results, _standings(totals.values(), by_diff)
@@ -224,10 +230,13 @@ SCORING = {
     "rey_cancha": partial(tournament_results, score=win_points),  # 1 per set won
     # Escalafón: 1 per match won; the ladder (not the points) orders its standings.
     "escalafon": partial(tournament_results, score=win_points),
+    # Amistosos: friendlies, 1 per set won (to track who beats whom).
+    "amistosos": partial(tournament_results, score=win_points),
 }
 # Rule types played in rounds of one match per court, to a number of points.
 ROUND_MODES = {"americano", "mexicano"}
 RETAS, REY, LADDER = "retas", "rey_cancha", "escalafon"  # app/formats.py
+AMISTOSOS = "amistosos"  # one per organization, every player in it
 # Courts that play one match of two pairs at a time (not the Liga's three sets).
 ONE_MATCH = ROUND_MODES | {RETAS}
 # Courts drawn by the app among the tournament's players.

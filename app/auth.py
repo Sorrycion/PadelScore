@@ -153,16 +153,19 @@ def is_guest_player(request: Request, tournament) -> bool:
 
 
 def account_plays(user, tournament) -> bool:
-    """The account's player is in the tournament (its list or one of its sets)."""
+    """The account's player is in the tournament (its list or one of its sets). Every
+    player of the organization is in its 🤝 Amistosos."""
     with db.connect() as conn:
         return conn.execute(
             "SELECT 1 FROM players p WHERE p.user_id = ? AND p.organization_id = ? AND ("
             " EXISTS (SELECT 1 FROM tournament_players tp WHERE tp.tournament_id = ? "
             "         AND tp.player_id = p.id)"
             " OR EXISTS (SELECT 1 FROM matches m JOIN matchdays d ON d.id = m.matchday_id "
-            "            WHERE d.tournament_id = ? AND p.id IN (m.a1, m.a2, m.b1, m.b2)))",
+            "            WHERE d.tournament_id = ? AND p.id IN (m.a1, m.a2, m.b1, m.b2))"
+            " OR EXISTS (SELECT 1 FROM tournaments t JOIN rule_types r ON r.id = t.rule_type_id"
+            "            WHERE t.id = ? AND r.code = 'amistosos'))",
             (user["id"], tournament["organization_id"], tournament["id"],
-             tournament["id"])).fetchone() is not None
+             tournament["id"], tournament["id"])).fetchone() is not None
 
 
 def is_player(request: Request, tournament) -> bool:

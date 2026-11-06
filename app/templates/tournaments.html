@@ -62,6 +62,10 @@
   <a href="/tournaments" {% if not past %}class="active" aria-current="page"{% endif %}>🎾 {{ _("current_tournaments") }} ({{ n_current }})</a>
   <a href="/tournaments?past=1" {% if past %}class="active" aria-current="page"{% endif %}>🏁 {{ _("past_tournaments") }} ({{ n_past }})</a>
 </nav>
+{% if not friendlies and not past %}
+<p><a class="t-card" href="/friendlies"><span class="name">🤝 {{ _("friendlies") }}</span>
+  <span class="meta">{{ _("friendlies_card") }}</span></a></p>
+{% endif %}
 {% if tournaments %}
 <ul class="cards">
   {% for t in tournaments %}

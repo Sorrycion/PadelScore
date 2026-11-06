@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ _("new_friendly") }} · PadelScore{% endblock %}
+{% block content %}
+{# 🤝 A new friendly (main.add_friendly): the date picks the jornada (or makes one); each
+   player box searches the organization's players, and a new name creates one. #}
+<p class="eyebrow">{% if tournament %}<a class="plain" href="/tournaments/{{ tournament.id }}">🤝 {{ tournament.name }}</a>{% else %}<a class="plain" href="/friendlies">🤝 {{ _("friendlies") }}</a>{% endif %}</p>
+<h1>{{ _("new_friendly") }}</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post" action="/friendlies" class="stack friendly-form">
+  <label>{{ _("date") }} <input type="date" name="played_on" value="{{ form.played_on }}" required></label>
+  <p class="muted">{{ _("friendly_date_hint") }}</p>
+  {% for team, p1, p2, games in [("team_a", "a1", "a2", "team_a_games"), ("team_b", "b1", "b2", "team_b_games")] %}
+  <fieldset class="team-row"><legend>{{ _(team) }}</legend><div class="fields">
+    {% for field, label in ((p1, _("player_1")), (p2, _("player_2"))) %}
+    <div class="picker" data-mode="field" data-players='{{ players_json|tojson }}'
+         data-create="{{ _('create_player_option', name='{name}') }}">
+      <label>{{ label }}
+        <input name="{{ field }}" class="picker-input" autocomplete="off" required
+               value="{{ form[field] or '' }}" placeholder="{{ _('search_player') }}">
+      </label>
+      <div class="picker-suggestions"></div>
+    </div>
+    {% endfor %}
+    <label class="games">{{ _("games_legend") }}
+      <input type="number" name="{{ games }}" min="0" inputmode="numeric" value="{{ form[games] or '' }}">
+    </label>
+  </div></fieldset>
+  {% endfor %}
+  <p class="muted">{{ _("friendly_players_hint") }}</p>
+  <button type="submit">{{ _("save_friendly") }}</button>
+</form>
+<script src="/static/picker.js?v={{ css_version }}" defer></script>
+{% endblock %}

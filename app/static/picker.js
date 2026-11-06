@@ -8,6 +8,8 @@
              (each chosen player adds a hidden players=<id>, or new_players=<name>)
      single: <input type="hidden" class="picker-create" name="create">
              (choosing fills the input and submits its form; create=1 for a new name)
+     field:  choosing just fills the input (several boxes in one form; the server
+             finds the name, or creates the player)
    </div>
 */
 (function () {
@@ -59,6 +61,11 @@
     }
 
     function choose(p) {
+      if (box.dataset.mode === "field") {
+        input.value = p.name;
+        list.innerHTML = "";
+        return;
+      }
       if (!multi) {
         input.value = p.name;
         box.querySelector(".picker-create").value = p.id ? "" : "1";

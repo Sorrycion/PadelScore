@@ -17,7 +17,10 @@
 {% include "_matchday_tabs.html" %}
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if not results %}<p class="empty">{{ _("no_matchdays") }}</p>{% endif %}
-{% if editor and tournament.rule_code != LADDER %}
+{% if tournament.rule_code == AMISTOSOS and can_add_friendly %}
+<p class="inline"><a class="button" href="/friendlies/new">{{ _("new_friendly") }}</a></p>
+{% endif %}
+{% if editor and tournament.rule_code not in (LADDER, AMISTOSOS) %}
 <form method="get" action="/tournaments/{{ tournament.id }}/matchdays/new" class="inline">
   <input type="date" name="played_on" value="{{ today }}" aria-label="{{ _('date') }}" required>
   <button type="submit">{{ _("add_round_n" if round_mode else "add_matchday_n", n=results|length + 1) }}</button>
@@ -29,7 +32,8 @@
 {% elif tournament.rule_code == MANUAL %}<p class="muted">{{ _("manual_note") }}</p>
 {% elif tournament.rule_code == RETAS %}<p class="muted">{{ _("retas_note") }}</p>
 {% elif tournament.rule_code == REY %}<p class="muted">{{ _("rey_cancha_note") }}</p>
-{% elif tournament.rule_code == LADDER %}<p class="muted">{{ _("escalafon_note") }}</p>{% endif %}
+{% elif tournament.rule_code == LADDER %}<p class="muted">{{ _("escalafon_note") }}</p>
+{% elif tournament.rule_code == AMISTOSOS %}<p class="muted">{{ _("amistosos_note") }}</p>{% endif %}
 {% if ladder is not none %}{% include "_ladder.html" %}{% endif %}
 
 {% if tournament.rule_code != LADDER %}{# an Escalafón's ranking is its ladder, below #}
@@ -39,7 +43,10 @@
 {% include "_jornada_pdf.html" %}
 
 
-{% if participants or editor %}
+{% if tournament.rule_code == AMISTOSOS %}
+<h2 id="players">{{ _("tournament_players") }}</h2>
+<p class="muted">{{ _("friendlies_everyone", url="/players") }}</p>
+{% elif participants or editor %}
 <h2 id="players">{{ _("tournament_players") }}</h2>
 {% if mail_sent %}<p class="saved">✅ {{ _("recap_email_sent") }}</p>{% endif %}
 {% if participants %}
@@ -120,7 +127,7 @@
 {% endif %}
 {% endif %}
 
-{% if editor %}
+{% if editor and tournament.rule_code != AMISTOSOS %}{# Amistosos stays open, always #}
 <form method="post" action="/tournaments/{{ tournament.id }}/ended" class="inline">
   <input type="hidden" name="ended" value="{{ 0 if tournament.ended else 1 }}">
   <button type="submit" class="secondary">{{ _("reopen_tournament" if tournament.ended else "end_tournament") }}</button>
