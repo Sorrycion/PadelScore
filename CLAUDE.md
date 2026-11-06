@@ -52,6 +52,14 @@ It's live at https://padelscore-sorrycion.azurewebsites.net (repo `Sorrycion/Pad
   it to links and redirects (`orgs.SECTIONS`). A new section of organization pages goes
   in `orgs.SECTIONS` and `orgs.RESERVED`. Tests use the fixture organization `club`
   (`/club/...`).
+- **The user manuals follow the screens** (the user's rule, 2026-11-06). Every commit that
+  changes what users see (`app/templates/`, `app/static/`, `app/i18n.py`) refreshes the
+  📘 manuals in the same commit: run `scripts/make_manuals.py`, update
+  `scripts/manual_texts.py` if a screen, menu or process changed, look at the pages, and
+  stage `docs/manuales/` + `app/static/manuals/` (skill `padelscore-manuals`). A
+  project hook (`.claude/settings.json` → `scripts/check_manuals.py`) blocks a
+  `git commit` that skips it; "[manuals: n/a]" in the message says no manual screen
+  changed.
 - **Every PR documents itself** (the user's rule, 2026-10-30). Before opening any PR,
   in the same branch:
 

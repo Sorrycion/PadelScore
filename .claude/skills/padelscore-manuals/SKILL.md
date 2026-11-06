@@ -27,3 +27,12 @@ flowchart LR
    still frame the right part (render the PDF pages, e.g. with PyMuPDF, and look).
 5. **Never real data:** the demo league is seeded by `seed()` with made-up names.
 6. **Look at every page** before committing; commit both PDF copies.
+
+## When (the user's rule): every commit that changes what users see
+
+A project hook enforces it: `.claude/settings.json` runs `scripts/check_manuals.py`
+before every `git commit` Claude makes. If the staged files touch `app/templates/`,
+`app/static/` (not the manuals) or `app/i18n.py` and no manual PDF is staged, the
+commit is blocked with these steps. When the change doesn't touch any screen the
+manuals show (e.g. an email template or an admin-only tweak already described), put
+`[manuals: n/a]` in the commit message.
