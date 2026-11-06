@@ -25,6 +25,8 @@ flowchart TD
     CHARTS[charts.py<br/>inline SVG] --> web
     I18N[i18n.py<br/>es / en texts] --> web
     MAIL[mailer.py<br/>Azure email REST — stdlib] --> web
+    REPORT[report.py<br/>📄 jornada summary PDF — fpdf2] --> web
+    STATS --> REPORT
     SQL[(sql/predeployment/*.sql)] --> MIG
 ```
 
@@ -131,6 +133,7 @@ erDiagram
     matchdays ||--o{ matches : "sets, by court"
     matchdays ||--o{ absences : marks
     medal_types }o--o{ players : "awarded live (medals.py)"
+    matchdays ||--o| summary_requests : "📄 emailed on request"
     schema_migrations }o--|| organizations : "(records applied SQL files)"
 ```
 

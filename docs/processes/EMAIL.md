@@ -23,6 +23,15 @@ library only).
   same numbers: a bar on each **pending set** of a jornada and on its result page,
   and "🎯 Probabilidad de ganarle a X" on ⚔️ Cara a cara.
 
+- **📄 The jornada summary (PDF attached)**, when an admin presses "📧 Enviar por email"
+  on the jornada's card (see [JORNADAS.md](JORNADAS.md)). It's queued in
+  `summary_requests` (`0009_jornada_summaries.sql`) and goes to every account with an
+  email and a player in the tournament (recaps on; their unsubscribe link turns it
+  off too), once each (`sent_emails`, kind `summary`). The first batch goes right
+  after the button (a background task); the hourly job sends the rest for 3 days after
+  the request. Kinds per run: reminders, then summaries, then recaps. `mailer.send`
+  takes attachments (ACS `attachments`, base64). The card shows "Enviado a X de N".
+
 - **The jornada recap**, the morning after. A GitHub Actions job
   (`.github/workflows/daily-emails.yml`, every hour, all day, from 00:00 Mexico time) calls
   `POST /tasks/send-emails`, which sends the due reminders and then the recaps (see the

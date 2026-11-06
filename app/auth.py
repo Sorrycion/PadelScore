@@ -54,6 +54,12 @@ def recap_token(org, matchday_id: int, player_id: int) -> str:
     return _sign(org, f"recap:{matchday_id}:{player_id}")[:20]
 
 
+def summary_token(org, matchday_id: int) -> str:
+    """Signs a jornada summary PDF's public link (/r/<org>/<jornada>/summary/...), sent on
+    WhatsApp: it opens without entering the organization, for that jornada only."""
+    return _sign(org, f"summary:{matchday_id}")[:20]
+
+
 def unsubscribe_token(user) -> str:
     """Signs an email's unsubscribe link (/unsubscribe/...), so it works without logging
     in, for that account only."""

@@ -775,6 +775,89 @@ TEXT = {
     "email_kind_test_recap": {"es": "🧪 Prueba: resumen", "en": "🧪 Test: recap"},
     "email_kind_test_reminder": {"es": "🧪 Prueba: recordatorio", "en": "🧪 Test: reminder"},
     "email_kind_test": {"es": "🧪 Prueba", "en": "🧪 Test"},
+    "email_kind_summary": {"es": "📄 Resumen de jornada (PDF)", "en": "📄 Matchday summary (PDF)"},
+    # 📄 Jornada summary (PDF; no emoji in pdf_* texts: the PDF's fonts can't draw them)
+    "pdf_card_title": {"es": "📄 Resumen de la {label}", "en": "📄 {label} summary"},
+    "pdf_card_note": {"es": "Un PDF con el ranking y sus medallas, los sets, las medallas de "
+                            "la jornada, cómo van los puntos y la próxima jornada.",
+                      "en": "A PDF with the ranking and its medals, the sets, the matchday's "
+                            "medals, how the points are going and the next matchday."},
+    "pdf_download": {"es": "⬇️ Ver PDF", "en": "⬇️ View PDF"},
+    "pdf_whatsapp": {"es": "📲 Enviar por WhatsApp", "en": "📲 Send on WhatsApp"},
+    "pdf_whatsapp_note": {"es": "Desde tu WhatsApp: en el celular se manda el PDF al chat o grupo "
+                                "que elijas; en la computadora, un enlace al PDF.",
+                          "en": "From your WhatsApp: on a phone the PDF goes to the chat or "
+                                "group you pick; on a computer, a link to the PDF."},
+    "pdf_whatsapp_text": {"es": "📄 Resumen de la {label} · {tournament}",
+                          "en": "📄 {label} summary · {tournament}"},
+    "pdf_or_email": {"es": "O por email, a los jugadores del torneo con cuenta:",
+                     "en": "Or by email, to the tournament's players with an account:"},
+    "pdf_send": {"es": ("📧 Enviar por email a {n} jugador", "📧 Enviar por email a {n} jugadores"),
+                 "en": ("📧 Email {n} player", "📧 Email {n} players")},
+    "pdf_send_confirm": {"es": "¿Enviar el resumen por email a los jugadores del torneo con cuenta "
+                               "y email?",
+                         "en": "Email the summary to the tournament's players with an account "
+                               "and email?"},
+    "pdf_no_audience": {"es": "Nadie del torneo tiene cuenta con email todavía.",
+                        "en": "Nobody in the tournament has an account with email yet."},
+    "pdf_queued": {"es": "✅ Enviando por email. Azure deja 10 emails por hora: si son más, los demás "
+                         "salen en las siguientes horas.",
+                   "en": "✅ Sending by email. Azure allows 10 emails an hour: if there are more, the "
+                         "rest go out over the next hours."},
+    "pdf_sent_status": {"es": "📧 Enviado a {sent} de {to}.", "en": "📧 Sent to {sent} of {to}."},
+    "pdf_title": {"es": "Resumen", "en": "Summary"},
+    "pdf_ranking": {"es": "Ranking", "en": "Ranking"},
+    "pdf_ranking_note": {"es": "Después de la {label}. Medallas: las ganadas en el torneo.",
+                         "en": "After {label}. Medals: those won in the tournament."},
+    "pdf_points": {"es": "Pts", "en": "Pts"},
+    "pdf_moved": {"es": "Lugares", "en": "Places"},
+    "pdf_medals": {"es": "Medallas", "en": "Medals"},
+    "pdf_set_medals": {"es": "Medallas de la jornada", "en": "Medals of the matchday"},
+    "pdf_vs": {"es": "a", "en": "to"},
+    "pdf_sets": {"es": "Sets y resultados", "en": "Sets and results"},
+    "pdf_sets_note": {"es": "En negritas, los ganadores. Debajo, la probabilidad que tenían de "
+                            "ganar antes de la jornada.",
+                      "en": "Winners in bold. Below, the chance they had of winning before "
+                            "the matchday."},
+    "pdf_court": {"es": "Cancha {n}", "en": "Court {n}"},
+    "pdf_had": {"es": "Los ganadores tenían {n}% de probabilidad",
+                "en": "The winners had a {n}% chance"},
+    "pdf_evolution": {"es": "Así van los puntos, jornada a jornada",
+                      "en": "The points, matchday by matchday"},
+    "pdf_evolution_note": {"es": "Los puntos acumulados de cada jugador (en azul), sobre los de "
+                                 "todos los demás (en gris). Todos en la misma escala.",
+                           "en": "Each player's total points (blue) over everyone else's "
+                                 "(gray). All on the same scale."},
+    "pdf_next": {"es": "Próxima", "en": "Next"},
+    "pdf_next_note": {"es": "La probabilidad de ganar de cada pareja (azul y rojo), según los "
+                            "resultados de todos hasta hoy.",
+                      "en": "Each pair's chance of winning (blue and red), from everyone's "
+                            "results so far."},
+    "set_medal_renido": {"es": "El más reñido", "en": "The hardest fought"},
+    "set_medal_renido_how": {"es": "El set más largo: {games} games, ¡qué partidazo!",
+                             "en": "The longest set: {games} games, what a match!"},
+    "set_medal_parejo": {"es": "El más parejo", "en": "The closest"},
+    "set_medal_parejo_how": {"es": "Por {gap} game de diferencia, parejito, parejito",
+                             "en": "Only {gap} game apart, neck and neck"},
+    "set_medal_aplastante": {"es": "El más aplastante", "en": "The biggest win"},
+    "set_medal_aplastante_how": {"es": "Por {gap} games: ¡los barrieron!",
+                                 "en": "By {gap} games: a clean sweep!"},
+    "set_medal_sorpresa": {"es": "La sorpresa", "en": "The upset"},
+    "set_medal_sorpresa_how": {"es": "¡Batacazo! Ganaron con solo {n}% de probabilidad",
+                               "en": "They won with only a {n}% chance"},
+    "set_medal_cantado": {"es": "Estaba cantado", "en": "As expected"},
+    "set_medal_cantado_how": {"es": "Tenían {n}% de probabilidad y cumplieron",
+                              "en": "They had a {n}% chance and delivered"},
+    "summary_email_subject": {"es": "📄 Resumen de la {label} · {tournament}",
+                              "en": "📄 {label} summary · {tournament}"},
+    "summary_email_hi": {"es": "¡Hola, {name}!", "en": "Hi, {name}!"},
+    "summary_email_intro": {"es": "Te mandamos el resumen de la {label} de {tournament}: va en "
+                                  "el PDF adjunto.",
+                            "en": "Here's the {label} summary of {tournament}: it's in the "
+                                  "attached PDF."},
+    "summary_email_leader": {"es": "🥇 Va en primer lugar {name}, con {points} puntos.",
+                             "en": "🥇 {name} leads with {points} points."},
+    "summary_email_open": {"es": "Ver el torneo", "en": "See the tournament"},
     "no_emails_day": {"es": "Ese día no se mandó ningún email.", "en": "No emails that day."},
     "confirm_test_reminder": {"es": "¿Enviar a {name} el recordatorio de su próxima jornada (sea "
                                     "el día que sea)?",

@@ -212,7 +212,7 @@ h1 + .muted { margin-top: -8px; }
                   text-decoration: none; display: inline-block; }
 button.link { background: none; color: var(--error); padding: 0; font-weight: 400; font-size: inherit; }
 button.plain-link { padding: 0; background: none; font-weight: 400; }
-button.secondary { background: var(--card); color: var(--accent); border: 1.5px dashed var(--accent); }
+button.secondary, a.button.secondary { background: var(--card); color: var(--accent); border: 1.5px dashed var(--accent); }
 button.danger { background: none; color: var(--error); border: 1.5px solid var(--error); }
 .fab { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; z-index: 5;
        padding: 14px 30px; font-size: 1.05rem; box-shadow: 0 6px 20px rgba(69, 104, 245, .35); }
@@ -430,3 +430,6 @@ form.filters select { flex: 1 1 180px; }
   fieldset.team-row .fields > .games { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
   fieldset.court-pick .fields { grid-template-columns: 1fr 1fr; }
 }
+
+/* 📄 Jornada summary card (_jornada_pdf.html): 📲 WhatsApp first, then 📧 email. */
+.pdf-card p.small { font-size: .8rem; margin-top: 0; }

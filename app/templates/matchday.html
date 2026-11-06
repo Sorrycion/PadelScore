@@ -26,6 +26,7 @@
 {% endif %}
 {% if scorer and not editor %}<p class="muted">{{ _("player_mode_note") }}</p>{% endif %}
 {% if recap_players %}<p><a href="/matchdays/{{ matchday.id }}/recap">📲 {{ _("recap_title") }}</a></p>{% endif %}
+{% include "_jornada_pdf.html" %}
 
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if matchday.courts %}

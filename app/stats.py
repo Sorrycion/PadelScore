@@ -220,6 +220,63 @@ def season(results, standings, sets, liga=False):
     return out
 
 
+UPSET = 0.45     # winners who had less chance than this: 😱 La sorpresa
+SAFE_BET = 0.70  # winners who had at least this: 🔮 Estaba cantado
+
+
+def set_highlights(sets, rates):
+    """A jornada's set medals (the 📄 jornada summary), from its played sets and
+    everyone's record BEFORE it (player_rates of the earlier sets):
+
+    - renido: the longest set (most games), when it was close (2 games or fewer apart);
+    - parejo: the closest of the others (a tie or 1 game);
+    - aplastante: the widest gap (3 games or more);
+    - sorpresa: the winners with the lowest chance (under UPSET);
+    - cantado: the winners with the highest chance (SAFE_BET or more).
+
+    Returns [{"code", "set", "chance"}], chance being the winners' % before the set
+    (None for a tie). The superlatives need two sets or more to compare."""
+    played = [s for s in sets if s["team_a_games"] is not None]
+
+    def total(s):
+        return s["team_a_games"] + s["team_b_games"]
+
+    def gap(s):
+        return abs(s["team_a_games"] - s["team_b_games"])
+
+    def chance(s):
+        if s["winner"] is None:
+            return None
+        a = win_probability(rates, (s["a1_id"], s["a2_id"]), (s["b1_id"], s["b2_id"]))
+        return a if s["winner"] == "A" else 1 - a
+
+    def pct(s):
+        c = chance(s)
+        return None if c is None else round(100 * c)
+
+    out = []
+    if len(played) >= 2:
+        close = [s for s in played if gap(s) <= 2]
+        renido = max(close, key=lambda s: (total(s), -gap(s)), default=None)
+        if renido:
+            out.append({"code": "renido", "set": renido, "chance": pct(renido)})
+        parejo = min([s for s in played if gap(s) <= 1 and s is not renido],
+                     key=lambda s: (gap(s), -total(s)), default=None)
+        if parejo:
+            out.append({"code": "parejo", "set": parejo, "chance": pct(parejo)})
+        wide = max(played, key=lambda s: (gap(s), -min(s["team_a_games"], s["team_b_games"])))
+        if gap(wide) >= 3:
+            out.append({"code": "aplastante", "set": wide, "chance": pct(wide)})
+    decided = [s for s in played if s["winner"] is not None]
+    upset = min(decided, key=chance, default=None)
+    if upset and chance(upset) < UPSET:
+        out.append({"code": "sorpresa", "set": upset, "chance": pct(upset)})
+    sure = max(decided, key=chance, default=None)
+    if sure and chance(sure) >= SAFE_BET:
+        out.append({"code": "cantado", "set": sure, "chance": pct(sure)})
+    return out
+
+
 def by_month(sets):
     """[(YYYY-MM, sets played)] in order."""
     counts = Counter(str(s["played_on"])[:7] for s in sets)
