@@ -433,3 +433,16 @@ form.filters select { flex: 1 1 180px; }
 
 /* 📄 Jornada summary card (_jornada_pdf.html): 📲 WhatsApp first, then 📧 email. */
 .pdf-card p.small { font-size: .8rem; margin-top: 0; }
+
+/* Retas / Rey de la cancha / Escalafón (app/formats.py) */
+.team-a-text { color: var(--accent); }
+.team-b-text { color: var(--error); }
+.warning { color: #c47012; font-weight: 600; }
+.pairing-option { align-items: flex-start; margin: 6px 0; }
+.sets-detail { margin: 6px 0 0; text-align: center; color: var(--muted); font-size: .85rem; }
+.ladder td:nth-child(2) { min-width: 9em; }
+.ladder .reto-form { flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
+.sets-grid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 10px 12px; align-items: center; }
+.sets-grid strong { text-align: center; font-size: .9rem; }
+.sets-grid .score-box { width: 100%; max-width: 76px; justify-self: center; }
+.ladder .reto-form select { max-width: 11em; }

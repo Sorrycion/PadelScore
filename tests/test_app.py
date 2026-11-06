@@ -2695,3 +2695,200 @@ def test_health_reports_the_version_and_migrations(client):
     r = client.get("/health")
     assert r.status_code == 200 and r.json()["version"] == "dev"
     assert {"0001_users", "0002_medals"} <= set(r.json()["migrations"])
+
+
+# --- Retas, Rey de la cancha, Escalafón (app/formats.py) -----------------------------------
+
+def fmt_set(court, players, a, b):
+    """A played set as formats.py reads it: ids, games and winner."""
+    return {"court": court, "team_a_games": a, "team_b_games": b, "winner": check_set(a, b),
+            **dict(zip(("a1_id", "a2_id", "b1_id", "b2_id"), players))}
+
+
+def test_retas_winners_move_up_and_losers_down():
+    from app import formats
+    round_sets = [fmt_set(1, (1, 2, 3, 4), 6, 3), fmt_set(2, (5, 6, 7, 8), 2, 6),
+                  fmt_set(3, (9, 10, 11, 12), 6, 4)]
+    new = formats.retas_move(round_sets)
+    assert set(new[1]) == {1, 2, 7, 8}  # court 1 winners stay, court 2 winners come up
+    assert set(new[2]) == {3, 4, 9, 10}  # court 1 losers come down, court 3 winners up
+    assert set(new[3]) == {5, 6, 11, 12}  # court 2 losers down, court 3 losers stay
+    assert set(formats.retas_move([fmt_set(1, (1, 2, 3, 4), 6, 3)])[1]) == {1, 2, 3, 4}
+    with pytest.raises(ValueError):
+        formats.retas_move([fmt_set(1, (1, 2, 3, 4), 5, 5)])
+    assert len(formats.pairings([1, 2, 3, 4])) == 3
+    assert frozenset((1, 2)) in formats.played_pairs(round_sets)
+
+
+def test_rey_de_la_cancha_line_and_ladder_rules():
+    from app import formats
+    pairs = [(1, 2), (3, 4), (5, 6)]
+    king, challenger, line = formats.king_line(pairs, [])
+    assert (king, challenger, line) == (frozenset((1, 2)), frozenset((3, 4)), [frozenset((5, 6))])
+    played = [fmt_set(1, (1, 2, 3, 4), 6, 3), fmt_set(1, (1, 2, 5, 6), 2, 6)]
+    king, challenger, line = formats.king_line(pairs, played)
+    assert king == frozenset((5, 6)) and challenger == frozenset((3, 4)) and line == [frozenset((1, 2))]
+    # Escalafón: 3 places up, 5 when none of those 3 is free; a won challenge swaps.
+    order = [10, 20, 30, 40, 50, 60]
+    assert formats.targets(order, 60) == [30, 40, 50]
+    assert formats.targets(order, 60, busy={30, 40, 50}) == [10, 20]
+    assert formats.targets(order, 10) == [] and formats.targets(order, 60, busy={60}) == []
+    assert formats.ladder(order, [(60, 30, True), (20, 10, False)]) == [10, 20, 60, 40, 50, 30]
+    assert formats.best_of_three([(6, 4), (3, 6), (10, 8)]) == (2, 1)
+    assert formats.best_of_three([(6, 4), (6, 2)]) == (2, 0)
+    for bad in ([(6, 4)], [(6, 4), (6, 4), (6, 1)], [(6, 6), (6, 4)], [(6, 4), (3, 6)]):
+        with pytest.raises(ValueError):
+            formats.best_of_three(bad)
+    assert formats.parse_sets(formats.sets_text([(6, 4), (3, 6)])) == [(6, 4), (3, 6)]
+
+
+def format_tournament(c, rule_type_id, players=range(1, 9), name="Torneo"):
+    c.post("/tournaments", data={"name": name, "held_on": "2026-11-01",
+                                 "rule_type_id": str(rule_type_id),
+                                 "players": [str(p) for p in players]})
+    with db.connect() as conn:
+        return conn.execute("SELECT MAX(id) FROM tournaments").fetchone()[0]
+
+
+def md_sets(matchday_id):
+    with db.connect() as conn:
+        return conn.execute("SELECT * FROM matches WHERE matchday_id = ? ORDER BY round, court, id",
+                            (matchday_id,)).fetchall()
+
+
+def enter_score(c, match_id, a, b):
+    c.post(f"/matches/{match_id}/score", data={"team_a_games": str(a), "team_b_games": str(b)})
+
+
+def test_retas_jornada_in_rounds(league):
+    c = league
+    tid = format_tournament(c, 5)
+    page = c.get(f"/club/tournaments/{tid}/matchdays/new?played_on=2026-11-02").text
+    assert "Round 1: 4 players per court" in page and "Courts available" in page
+    r = c.post(f"/club/tournaments/{tid}/matchdays", data={
+        "played_on": "2026-11-02", "court-1": ["1", "2", "3", "4"], "court-2": ["5", "6", "7", "8"]})
+    md = int(re.search(r"/matchdays/(\d+)", str(r.url)).group(1))
+    first = md_sets(md)
+    assert len(first) == 2 and all(s["round"] == 1 for s in first)
+    assert "Next round" not in r.text and "Once every result of the round is in" in r.text
+    enter_score(c, first[0]["id"], 6, 3)  # 1+2 beat 3+4 on court 1
+    enter_score(c, first[1]["id"], 2, 6)  # 7+8 beat 5+6 on court 2
+    page = c.get(f"/club/matchdays/{md}").text
+    assert "Next round" in page and "The matchday's table" in page and "+3" in page
+    page = c.get(f"/club/matchdays/{md}/next-round").text
+    assert "Round 2" in page and page.count('type="radio"') == 6 and "the app's draw" in page
+    assert "already partners today" in page  # 1+2 together again is one of the options
+    c.post(f"/club/matchdays/{md}/next-round", data={"court-1": "1", "court-2": "1"})
+    second = [s for s in md_sets(md) if s["round"] == 2]
+    court1 = {s["a1"] for s in second if s["court"] == 1} | {s["a2"] for s in second if s["court"] == 1} \
+        | {s["b1"] for s in second if s["court"] == 1} | {s["b2"] for s in second if s["court"] == 1}
+    assert court1 == {1, 2, 7, 8} and len(second) == 2
+    # Points: the games difference of each set (Retas can go below zero).
+    with db.connect() as conn:
+        from app.main import load_results, in_org
+        _, standings = in_org(1, lambda: load_results(conn, tid))
+    points = {r["id"]: r["points"] for r in standings}
+    assert points[1] == 3 and points[3] == -3 and points[7] == 4 and points[5] == -4
+    assert c.get(f"/club/matchdays/{md}/courts", follow_redirects=False).status_code in (303, 307)
+
+
+def test_rey_de_la_cancha_jornada(league):
+    c = league
+    tid = format_tournament(c, 6, players=range(1, 7))
+    page = c.get(f"/club/tournaments/{tid}/matchdays/new?played_on=2026-11-02").text
+    assert "Pair 1" in page and "Draw again" in page
+    bad = c.post(f"/club/tournaments/{tid}/matchdays", data={
+        "played_on": "2026-11-02", "pair-1": ["1", "2"], "pair-2": ["1", "3"]})
+    assert bad.status_code == 400 and "at least 2 complete pairs" in bad.text
+    r = c.post(f"/club/tournaments/{tid}/matchdays", data={
+        "played_on": "2026-11-02", "pair-1": ["1", "2"], "pair-2": ["3", "4"],
+        "pair-3": ["5", "6"], "pair-4": ["", ""]})
+    md = int(re.search(r"/matchdays/(\d+)", str(r.url)).group(1))
+    assert "King of the court" in r.text and "In line" in r.text
+    (m1,) = md_sets(md)
+    assert {m1["a1"], m1["a2"]} == {1, 2} and {m1["b1"], m1["b2"]} == {3, 4}
+    assert "still has results" in c.post(f"/club/matchdays/{md}/next-match").text  # not played yet
+    enter_score(c, m1["id"], 6, 3)  # 1+2 stay as kings, 3+4 to the end of the line
+    c.post(f"/club/matchdays/{md}/next-match")
+    m2 = md_sets(md)[-1]
+    assert m2["round"] == 2 and {m2["a1"], m2["a2"]} == {1, 2} and {m2["b1"], m2["b2"]} == {5, 6}
+    enter_score(c, m2["id"], 4, 6)  # 5+6 win: they stay, 1+2 to the line
+    c.post(f"/club/matchdays/{md}/next-match")
+    m3 = md_sets(md)[-1]
+    assert {m3["a1"], m3["a2"]} == {5, 6} and {m3["b1"], m3["b2"]} == {3, 4}
+    page = c.get(f"/club/matchdays/{md}").text
+    assert "Match 3" in page
+    with db.connect() as conn:
+        from app.main import load_results, in_org
+        _, standings = in_org(1, lambda: load_results(conn, tid))
+    points = {r["id"]: r["points"] for r in standings}
+    assert points[1] == 1 and points[5] == 1 and points[3] == 0  # 1 per set won
+
+
+def test_escalafon_pairs_challenges_and_best_of_three(league):
+    c = league
+    tid = format_tournament(c, 7)
+    page = c.get(f"/club/tournaments/{tid}").text
+    assert "Ladder" in page and "No pairs yet" in page and "Add matchday" not in page
+    for a, b in ((1, 2), (3, 4), (5, 6), (7, 8)):
+        c.post(f"/club/tournaments/{tid}/pairs", data={"player1": str(a), "player2": str(b)})
+    assert "err_pair_invalid" in str(c.post(f"/club/tournaments/{tid}/pairs",
+                                            data={"player1": "1", "player2": "3"}).url)
+    with db.connect() as conn:
+        pair = dict(conn.execute("SELECT player1_id, id FROM ladder_pairs").fetchall())
+    page = c.get(f"/club/tournaments/{tid}").text
+    assert "Draw the positions" in page and page.count("⚔️ Challenge</button>") == 3
+    # Pair #4 (7+8) challenges #1 (1+2): within 3 places.
+    r = c.post(f"/club/tournaments/{tid}/retos", data={"challenger": pair[7], "challenged": pair[1],
+                                                       "played_on": "2026-11-03"})
+    md = int(re.search(r"/matchdays/(\d+)", str(r.url)).group(1))
+    (m,) = md_sets(md)
+    assert {m["a1"], m["a2"]} == {7, 8} and {m["b1"], m["b2"]} == {1, 2}
+    # Busy pairs can't challenge or be challenged again.
+    assert "err_reto_invalid" in str(c.post(f"/club/tournaments/{tid}/retos", data={
+        "challenger": pair[3], "challenged": pair[1]}).url)
+    edit = c.get(f"/club/matches/{m['id']}/edit").text
+    assert "Best of 3 sets" in edit and 'name="a3"' in edit
+    bad = c.post(f"/club/matches/{m['id']}/sets", data={"a1": "6", "b1": "4", "a2": "3", "b2": "6"})
+    assert "err_best_of_three" in str(bad.url)
+    c.post(f"/club/matches/{m['id']}/sets", data={"a1": "6", "b1": "4", "a2": "3", "b2": "6",
+                                                  "a3": "10", "b3": "8"})
+    (m,) = md_sets(md)
+    assert (m["team_a_games"], m["team_b_games"], m["winner"]) == (2, 1, "A")
+    assert m["sets_detail"] == "6-4, 3-6, 10-8" and "6-4, 3-6, 10-8" in c.get(f"/club/matchdays/{md}").text
+    with db.connect() as conn:
+        from app.main import ladder_state, load_results, in_org
+        ladder = in_org(1, lambda: ladder_state(conn, tid))
+        _, standings = in_org(1, lambda: load_results(conn, tid))
+    assert [r["players"] for r in ladder] == [(7, 8), (3, 4), (5, 6), (1, 2)]  # swapped
+    assert ladder[0]["won"] == 1 and ladder[3]["lost"] == 1
+    assert [r["id"] for r in standings][:2] in ([7, 8], [8, 7]) and standings[0]["position"] == 1
+    # No more draws once retos exist; a pair with no reto pending can leave.
+    assert "err_ladder_started" in str(c.post(f"/club/tournaments/{tid}/pairs/draw").url)
+    c.post(f"/club/tournaments/{tid}/pairs/{pair[3]}/leave")
+    with db.connect() as conn:
+        ladder = in_org(1, lambda: ladder_state(conn, tid))
+    assert [r["players"] for r in ladder] == [(7, 8), (5, 6), (1, 2)]
+    assert "Escalafón" in c.get("/rules").text
+
+
+def test_jornada_pdf_has_a_positions_chart(league):
+    from app import report
+    calls = []
+    original = report.lines_chart
+    report.lines_chart = lambda pdf, labels, players, key, **kw: calls.append((key, kw)) or original(
+        pdf, labels, players, key, **kw)
+    try:
+        c = league
+        for md, players in ((1, ("1", "2", "3", "4")),):
+            c.post(f"/club/matchdays/{md}/courts", data={"court-1": list(players)})
+        for s in md_sets(1):
+            enter_score(c, s["id"], 6, 3)
+        add_matchday(1, "2026-10-30")
+        c.post("/club/matchdays/2/courts", data={"court-1": ["1", "2", "3", "4"]})
+        for s in md_sets(2):
+            enter_score(c, s["id"], 2, 6)
+        assert c.get("/club/matchdays/2/summary.pdf").content.startswith(b"%PDF")
+    finally:
+        report.lines_chart = original
+    assert [k for k, _ in calls] == ["values", "positions"] and calls[1][1]["invert"]

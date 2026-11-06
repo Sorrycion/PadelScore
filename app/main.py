@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import os
+import random
 import re
 import threading
 import time
@@ -19,18 +20,21 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import (auth, charts, countries, db, mailer, medals, migrate, orgs, report, rounds,
-               stats, users)
+from . import (auth, charts, countries, db, formats, mailer, medals, migrate, orgs, report,
+               rounds, stats, users)
 from .auth import LoginRequired, require_editor, require_super
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
-from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
-                      court_rotation, is_played, next_courts)
+from .scoring import (DAY_ROUNDS, DRAWN, LADDER, ONE_MATCH, RETAS, REY, ROUND_MODES,
+                      SCORING, ScoreError, check_set, court_moves, court_rotation,
+                      is_played, next_courts)
 
 BASE = Path(__file__).parent
 DOCS = BASE.parent / "docs"
 # The rules page: one section per rule type with written rules (code, file).
 RULES = [("liga_amigos", DOCS / "REGLAMENTO.md"), ("americano", DOCS / "AMERICANO.md"),
-         ("mexicano", DOCS / "MEXICANO.md"), ("manual", DOCS / "MANUAL.md")]
+         ("mexicano", DOCS / "MEXICANO.md"), ("manual", DOCS / "MANUAL.md"),
+         ("retas", DOCS / "RETAS.md"), ("rey_cancha", DOCS / "REY_CANCHA.md"),
+         ("escalafon", DOCS / "ESCALAFON.md")]
 
 
 @asynccontextmanager
@@ -157,10 +161,12 @@ templates.env.filters["pick_player"] = lambda p: {"id": p["id"], "name": p["name
 templates.env.filters["phone"] = lambda u: countries.phone_display(u["phone_country"], u["phone"])
 templates.env.filters["phone_link"] = lambda u: countries.phone_link(u["phone_country"], u["phone"])
 templates.env.globals.update(
-    ROUND_MODES=ROUND_MODES, MANUAL=MANUAL,
+    ROUND_MODES=ROUND_MODES, MANUAL=MANUAL, RETAS=RETAS, REY=REY, LADDER=LADDER,
+    DAY_ROUNDS=DAY_ROUNDS, DRAWN=DRAWN,
     ROLE_KEYS={"super": "role_super", "org_admin": "role_org_admin", "player": "role_player"},
     TIER_KEYS={1: "tier_bronze", 2: "tier_silver", 3: "tier_gold"},
-    RULE_ICONS={"liga_amigos": "🏅", "americano": "🇺🇸", "mexicano": "🇲🇽", "manual": "✍️"},
+    RULE_ICONS={"liga_amigos": "🏅", "americano": "🇺🇸", "mexicano": "🇲🇽", "manual": "✍️",
+                "retas": "🔄", "rey_cancha": "👑", "escalafon": "🪜"},
     COUNTRIES=countries.COUNTRIES, DEFAULT_COUNTRY=countries.DEFAULT,
     EMAIL_KIND_KEYS={"recap": "email_kind_recap", "reminder": "email_kind_reminder",
                      "test-recap": "email_kind_test_recap",
@@ -356,7 +362,7 @@ def set_rows(conn, tournament_id=None, matchday_id=None, player_id=None, limit=N
     sql = """
         SELECT m.id, m.matchday_id, d.number AS matchday, d.played_on,
                d.tournament_id, t.name AS tournament, r.code AS rule_code, m.court,
-               m.team_a_games, m.team_b_games, m.winner,
+               m.team_a_games, m.team_b_games, m.winner, m.round, m.sets_detail,
                m.a1 AS a1_id, pa1.name AS a1, m.a2 AS a2_id, pa2.name AS a2,
                m.b1 AS b1_id, pb1.name AS b1, m.b2 AS b2_id, pb2.name AS b2
         FROM matches m
@@ -400,12 +406,333 @@ def load_results(conn, tournament_id):
             "SELECT a.* FROM absences a JOIN matchdays d ON d.id = a.matchday_id "
             "WHERE d.tournament_id = ?", (tournament_id,)):
         absent.setdefault(a["matchday_id"], set()).add(a["player_id"])
-    score = SCORING[get_tournament(conn, tournament_id)["rule_code"]]
-    return score([
+    code = get_tournament(conn, tournament_id)["rule_code"]
+    results, standings = SCORING[code]([
         {"id": d["id"], "number": d["number"], "played_on": d["played_on"],
          "sets": sets.get(d["id"], []), "absent": absent.get(d["id"], set())}
         for d in matchdays
     ])
+    if code == LADDER:  # the ladder's positions, not the points, order an Escalafón
+        place = {p: row["position"] for row in ladder_state(conn, tournament_id)
+                 for p in row["players"]}
+        last = len(place) + 1
+        standings = sorted(standings, key=lambda r: (place.get(r["id"], last), r["name"].lower()))
+        for r in standings:
+            r["position"] = place.get(r["id"], last)
+    return results, standings
+
+
+# --- Escalafón: the ladder ------------------------------------------------------------------
+
+def ladder_state(conn, tournament_id):
+    """An Escalafón's active pairs, top first: id, position, players (ids), name,
+    matches won and lost, the pending reto it is in (matchday id) and the pairs it may
+    challenge (formats.targets). Each reto is a matchday whose set has the challenger
+    as pair A and the challenged as pair B."""
+    pairs = conn.execute(
+        "SELECT lp.*, p1.name AS name1, p2.name AS name2 FROM ladder_pairs lp "
+        "JOIN players p1 ON p1.id = lp.player1_id JOIN players p2 ON p2.id = lp.player2_id "
+        "WHERE lp.tournament_id = ? ORDER BY lp.seed, lp.id", (tournament_id,)).fetchall()
+    by_players = {frozenset((p["player1_id"], p["player2_id"])): p["id"] for p in pairs}
+    retos, busy = [], {}
+    record = {p["id"]: [0, 0] for p in pairs}
+    for s in reversed(set_rows(conn, tournament_id=tournament_id)):  # oldest first
+        challenger = by_players.get(formats.pair(s, "A"))
+        challenged = by_players.get(formats.pair(s, "B"))
+        if challenger is None or challenged is None:
+            continue
+        if not is_played(s):
+            busy[challenger] = busy[challenged] = s["matchday_id"]
+            continue
+        retos.append((challenger, challenged, s["winner"] == "A"))
+        won, lost = (challenger, challenged) if s["winner"] == "A" else (challenged, challenger)
+        record[won][0] += 1
+        record[lost][1] += 1
+    order = formats.ladder([p["id"] for p in pairs if p["active"]], retos)
+    info = {p["id"]: p for p in pairs}
+    return [{"id": pid, "position": n,
+             "players": (info[pid]["player1_id"], info[pid]["player2_id"]),
+             "name": f"{info[pid]['name1']} / {info[pid]['name2']}",
+             "won": record[pid][0], "lost": record[pid][1], "busy": busy.get(pid),
+             "targets": formats.targets(order, pid, busy)}
+            for n, pid in enumerate(order, 1)]
+
+
+def my_player_id(request, conn):
+    """The logged-in account's player in this organization, or None."""
+    user = auth.current_user(request)
+    row = user and conn.execute("SELECT id FROM players WHERE user_id = ? AND "
+                                "organization_id = ?", (user["id"], org_id())).fetchone()
+    return row["id"] if row else None
+
+
+def ladder_tournament(conn, tournament_id):
+    tournament = get_tournament(conn, tournament_id)
+    if tournament["rule_code"] != LADDER:
+        raise HTTPException(404, "Not an Escalafón")
+    return tournament
+
+
+@app.post("/tournaments/{tournament_id}/pairs", dependencies=EDIT)
+def add_ladder_pair(tournament_id: int, player1: str = Form(""), player2: str = Form("")):
+    """Add a pair to the Escalafón, last on the ladder. Its players join the tournament."""
+    ids = [opt_int(player1), opt_int(player2)]
+    with db.connect() as conn:
+        ladder_tournament(conn, tournament_id)
+        known = {p["id"] for p in all_players(conn)}
+        taken = {p for row in ladder_state(conn, tournament_id) for p in row["players"]}
+        if None in ids or ids[0] == ids[1] or not set(ids) <= known or set(ids) & taken:
+            return redirect(f"/tournaments/{tournament_id}?error=err_pair_invalid#ladder")
+        seed = conn.execute("SELECT COALESCE(MAX(seed), 0) + 1 FROM ladder_pairs "
+                            "WHERE tournament_id = ?", (tournament_id,)).fetchone()[0]
+        conn.execute("INSERT INTO ladder_pairs (tournament_id, player1_id, player2_id, seed) "
+                     "VALUES (?, ?, ?, ?)", (tournament_id, *ids, seed))
+        conn.executemany("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
+                         "VALUES (?, ?)", [(tournament_id, p) for p in ids])
+    return redirect(f"/tournaments/{tournament_id}#ladder")
+
+
+@app.post("/tournaments/{tournament_id}/pairs/draw", dependencies=EDIT)
+def draw_ladder(tournament_id: int):
+    """The starting draw: the pairs' positions at random. Only before the first reto."""
+    with db.connect() as conn:
+        ladder_tournament(conn, tournament_id)
+        if set_rows(conn, tournament_id=tournament_id, limit=1):
+            return redirect(f"/tournaments/{tournament_id}?error=err_ladder_started#ladder")
+        ids = [r[0] for r in conn.execute("SELECT id FROM ladder_pairs WHERE tournament_id = ?",
+                                          (tournament_id,))]
+        random.shuffle(ids)
+        for n, pid in enumerate(ids, 1):
+            conn.execute("UPDATE ladder_pairs SET seed = ? WHERE id = ?", (n, pid))
+    return redirect(f"/tournaments/{tournament_id}#ladder")
+
+
+@app.post("/tournaments/{tournament_id}/pairs/{pair_id}/leave", dependencies=EDIT)
+def leave_ladder(tournament_id: int, pair_id: int):
+    """A pair leaves the Escalafón: the pairs below it move up a place. Its played retos
+    stay; it can't leave with a reto still to play."""
+    with db.connect() as conn:
+        ladder_tournament(conn, tournament_id)
+        row = next((r for r in ladder_state(conn, tournament_id) if r["id"] == pair_id), None)
+        if row is None:
+            raise HTTPException(404, "Pair not found")
+        if row["busy"]:
+            return redirect(f"/tournaments/{tournament_id}?error=err_pair_busy#ladder")
+        conn.execute("UPDATE ladder_pairs SET active = 0 WHERE id = ?", (pair_id,))
+    return redirect(f"/tournaments/{tournament_id}#ladder")
+
+
+@app.post("/tournaments/{tournament_id}/retos")
+def create_reto(request: Request, tournament_id: int, challenger: int = Form(...),
+                challenged: int = Form(...), played_on: str = Form("")):
+    """⚔️ A pair challenges a pair above it (formats.targets): the reto is a new jornada
+    with one match, pending. Admins, or a player of the challenging pair."""
+    with db.connect() as conn:
+        ladder_tournament(conn, tournament_id)
+        rows = {r["id"]: r for r in ladder_state(conn, tournament_id)}
+        mine = rows.get(challenger)
+        if not auth.is_editor(request) and (
+                mine is None or my_player_id(request, conn) not in mine["players"]):
+            raise LoginRequired(f"/tournaments/{tournament_id}")
+        if mine is None or challenged not in mine["targets"]:
+            return redirect(f"/tournaments/{tournament_id}?error=err_reto_invalid#ladder")
+        day = parse_date(played_on) or league_today().isoformat()
+        matchday_id = conn.execute(
+            "INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
+            (tournament_id, next_number(conn, tournament_id), day)).lastrowid
+        (a1, a2), (b1, b2) = mine["players"], rows[challenged]["players"]
+        conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, round) "
+                     "VALUES (?, 1, ?, ?, ?, ?, 1)", (matchday_id, a1, a2, b1, b2))
+    return redirect(f"/matchdays/{matchday_id}")
+
+
+@app.post("/matches/{match_id}/sets")
+def save_sets(request: Request, match_id: int, a1: str = Form(""), b1: str = Form(""),
+              a2: str = Form(""), b2: str = Form(""), a3: str = Form(""), b3: str = Form("")):
+    """An Escalafón match's result, best of 3 sets (formats.best_of_three): editors and
+    the tournament's players. All empty clears it."""
+    with db.connect() as conn:
+        match = get_or_404(conn, "matches", match_id)
+        auth.require_scorer(request, tournament_of(conn, match["matchday_id"]))
+        edit = f"/matches/{match_id}/edit"
+        try:
+            games = [(opt_games(a), opt_games(b)) for a, b in ((a1, b1), (a2, b2), (a3, b3))]
+        except ValueError:
+            return redirect(f"{edit}?error=err_best_of_three")
+        if any((a is None) != (b is None) for a, b in games):
+            return redirect(f"{edit}?error=err_best_of_three")
+        played = [(a, b) for a, b in games if a is not None]
+        if not played:
+            conn.execute("UPDATE matches SET team_a_games = NULL, team_b_games = NULL, "
+                         "winner = NULL, sets_detail = NULL WHERE id = ?", (match_id,))
+            return redirect(f"/matchdays/{match['matchday_id']}")
+        try:
+            won_a, won_b = formats.best_of_three(played)
+        except ValueError:
+            return redirect(f"{edit}?error=err_best_of_three")
+        conn.execute("UPDATE matches SET team_a_games = ?, team_b_games = ?, winner = ?, "
+                     "sets_detail = ? WHERE id = ?",
+                     (won_a, won_b, "A" if won_a > won_b else "B", formats.sets_text(played),
+                      match_id))
+    return redirect(f"/matchdays/{match['matchday_id']}#set-{match_id}")
+
+
+# --- Retas and Rey de la cancha: the rounds of a jornada -------------------------------------
+
+def by_round(sets):
+    """{round: its sets, by court} of a jornada, rounds in order (round 1 when unset)."""
+    out = {}
+    for s in sorted(sets, key=lambda s: (s["round"] or 1, s["court"], s["id"])):
+        out.setdefault(s["round"] or 1, []).append(s)
+    return dict(sorted(out.items()))
+
+
+def day_table(md):
+    """Everyone's jornada (Retas, Rey): points, games difference, sets won and played,
+    best first; a player on several courts adds them up."""
+    rows = {}
+    for court_rows in md["courts"].values():
+        for r in court_rows:
+            t = rows.setdefault(r["id"], {"id": r["id"], "name": r["name"], "points": 0,
+                                          "diff": 0, "sets_won": 0, "sets": 0})
+            for k in ("points", "diff", "sets_won", "sets"):
+                t[k] += r[k]
+    return sorted(rows.values(), key=lambda r: (-r["points"], -r["diff"], r["name"].lower()))
+
+
+def names_of(conn):
+    return {p["id"]: p["name"] for p in all_players(conn)}
+
+
+def retas_next(conn, matchday_id):
+    """(round number, {court: [4 ids]}) of the next Retas round, or (None, error key)."""
+    rounds_ = by_round(set_rows(conn, matchday_id=matchday_id))
+    if not rounds_:
+        return None, "err_round_pending"
+    last = max(rounds_)
+    if not all(is_played(s) for s in rounds_[last]):
+        return None, "err_round_pending"
+    try:
+        return last + 1, formats.retas_move(rounds_[last])
+    except ValueError as tie:
+        return None, ("err_retas_tie", tie.args[0])
+
+
+def retas_options(conn, matchday_id, number, courts):
+    """Each court of the next round with its 3 possible pairings: names, whether a pair
+    already played together this jornada (a warning, still allowed) and the app's draw."""
+    names, used = names_of(conn), formats.played_pairs(set_rows(conn, matchday_id=matchday_id))
+    out = []
+    for court, four in sorted(courts.items()):
+        options = []
+        for i, (a, b) in enumerate(formats.pairings(four)):
+            options.append({"index": i, "a": " / ".join(names[p] for p in a),
+                            "b": " / ".join(names[p] for p in b),
+                            "repeat": frozenset(a) in used or frozenset(b) in used})
+        out.append({"court": court, "players": [names[p] for p in four], "options": options,
+                    "drawn": formats.draw_pairing(four, matchday_id * 1000 + number * 10 + court)})
+    return out
+
+
+@app.get("/matchdays/{matchday_id}/next-round", response_class=HTMLResponse)
+def next_round_page(request: Request, matchday_id: int):
+    """🔄 Retas: the next round. Winners moved up and losers down; on each court the
+    pairs are the app's draw or what the players chose on court."""
+    with db.connect() as conn:
+        tournament = tournament_of(conn, matchday_id)
+        auth.require_scorer(request, tournament)
+        number, courts = retas_next(conn, matchday_id)
+        if number is None:
+            key, *n = courts if isinstance(courts, tuple) else (courts,)
+            return redirect(f"/matchdays/{matchday_id}?error={key}" + (f"&n={n[0]}" if n else ""))
+        return templates.TemplateResponse(request, "next_round.html", {
+            "tournament": tournament, "matchday": get_or_404(conn, "matchdays", matchday_id),
+            "number": number, "courts": retas_options(conn, matchday_id, number, courts)})
+
+
+@app.post("/matchdays/{matchday_id}/next-round")
+async def save_next_round(request: Request, matchday_id: int):
+    form = await request.form()
+    with db.connect() as conn:
+        tournament = tournament_of(conn, matchday_id)
+        auth.require_scorer(request, tournament)
+        number, courts = retas_next(conn, matchday_id)
+        if number is None:
+            return redirect(f"/matchdays/{matchday_id}")
+        for court, four in sorted(courts.items()):
+            choice = opt_int(form.get(f"court-{court}", ""))
+            if choice not in (0, 1, 2):
+                choice = formats.draw_pairing(four, matchday_id * 1000 + number * 10 + court)
+            (a1, a2), (b1, b2) = formats.pairings(four)[choice]
+            conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, round) "
+                         "VALUES (?, ?, ?, ?, ?, ?, ?)", (matchday_id, court, a1, a2, b1, b2,
+                                                          number))
+    return redirect(f"/matchdays/{matchday_id}#round-{number}")
+
+
+def rey_pairs(conn, matchday_id):
+    return [(r["player1_id"], r["player2_id"]) for r in conn.execute(
+        "SELECT * FROM queue_pairs WHERE matchday_id = ? ORDER BY slot", (matchday_id,))]
+
+
+def rey_state(conn, matchday_id, sets=None):
+    """👑 Rey de la cancha now: names of the king, the challenger and the line, and
+    whether the next match can start (every match so far played)."""
+    sets = sets if sets is not None else set_rows(conn, matchday_id=matchday_id)
+    played = [s for rnd in by_round(sets).values() for s in rnd if is_played(s)]
+    king, challenger, line = formats.king_line(rey_pairs(conn, matchday_id), played)
+    names = names_of(conn)
+    label = lambda p: p and " / ".join(names[i] for i in sorted(p))  # noqa: E731
+    return {"king": label(king), "challenger": label(challenger),
+            "line": [label(p) for p in line], "pairs": (king, challenger),
+            "can_next": bool(sets) and all(is_played(s) for s in sets) and challenger}
+
+
+@app.post("/matchdays/{matchday_id}/next-match")
+def next_match(request: Request, matchday_id: int):
+    """▶️ Rey de la cancha: the next match, the king against the next pair in line."""
+    with db.connect() as conn:
+        auth.require_scorer(request, tournament_of(conn, matchday_id))
+        sets = set_rows(conn, matchday_id=matchday_id)
+        state = rey_state(conn, matchday_id, sets)
+        if not state["can_next"]:
+            return redirect(f"/matchdays/{matchday_id}?error=err_round_pending")
+        (a1, a2), (b1, b2) = (sorted(p) for p in state["pairs"])
+        number = max((s["round"] or 1 for s in sets), default=0) + 1
+        conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, round) "
+                     "VALUES (?, 1, ?, ?, ?, ?, ?)", (matchday_id, a1, a2, b1, b2, number))
+    return redirect(f"/matchdays/{matchday_id}#round-{number}")
+
+
+def read_pairs(form):
+    """[(id, id), ...] from the pair-<n> selects of the Rey de la cancha form, in order;
+    rows left empty are skipped. Raises ValueError for a half-filled row."""
+    numbered = sorted((int(k[5:]), form.getlist(k)) for k in form
+                      if k.startswith("pair-") and k[5:].isdigit())
+    pairs = []
+    for _n, values in numbered:
+        ids = [opt_int(v) for v in values]
+        if not any(ids):
+            continue
+        if len(ids) != 2 or None in ids or ids[0] == ids[1]:
+            raise ValueError
+        pairs.append(tuple(ids))
+    return pairs
+
+
+def render_pairs(request, conn, tournament, pairs, played_on, number, error=None, status_code=200):
+    return templates.TemplateResponse(request, "pairs.html", {
+        "tournament": tournament, "pairs": pairs + [(None, None)] * 2, "played_on": played_on,
+        "number": number, "players": players_for(conn, tournament["id"]), "error": error,
+        "redraw": f"?played_on={played_on}&seed={random.randrange(10 ** 6)}"},
+        status_code=status_code)
+
+
+def draw_pairs(players, seed):
+    """Pairs at random for a Rey de la cancha jornada (an odd player out is left over)."""
+    ids = [p["id"] for p in players]
+    random.Random(seed).shuffle(ids)
+    return [tuple(ids[i:i + 2]) for i in range(0, len(ids) - 1, 2)]
 
 
 # --- Pages -------------------------------------------------------------------
@@ -1253,6 +1580,10 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
             "today": league_today().isoformat(),
             "error": error,
             **summary_card(request, conn, last_played(results)),
+            "ladder": ladder_state(conn, tournament_id) if tournament["rule_code"] == LADDER
+                      else None,
+            "my_player_id": my_player_id(request, conn),
+            "ladder_started": bool(set_rows(conn, tournament_id=tournament_id, limit=1)),
         })
 
 
@@ -1390,6 +1721,9 @@ def replace_tournament_player(tournament_id: int, old_id: int = Form(0),
                      (tournament_id, old_id))
         conn.execute("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
                      "VALUES (?, ?)", (tournament_id, new_id))
+        for col in ("player1_id", "player2_id"):  # an Escalafón pair keeps its place
+            conn.execute(f"UPDATE ladder_pairs SET {col} = ? WHERE {col} = ? AND "
+                         "tournament_id = ? AND active = 1", (new_id, old_id, tournament_id))
     return redirect(done)
 
 
@@ -1432,7 +1766,7 @@ def delete_tournament(tournament_id: int):
 
 @app.get("/matchdays/{matchday_id}", response_class=HTMLResponse)
 def matchday_page(request: Request, matchday_id: int, move: int = 1,
-                  error: str | None = None, summary: str | None = None):
+                  error: str | None = None, summary: str | None = None, n: str = ""):
     move = 2 if move == 2 else 1
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
@@ -1443,11 +1777,18 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
         playing = {s[k + "_id"] for s in sets for k in ("a1", "a2", "b1", "b2")}
         resting = [p["name"] for p in tournament_players(conn, tournament["id"])
                    if p["id"] not in playing] if sets else []
+        code = tournament["rule_code"]
         return templates.TemplateResponse(request, "matchday.html", {
             "tournament": tournament,
             "matchday": result,
             "results": results,
             "sets": sets,
+            # Retas / Rey de la cancha: the jornada by rounds, its table, what comes next.
+            "rounds": by_round(sets) if code in DAY_ROUNDS else {},
+            "day_table": day_table(result) if code in DAY_ROUNDS else [],
+            "rey": rey_state(conn, matchday_id, sets) if code == REY else None,
+            "next_round_ready": code == RETAS and bool(sets) and all(is_played(s) for s in sets),
+            "error_n": n,
             "resting": resting,
             "moves": court_moves(result["courts"], move),
             "move": move,
@@ -1566,7 +1907,7 @@ def check_courts(conn, courts, _):
 def court_sets(players, code):
     """A court's sets: in the Liga three, every player partnering each of the others
     once; in an Americano / Mexicano round one match, the first two against the last two."""
-    if code in ROUND_MODES:
+    if code in ONE_MATCH:
         return [(tuple(players[:2]), tuple(players[2:]))]
     return court_rotation(players)
 
@@ -1576,7 +1917,7 @@ def same_court(old, new, code):
     Americano / Mexicano round)."""
     if old is None:
         return False
-    if code in ROUND_MODES:
+    if code in ONE_MATCH:
         return {frozenset(old[:2]), frozenset(old[2:])} == {frozenset(new[:2]), frozenset(new[2:])}
     return set(old) == set(new)
 
@@ -1587,8 +1928,9 @@ def add_court_sets(conn, matchday_id, court, players, code):
     player whose place on the list someone else took while they were absent."""
     for (a1, a2), (b1, b2) in court_sets(players, code):
         conn.execute(
-            "INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
-            "VALUES (?, ?, ?, ?, ?, ?)", (matchday_id, court, a1, a2, b1, b2))
+            "INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, round) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (matchday_id, court, a1, a2, b1, b2, 1 if code == RETAS else None))
     tournament_id = conn.execute("SELECT tournament_id FROM matchdays WHERE id = ?",
                                  (matchday_id,)).fetchone()[0]
     if conn.execute("SELECT 1 FROM tournament_players WHERE tournament_id = ?",
@@ -1605,6 +1947,8 @@ def draw_round(conn, tournament, number, courts=None, rest=()):
     history = [[ids for _, ids in sorted(courts_of(md["sets"])[0].items()) if ids]
                for md in results if md["number"] < number and md["sets"]]
     seed = tournament["id"] * 1000 + number  # the same suggestion on every reload
+    if tournament["rule_code"] == RETAS:
+        return formats.draw_courts(players, seed, courts, rest)
     if tournament["rule_code"] == "americano":
         return rounds.americano_round(players, history, seed, courts, rest)
     return rounds.mexicano_round(players, history, [r["id"] for r in standings], seed,
@@ -1657,7 +2001,7 @@ def render_courts(request, conn, tournament, courts, *, matchday=None, number=No
          dependencies=EDIT)
 def new_matchday_page(request: Request, tournament_id: int, played_on: str = "",
                       move: str | None = None, courts: str | None = None,
-                      rest: list[int] = Query([])):
+                      rest: list[int] = Query([]), seed: str | None = None):
     """Draft of the next matchday: choose how many players change court, then review
     the courts. Nothing is saved here."""
     with db.connect() as conn:
@@ -1669,7 +2013,13 @@ def new_matchday_page(request: Request, tournament_id: int, played_on: str = "",
         if tournament["rule_code"] == MANUAL:  # only the date: sets are added by hand
             return render_courts(request, conn, tournament, [], number=number,
                                  played_on=played_on, move=1)
-        if tournament["rule_code"] in ROUND_MODES:
+        if tournament["rule_code"] == LADDER:  # retos come from the ladder
+            return redirect(f"/tournaments/{tournament_id}#ladder")
+        if tournament["rule_code"] == REY:  # the line of pairs
+            pairs = draw_pairs(players_for(conn, tournament_id),
+                               opt_int(seed) or tournament_id * 1000 + number)
+            return render_pairs(request, conn, tournament, pairs, played_on, number)
+        if tournament["rule_code"] in DRAWN:
             drawn, resting = draw_round(conn, tournament, number, opt_int(courts), rest)
             return render_courts(request, conn, tournament, drawn, number=number,
                                  played_on=played_on, move=1, resting=resting, asked=rest)
@@ -1690,6 +2040,10 @@ async def add_matchday(request: Request, tournament_id: int):
         tournament = get_tournament(conn, tournament_id)
         played_on = parse_date(form.get("played_on", ""))
         number = next_number(conn, tournament_id)
+        if tournament["rule_code"] == LADDER:
+            return redirect(f"/tournaments/{tournament_id}#ladder")
+        if tournament["rule_code"] == REY:
+            return add_rey_matchday(request, conn, tournament, form, played_on, number, _)
         manual = tournament["rule_code"] == MANUAL
         chosen, error = ([], None) if manual else check_courts(conn, courts, _)
         if played_on is None:
@@ -1698,7 +2052,7 @@ async def add_matchday(request: Request, tournament_id: int):
             return render_courts(
                 request, conn, tournament, courts, number=number,
                 played_on=form.get("played_on", ""), move=opt_int(form.get("move")),
-                previous=None if tournament["rule_code"] in ROUND_MODES
+                previous=None if tournament["rule_code"] in DRAWN
                 else previous_matchday(conn, tournament_id, number),
                 error=error, status_code=400)
         matchday_id = conn.execute(
@@ -1707,6 +2061,33 @@ async def add_matchday(request: Request, tournament_id: int):
         ).lastrowid
         for n, ids in enumerate(chosen, 1):
             add_court_sets(conn, matchday_id, n, ids, tournament["rule_code"])
+    return redirect(f"/matchdays/{matchday_id}")
+
+
+def add_rey_matchday(request, conn, tournament, form, played_on, number, _):
+    """Save a Rey de la cancha jornada: its line of pairs and the first match (the first
+    two pairs). Every player once; at least two pairs."""
+    try:
+        pairs = read_pairs(form)
+    except ValueError:
+        pairs = None
+    known = {p["id"] for p in all_players(conn)}
+    flat = [p for pair_ in pairs or [] for p in pair_]
+    if not pairs or len(pairs) < 2 or len(set(flat)) != len(flat) or not set(flat) <= known \
+            or played_on is None:
+        return render_pairs(request, conn, tournament, pairs or [], form.get("played_on", ""),
+                            number, error=_("err_invalid_date") if played_on is None
+                            else _("err_rey_pairs"), status_code=400)
+    matchday_id = conn.execute(
+        "INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
+        (tournament["id"], number, played_on)).lastrowid
+    conn.executemany("INSERT INTO queue_pairs (matchday_id, slot, player1_id, player2_id) "
+                     "VALUES (?, ?, ?, ?)", [(matchday_id, n, *p) for n, p in enumerate(pairs, 1)])
+    (a1, a2), (b1, b2) = pairs[0], pairs[1]
+    conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, round) "
+                 "VALUES (?, 1, ?, ?, ?, ?, 1)", (matchday_id, a1, a2, b1, b2))
+    conn.executemany("INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) "
+                     "VALUES (?, ?)", [(tournament["id"], p) for p in flat])
     return redirect(f"/matchdays/{matchday_id}")
 
 
@@ -1729,11 +2110,15 @@ def courts_page(request: Request, matchday_id: int, move: str | None = None,
         tournament = get_tournament(conn, matchday["tournament_id"])
         if tournament["rule_code"] == MANUAL:  # no courts to assign: add sets by hand
             return redirect(f"/matches/new?matchday={matchday_id}")
-        players, _ = courts_of(set_rows(conn, matchday_id=matchday_id))
+        md_sets = set_rows(conn, matchday_id=matchday_id)
+        if tournament["rule_code"] in (REY, LADDER) or any((s["round"] or 1) > 1 for s in md_sets):
+            # the line, a reto, or rounds after the first: change players set by set
+            return redirect(f"/matchdays/{matchday_id}")
+        players, _ = courts_of(md_sets)
         if players:
             assigned = [ids or [None] * 4 for _, ids in sorted(players.items())]
             return render_courts(request, conn, tournament, assigned, matchday=matchday)
-        if tournament["rule_code"] in ROUND_MODES:
+        if tournament["rule_code"] in DRAWN:
             drawn, resting = draw_round(conn, tournament, matchday["number"],
                                         opt_int(courts), rest)
             return render_courts(request, conn, tournament, drawn, matchday=matchday,
@@ -2308,6 +2693,9 @@ def jornada_summary(conn, matchday_id, lang):
     n, round_mode = md["number"], tournament["rule_code"] in ROUND_MODES
     label_key = "round_n" if round_mode else "matchday_n"
     after, before = ranking_upto(standings, n), ranking_upto(standings, n - 1)
+    if tournament["rule_code"] == LADDER:  # the ladder, not the points, gives positions
+        after = {r["id"]: r["position"] for r in standings}
+        before = {}
     won = tournament_medals(conn, tournament["id"], standings, lang)
     names = {m["code"]: m["name"] for m in medal_types(conn, lang)}
     ranking = sorted((
@@ -2331,6 +2719,7 @@ def jornada_summary(conn, matchday_id, lang):
         highlights.append({**hl, "name": str(_(name)), "how": str(_(
             how, n=hl["chance"], games=a + b, gap=abs(a - b)))})
     numbers = [d["number"] for d in results if d["number"] <= n]
+    ranks = {k: ranking_upto(standings, k) for k in numbers}
     evolution = []
     for r in ranking:
         days = next(row for row in standings if row["id"] == r["id"])["by_matchday"]
@@ -2338,7 +2727,9 @@ def jornada_summary(conn, matchday_id, lang):
         for k in numbers:
             total += days.get(k, 0)
             values.append(total)
-        evolution.append({"name": r["name"], "position": r["position"], "values": values})
+        evolution.append({"name": r["name"], "position": r["position"], "values": values,
+                          # the position after each jornada (None before their first)
+                          "positions": [ranks[k].get(r["id"]) for k in numbers]})
     upcoming = next((d for d in results if d["number"] == n + 1), None)
     upcoming_sets = set_rows(conn, matchday_id=upcoming["id"]) if upcoming else []
     org = conn.execute("SELECT * FROM organizations WHERE id = ?", (org_id(),)).fetchone()
@@ -2936,6 +3327,15 @@ def edit_match_page(request: Request, match_id: int, error: str | None = None):
     whole set; the other players of its tournament, just its games."""
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
+        tournament = tournament_of(conn, match["matchday_id"])
+        if tournament["rule_code"] == LADDER:  # a match to 2 of 3 sets
+            if not auth.can_score(request, tournament):
+                raise LoginRequired(here(request))
+            row = next(s for s in set_rows(conn, matchday_id=match["matchday_id"])
+                       if s["id"] == match_id)
+            sets = formats.parse_sets(row["sets_detail"]) + [(None, None)] * 3
+            return templates.TemplateResponse(request, "match_sets.html", {
+                "m": row, "tournament": tournament, "sets": sets[:3], "error": error})
         if auth.is_editor(request) or match["matchday_id"] in {
                 d["id"] for d in set_matchdays(request, conn)}:
             return render_match_form(request, conn, {c: match[c] for c in MATCH_COLUMNS},

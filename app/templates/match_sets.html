@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ _("enter_result") }} · PadelScore{% endblock %}
+{% block content %}
+{# 🪜 Escalafón: a reto's result, best of 3 sets (main.save_sets): the games of each set;
+   the third only at 1-1, and it may be a super tie-break (to 10). #}
+<p class="eyebrow"><a class="plain" href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · <a class="plain" href="/matchdays/{{ m.matchday_id }}">{{ _("matchday_n", n=m.matchday) }}</a> · 📅 {{ m.played_on }}</p>
+<h1>✏️ {{ _("enter_result") }}</h1>
+<p class="muted">{{ _("best_of_three_hint") }}</p>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+<form method="post" action="/matches/{{ m.id }}/sets" class="card stack sets-form">
+  <div class="sets-grid">
+    <span></span>
+    <strong class="team-a-text">{{ m.a1 }} / {{ m.a2 }}</strong>
+    <strong class="team-b-text">{{ m.b1 }} / {{ m.b2 }}</strong>
+    {% for a, b in sets %}
+    <span>{{ _("set_n", n=loop.index) }}{% if loop.last %} <span class="muted">({{ _("super_tiebreak") }})</span>{% endif %}</span>
+    <input class="score-box" type="number" name="a{{ loop.index }}" min="0" inputmode="numeric" value="{{ a if a is not none else '' }}" aria-label="{{ _('set_n', n=loop.index) }} · {{ _('team_a') }}">
+    <input class="score-box" type="number" name="b{{ loop.index }}" min="0" inputmode="numeric" value="{{ b if b is not none else '' }}" aria-label="{{ _('set_n', n=loop.index) }} · {{ _('team_b') }}">
+    {% endfor %}
+  </div>
+  <p class="inline">
+    <button type="submit">{{ _("save") }}</button>
+    <a class="button secondary" href="/matchdays/{{ m.matchday_id }}#set-{{ m.id }}">{{ _("cancel") }}</a>
+  </p>
+</form>
+{% endblock %}

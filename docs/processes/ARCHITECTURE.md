@@ -26,6 +26,7 @@ flowchart TD
     I18N[i18n.py<br/>es / en texts] --> web
     MAIL[mailer.py<br/>Azure email REST — stdlib] --> web
     REPORT[report.py<br/>📄 jornada summary PDF — fpdf2] --> web
+    FORMATS[formats.py<br/>Retas, Rey de la cancha, Escalafón rules] --> web
     STATS --> REPORT
     SQL[(sql/predeployment/*.sql)] --> MIG
 ```
@@ -134,6 +135,8 @@ erDiagram
     matchdays ||--o{ absences : marks
     medal_types }o--o{ players : "awarded live (medals.py)"
     matchdays ||--o| summary_requests : "📄 emailed on request"
+    tournaments ||--o{ ladder_pairs : "🪜 Escalafón pairs"
+    matchdays ||--o{ queue_pairs : "👑 Rey de la cancha line"
     schema_migrations }o--|| organizations : "(records applied SQL files)"
 ```
 

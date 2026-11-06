@@ -837,6 +837,125 @@ TEXT = {
                            "en": "Each player's total points, matchday by matchday. Each one has "
                                  "their own color, line style and point shape: see the legend."},
     "pdf_next": {"es": "Próxima", "en": "Next"},
+    "pdf_positions": {"es": "Así van las posiciones, jornada a jornada",
+                      "en": "The positions, matchday by matchday"},
+    "pdf_positions_note": {"es": "La posición de cada jugador después de cada jornada (el 1.º "
+                                 "arriba). Mismos colores, líneas y puntos que la gráfica de "
+                                 "puntos.",
+                           "en": "Each player's position after each matchday (1st at the "
+                                 "top). Same colors, lines and points as the points chart."},
+    # 🔄 Retas, 👑 Rey de la cancha, 🪜 Escalafón (app/formats.py)
+    "retas_note": {"es": "Retas: cada ronda, cada cancha juega un set; los ganadores suben de "
+                         "cancha y los perdedores bajan. Cada jugador suma la diferencia de "
+                         "juegos de cada set (puede ser negativa).",
+                   "en": "Retas: each round every court plays one set; winners move up a "
+                         "court and losers down. Each player scores the games difference of "
+                         "every set (it can go below zero)."},
+    "rey_cancha_note": {"es": "Rey de la cancha: la pareja que gana se queda en la cancha y la "
+                              "que pierde se va al final de la fila. Cada jugador suma 1 punto "
+                              "por set ganado.",
+                        "en": "King of the court: the winning pair stays on court and the "
+                              "losing pair goes to the end of the line. Each player scores 1 "
+                              "point per set won."},
+    "escalafon_note": {"es": "Escalafón: cada pareja tiene una posición y reta a parejas de "
+                             "arriba; si gana la retadora, intercambian lugar. Cada reto es su "
+                             "propia jornada, a 2 de 3 sets.",
+                       "en": "Ladder: each pair has a position and challenges pairs above it; "
+                             "if the challenger wins, they swap places. Each challenge is its "
+                             "own matchday, best of 3 sets."},
+    "retas_round1_hint": {"es": "Ronda 1: 4 jugadores por cancha; los dos primeros contra los "
+                                "dos últimos. La app ya los sorteó; cámbialos si los armaron en "
+                                "la cancha.",
+                          "en": "Round 1: 4 players per court; the first two against the last "
+                                "two. The app drew them; change them if they were set up on "
+                                "court."},
+    "next_round": {"es": "🔄 Siguiente ronda", "en": "🔄 Next round"},
+    "next_round_hint": {"es": "Cuando estén todos los resultados de la ronda, podrás armar la "
+                              "siguiente: suben los ganadores y bajan los perdedores.",
+                        "en": "Once every result of the round is in, you can set up the next "
+                              "one: winners move up and losers down."},
+    "next_round_intro": {"es": "Los ganadores subieron de cancha y los perdedores bajaron. En "
+                               "cada cancha elige las parejas: la app ya sorteó unas, o marca "
+                               "las que armaron en la cancha.",
+                         "en": "Winners moved up a court and losers down. On each court pick "
+                               "the pairs: the app drew some, or mark the ones set up on court."},
+    "pairing_drawn": {"es": "🎲 sorteo de la app", "en": "🎲 the app's draw"},
+    "pair_repeat_warning": {"es": "⚠️ ya jugaron juntos hoy", "en": "⚠️ already partners today"},
+    "save_round_n": {"es": "Guardar ronda {n}", "en": "Save round {n}"},
+    "day_table": {"es": "📊 Tabla de la jornada", "en": "📊 The matchday's table"},
+    "sets_played": {"es": "Sets", "en": "Sets"},
+    "match_n": {"es": "Partido {n}", "en": "Match {n}"},
+    "rey_title": {"es": "👑 Rey de la cancha", "en": "👑 King of the court"},
+    "rey_king": {"es": "👑 En la cancha", "en": "👑 On court"},
+    "rey_challenger": {"es": "⚔️ Retadora", "en": "⚔️ Challenger"},
+    "rey_line": {"es": "🧍 En la fila", "en": "🧍 In line"},
+    "next_match": {"es": "▶️ Siguiente partido", "en": "▶️ Next match"},
+    "next_match_hint": {"es": "Cuando esté el resultado del partido, empieza el siguiente: la "
+                              "pareja que gana se queda.",
+                        "en": "Once the match's result is in, the next one starts: the "
+                              "winning pair stays."},
+    "rey_pairs_hint": {"es": "Arma las parejas de hoy en el orden de la fila: las dos primeras "
+                             "juegan primero. La app ya las sorteó; cámbialas si quieres. Las "
+                             "filas vacías no cuentan.",
+                       "en": "Set up today's pairs in line order: the first two play first. "
+                             "The app drew them; change them if you like. Empty rows don't "
+                             "count."},
+    "redraw_pairs": {"es": "🎲 Sortear de nuevo", "en": "🎲 Draw again"},
+    "pair_n": {"es": "Pareja {n}", "en": "Pair {n}"},
+    "plays_first": {"es": "juega primero", "en": "plays first"},
+    "save_rey": {"es": "Guardar y empezar", "en": "Save and start"},
+    "best_of_three_hint": {"es": "A 2 de 3 sets: escribe los juegos de cada set. El 3.º solo "
+                                 "si van 1-1; puede ser súper tie-break (a 10).",
+                           "en": "Best of 3 sets: type the games of each set. The 3rd only at "
+                                 "1-1; it may be a super tie-break (to 10)."},
+    "set_n": {"es": "Set {n}", "en": "Set {n}"},
+    "super_tiebreak": {"es": "o súper tie-break", "en": "or super tie-break"},
+    "ladder_title": {"es": "🪜 Escalafón", "en": "🪜 Ladder"},
+    "ladder_hint": {"es": "Cada pareja reta hasta 3 lugares arriba (hasta 5 si no hay ninguna "
+                          "libre en esos 3). Una pareja con un reto pendiente no reta ni puede "
+                          "ser retada. Si gana la retadora, intercambian lugar.",
+                    "en": "Each pair challenges up to 3 places above (up to 5 if none of those "
+                          "3 is free). A pair with a pending challenge can't challenge or be "
+                          "challenged. If the challenger wins, they swap places."},
+    "ladder_pair": {"es": "Pareja", "en": "Pair"},
+    "ladder_record": {"es": "G-P", "en": "W-L"},
+    "ladder_reto": {"es": "Reto", "en": "Challenge"},
+    "reto_pending": {"es": "⚔️ Reto pendiente", "en": "⚔️ Pending challenge"},
+    "challenge_to": {"es": "Retar a", "en": "Challenge"},
+    "challenge": {"es": "⚔️ Retar", "en": "⚔️ Challenge"},
+    "no_targets": {"es": "Nadie libre para retar", "en": "Nobody free to challenge"},
+    "leave_pair": {"es": "Dar de baja", "en": "Remove"},
+    "confirm_leave_pair": {"es": "¿Dar de baja a esta pareja? Las de abajo suben un lugar.",
+                           "en": "Remove this pair? The pairs below move up a place."},
+    "no_pairs": {"es": "Aún no hay parejas: agrégalas abajo.",
+                 "en": "No pairs yet: add them below."},
+    "add_pair": {"es": "Agregar pareja (entra al último lugar)",
+                 "en": "Add a pair (it starts last)"},
+    "add_pair_button": {"es": "Agregar", "en": "Add"},
+    "draw_ladder": {"es": "🎲 Sortear posiciones", "en": "🎲 Draw the positions"},
+    "confirm_draw_ladder": {"es": "¿Sortear las posiciones de todas las parejas?",
+                            "en": "Draw the positions of every pair?"},
+    "err_pair_invalid": {"es": "Elige dos jugadores distintos que no estén ya en una pareja.",
+                         "en": "Pick two different players who aren't in a pair yet."},
+    "err_ladder_started": {"es": "Ya hay retos: las posiciones ya no se sortean.",
+                           "en": "There are challenges already: positions can't be drawn now."},
+    "err_pair_busy": {"es": "Esa pareja tiene un reto pendiente.",
+                      "en": "That pair has a pending challenge."},
+    "err_reto_invalid": {"es": "Ese reto no es válido: revisa el rango y que ninguna de las dos "
+                               "tenga un reto pendiente.",
+                         "en": "That challenge isn't valid: check the range and that neither "
+                               "pair has a pending challenge."},
+    "err_best_of_three": {"es": "Un partido a 2 de 3: escribe al menos 2 sets, sin empates, y el "
+                                "3.º solo si van 1-1.",
+                          "en": "Best of 3: type at least 2 sets, no ties, and the 3rd only "
+                                "at 1-1."},
+    "err_round_pending": {"es": "Faltan resultados de la ronda actual.",
+                          "en": "The current round still has results to enter."},
+    "err_retas_tie": {"es": "Hay un empate en la cancha {n}: corrige el marcador para saber quién "
+                            "sube.",
+                      "en": "Court {n} has a tie: fix the score to know who moves up."},
+    "err_rey_pairs": {"es": "Arma al menos 2 parejas completas, sin repetir jugadores.",
+                      "en": "Set up at least 2 complete pairs, with no player twice."},
     "pdf_start": {"es": "Inicio", "en": "Start"},
     "pdf_next_note": {"es": "La probabilidad de ganar de cada pareja (azul y rojo), según los "
                             "resultados de todos hasta hoy.",

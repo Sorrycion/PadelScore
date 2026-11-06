@@ -17,7 +17,7 @@
 {% include "_matchday_tabs.html" %}
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
 {% if not results %}<p class="empty">{{ _("no_matchdays") }}</p>{% endif %}
-{% if editor %}
+{% if editor and tournament.rule_code != LADDER %}
 <form method="get" action="/tournaments/{{ tournament.id }}/matchdays/new" class="inline">
   <input type="date" name="played_on" value="{{ today }}" aria-label="{{ _('date') }}" required>
   <button type="submit">{{ _("add_round_n" if round_mode else "add_matchday_n", n=results|length + 1) }}</button>
@@ -26,10 +26,16 @@
 {% if tournament.rule_code == "liga_amigos" and results|length >= 6 %}<p class="muted">{{ _("six_matchdays") }}</p>{% endif %}
 {% if tournament.rule_code == "americano" %}<p class="muted">{{ _("americano_note") }} {{ _("points_ranking_note") }}</p>
 {% elif tournament.rule_code == "mexicano" %}<p class="muted">{{ _("mexicano_note") }} {{ _("points_ranking_note") }}</p>
-{% elif tournament.rule_code == MANUAL %}<p class="muted">{{ _("manual_note") }}</p>{% endif %}
+{% elif tournament.rule_code == MANUAL %}<p class="muted">{{ _("manual_note") }}</p>
+{% elif tournament.rule_code == RETAS %}<p class="muted">{{ _("retas_note") }}</p>
+{% elif tournament.rule_code == REY %}<p class="muted">{{ _("rey_cancha_note") }}</p>
+{% elif tournament.rule_code == LADDER %}<p class="muted">{{ _("escalafon_note") }}</p>{% endif %}
+{% if ladder is not none %}{% include "_ladder.html" %}{% endif %}
 
+{% if tournament.rule_code != LADDER %}{# an Escalafón's ranking is its ladder, below #}
 <h2>{{ _("standings") }}</h2>
 {% include "_standings.html" %}
+{% endif %}
 {% include "_jornada_pdf.html" %}
 
 

@@ -7,7 +7,7 @@
   {% set done = md.sets and not (md.sets|selectattr("team_a_games", "none")|list) %}
   <a href="/matchdays/{{ md.id }}" {% if md.id == current %}class="active" aria-current="page"{% endif %} title="{{ _('round_n' if round_mode else 'matchday_n', n=md.number) }} · {{ md.played_on }}{% if done %} · {{ _('completed') }}{% endif %}">{{ md.number }}{% if done %} <span class="done">✅</span>{% elif md.sets %} <span class="done">⏳</span>{% endif %}</a>
   {% endfor %}
-  {% if editor %}<a class="add" href="/tournaments/{{ tournament.id }}/matchdays/new" title="{{ _('add_round_n' if round_mode else 'add_matchday_n', n=results|length + 1) }}">➕</a>{% endif %}
+  {% if editor and tournament.rule_code != LADDER %}<a class="add" href="/tournaments/{{ tournament.id }}/matchdays/new" title="{{ _('add_round_n' if round_mode else 'add_matchday_n', n=results|length + 1) }}">➕</a>{% endif %}
 </nav>
 <p class="tabs-label">{{ _("rounds" if round_mode else "matchdays") }}</p>
 {% endif %}
