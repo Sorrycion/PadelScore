@@ -52,6 +52,12 @@ def diff_points(m) -> tuple[int, int]:
     return d, -d
 
 
+def win_points(m) -> tuple[int, int]:
+    """Each player of the winning pair scores 1 (Rey de la cancha: a set won; Escalafón:
+    a match won); a tie gives nothing."""
+    return (m["winner"] == "A") * 1, (m["winner"] == "B") * 1
+
+
 def is_played(m) -> bool:
     return m["team_a_games"] is not None
 
@@ -213,6 +219,18 @@ SCORING = {
     "americano": tournament_results,
     "mexicano": tournament_results,
     "manual": partial(tournament_results, score=diff_points),  # sets made by hand
+    # Retas: the games difference of every set (can go below zero).
+    "retas": partial(tournament_results, score=diff_points),
+    "rey_cancha": partial(tournament_results, score=win_points),  # 1 per set won
+    # Escalafón: 1 per match won; the ladder (not the points) orders its standings.
+    "escalafon": partial(tournament_results, score=win_points),
 }
 # Rule types played in rounds of one match per court, to a number of points.
 ROUND_MODES = {"americano", "mexicano"}
+RETAS, REY, LADDER = "retas", "rey_cancha", "escalafon"  # app/formats.py
+# Courts that play one match of two pairs at a time (not the Liga's three sets).
+ONE_MATCH = ROUND_MODES | {RETAS}
+# Courts drawn by the app among the tournament's players.
+DRAWN = ROUND_MODES | {RETAS}
+# A jornada played in rounds on the day (its sets carry matches.round).
+DAY_ROUNDS = {RETAS, REY}

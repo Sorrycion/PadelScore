@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ _("round_n", n=number) }} · {{ tournament.name }} · PadelScore{% endblock %}
+{% block content %}
+{# 🔄 Retas, the next round (main.next_round_page): winners moved up a court, losers down.
+   On each court, one of the three pairings: the app's draw (preselected) or the one the
+   players chose on court. ⚠️ marks a pair that already played together today. #}
+<p class="eyebrow"><a class="plain" href="/tournaments/{{ tournament.id }}">{{ tournament.name }}</a> · <a class="plain" href="/matchdays/{{ matchday.id }}">{{ _("matchday_n", n=matchday.number) }}</a> · 📅 {{ matchday.played_on }}</p>
+<h1>🔄 {{ _("round_n", n=number) }}</h1>
+<p class="muted">{{ _("next_round_intro") }}</p>
+<form method="post" action="/matchdays/{{ matchday.id }}/next-round" class="stack">
+  {% for c in courts %}
+  <fieldset class="card pairing">
+    <legend>{{ _("court_n", n=c.court) }}</legend>
+    <p class="muted">{{ c.players|join(" · ") }}</p>
+    {% for o in c.options %}
+    <label class="check pairing-option">
+      <input type="radio" name="court-{{ c.court }}" value="{{ o.index }}" {% if o.index == c.drawn %}checked{% endif %}>
+      <span><strong class="team-a-text">{{ o.a }}</strong> vs <strong class="team-b-text">{{ o.b }}</strong>
+        {% if o.index == c.drawn %}<span class="muted">· {{ _("pairing_drawn") }}</span>{% endif %}
+        {% if o.repeat %}<span class="warning">· {{ _("pair_repeat_warning") }}</span>{% endif %}</span>
+    </label>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+  <div class="inline form-actions">
+    <button type="submit">{{ _("save_round_n", n=number) }}</button>
+    <a href="/matchdays/{{ matchday.id }}">{{ _("cancel") }}</a>
+  </div>
+</form>
+{% endblock %}

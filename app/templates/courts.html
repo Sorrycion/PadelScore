@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set round_mode = tournament.rule_code in ROUND_MODES %}
+{% set drawn = tournament.rule_code in DRAWN %}
 {% set manual = tournament.rule_code == MANUAL %}
 {% set heading = _("assign_courts") if matchday else _("new_round_n" if round_mode else "new_matchday_n", n=number) %}
 {% block title %}{{ heading }} · {{ tournament.name }} · PadelScore{% endblock %}
@@ -49,8 +50,8 @@
 <p><a href="/tournaments/{{ tournament.id }}">{{ _("cancel") }}</a></p>
 
 {% else %}
-<p>{{ _("round_hint") if round_mode else _("assign_courts_hint") }}</p>
-{% if round_mode and not has_sets and participants|length >= 4 %}
+<p>{{ _("round_hint") if round_mode else _("retas_round1_hint") if tournament.rule_code == RETAS else _("assign_courts_hint") }}</p>
+{% if drawn and not has_sets and participants|length >= 4 %}
 {# Round settings: fewer courts or players who ask to rest; the rules fill the other rests. #}
 <form method="get" class="card stack round-setup">
   {% if not matchday %}<input type="hidden" name="played_on" value="{{ played_on }}">{% endif %}

@@ -121,6 +121,8 @@ jornada page has one for itself. The PDF (`GET /<slug>/matchdays/<id>/summary.pd
    Each player has their own color, line style and point shape (`report.look`: 8 colors,
    then dashed, then dotted; circle, square, triangle, diamond), and a legend by
    position with their total.
+   With 2 jornadas or more, **Así van las posiciones** follows: each player's position
+   after each jornada (1st on top), same colors, lines and points (`report.lines_chart`).
 5. **Próxima jornada**, if it already has sets: each set with each pair's chance now
    (blue and red bar).
 

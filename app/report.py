@@ -332,42 +332,46 @@ def nice_step(top):
     return 1000
 
 
-def evolution(pdf, data, _):
-    """One chart with every player's total points from 0 at the start and after each
-    jornada: each player with their own color, line style and point shape (look()), and
-    a legend by position under it."""
-    evo = data["evolution"]
-    if not evo["numbers"]:
-        return
-    players = evo["players"]
+def lines_chart(pdf, labels, players, key, invert=False, first_marker=0):
+    """One chart with a line per player (look(): color, line style, point shape), all
+    on the same scale, and a legend by position under it. players[i][key]: the values,
+    one per label (None: no point there). invert: smaller is higher (positions, 1st on
+    top). first_marker: the first index that gets a point."""
     per_row = 3
     legend_h = 5.2 * -(-len(players) // per_row)
     chart_h = 92
-    section(pdf, _("pdf_evolution"), _("pdf_evolution_note"), keep=chart_h + legend_h + 4)
     x0, y0 = pdf.l_margin, pdf.get_y()
     left, bottom = 10, 8  # room for the y and x labels
     cx, cy, cw, ch = x0 + left, y0 + 2, pdf.epw - left - 4, chart_h - bottom - 2
-    every = [p["values"] for p in players]
-    lo = min(0, min(min(v) for v in every))
-    hi = max(1, max(max(v) for v in every))
-    step = nice_step(hi - lo)
-    lo, hi = step * (lo // step), step * -(-hi // step)
-    n = len(evo["labels"])
+    every = [v for p in players for v in p[key] if v is not None]
+    if invert:
+        lo, hi = 1, max(every + [2])
+        step = nice_step(hi - 1)
+        ticks = list(range(1, hi + 1, step))
+        if hi - ticks[-1] >= step / 2:  # the last place too, unless it would crowd
+            ticks.append(hi)
+    else:
+        lo, hi = min(0, min(every)), max(1, max(every))
+        step = nice_step(hi - lo)
+        lo, hi = step * (lo // step), step * -(-hi // step)
+        ticks = range(int(lo), int(hi) + 1, step)
+    n = len(labels)
 
     def at(k, v):
-        return (cx + cw * k / (n - 1), cy + ch - ch * (v - lo) / (hi - lo))
+        x = cx + (cw * k / (n - 1) if n > 1 else cw / 2)
+        frac = (v - lo) / (hi - lo) if hi != lo else 0.5
+        return x, (cy + ch * frac) if invert else (cy + ch - ch * frac)
 
-    # Grid, y values and x labels.
     pdf.set_font("Helvetica", "", 7)
     pdf.set_text_color(*MUTED)
-    for v in range(int(lo), int(hi) + 1, step):
+    for v in ticks:
         _x, y = at(0, v)
-        pdf.set_draw_color(*(GRAY_LINE if v == 0 else LINE))
-        pdf.set_line_width(0.4 if v == 0 else 0.2)
+        pdf.set_draw_color(*(GRAY_LINE if v == 0 and not invert else LINE))
+        pdf.set_line_width(0.4 if v == 0 and not invert else 0.2)
         pdf.line(cx, y, cx + cw, y)
         pdf.set_xy(x0, y - 2)
-        pdf.cell(left - 2, 4, str(v), align="R")
-    for k, label in enumerate(evo["labels"]):
+        pdf.cell(left - 2, 4, f"{v}." if invert else str(v), align="R")
+    for k, label in enumerate(labels):
         x, _y = at(k, lo)
         pdf.set_draw_color(*SOFT)
         pdf.set_line_width(0.2)
@@ -377,12 +381,19 @@ def evolution(pdf, data, _):
     # Last place first, so the leaders' lines end up on top.
     for i in reversed(range(len(players))):
         color, dash, shape = look(i)
-        points = [at(k, v) for k, v in enumerate(players[i]["values"])]
-        line(pdf, points, color, dash)
+        points = [(k, at(k, v)) for k, v in enumerate(players[i][key]) if v is not None]
+        segment = []
+        for k, xy in points + [(None, None)]:  # contiguous runs only
+            if segment and (k is None or k != segment[-1][0] + 1):
+                if len(segment) > 1:
+                    line(pdf, [q for _k, q in segment], color, dash)
+                segment = []
+            if k is not None:
+                segment.append((k, xy))
         pdf.set_fill_color(*color)
-        for x, y in points[1:]:
-            marker(pdf, shape, x, y, 0.95)
-    # The legend: position, name and total, with each player's line and point.
+        for k, (x, y) in points:
+            if k >= first_marker:
+                marker(pdf, shape, x, y, 0.95)
     pdf.set_xy(x0, y0 + chart_h + 1)
     col_w = pdf.epw / per_row
     for i, p in enumerate(players):
@@ -402,6 +413,21 @@ def evolution(pdf, data, _):
         if i % per_row == per_row - 1 or i == len(players) - 1:
             pdf.set_xy(x0, y + 5.2)
     pdf.ln(2)
+
+
+def evolution(pdf, data, _):
+    """Every player's total points from 0 at the start ("Inicio") and after each jornada,
+    then (with 2 jornadas or more) everyone's position after each jornada."""
+    evo = data["evolution"]
+    if not evo["numbers"]:
+        return
+    players = evo["players"]
+    keep = 92 + 5.2 * -(-len(players) // 3) + 4
+    section(pdf, _("pdf_evolution"), _("pdf_evolution_note"), keep=keep)
+    lines_chart(pdf, evo["labels"], players, "values", first_marker=1)
+    if len(evo["numbers"]) > 1 and any(p.get("positions") for p in players):
+        section(pdf, _("pdf_positions"), _("pdf_positions_note"), keep=keep)
+        lines_chart(pdf, evo["labels"][1:], players, "positions", invert=True)
 
 
 def build(data, _):

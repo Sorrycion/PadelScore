@@ -95,11 +95,83 @@ def seed(dbfile):
 
         tournament("Liga de Verano", today - timedelta(days=120), 3, 0, ended=1)
         tournament("Liga de Otoño", today - timedelta(days=21), 3, 1)
+        other_formats(conn, org, ids, rule, today)
         conn.execute("INSERT INTO email_log (day, organization_id, user_id, address, kind, "
                      "subject, status) VALUES (?, ?, ?, 'ana@example.com', 'reminder', "
                      "'⏰ Hoy juegas: Jornada 4 · Liga de Otoño', 'sent')",
                      (today.isoformat(), org, ana))
         conn.commit()
+
+
+def other_formats(conn, org, ids, rule, today):
+    """Retas, Rey de la cancha and Escalafón, each with a jornada to show (their own
+    random numbers, so the Liga above stays the same)."""
+    from app import formats
+    rng = random.Random(7)
+
+    def new(name, code, held_on):
+        t = conn.execute("INSERT INTO tournaments (organization_id, name, held_on, rule_type_id, "
+                         "player_password) VALUES (?, ?, ?, ?, ?)",
+                         (org, name, held_on.isoformat(), rule[code], name.lower().replace(" ", "_"))
+                         ).lastrowid
+        conn.executemany("INSERT INTO tournament_players VALUES (?, ?)", [(t, p) for p in ids])
+        return t
+
+    def matchday(t, n, day):
+        return conn.execute("INSERT INTO matchdays (tournament_id, number, played_on) "
+                            "VALUES (?, ?, ?)", (t, n, day.isoformat())).lastrowid
+
+    def play(d, court, a, b, rnd, played=True, sets=None):
+        ga = gb = winner = None
+        if played and sets:
+            ga, gb = formats.best_of_three(sets)
+        elif played:
+            ga, gb = rng.choice([(6, 3), (6, 4), (2, 6), (7, 5), (4, 6), (6, 1)])
+        if ga is not None:
+            winner = "A" if ga > gb else "B"
+        return conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, team_a_games, "
+                            "team_b_games, winner, round, sets_detail) VALUES "
+                            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (d, court, *a, *b, ga, gb, winner, rnd,
+                             formats.sets_text(sets) if sets and played else None)).lastrowid
+
+    # Retas: two rounds played on three courts (the third round is next).
+    t = new("Retas del sábado", "retas", today - timedelta(days=2))
+    d = matchday(t, 1, today - timedelta(days=2))
+    courts = {c + 1: ids[c * 4:c * 4 + 4] for c in range(3)}
+    for rnd in (1, 2):
+        for c, four in sorted(courts.items()):
+            a, b = formats.pairings(four)[(rnd + c) % 3]
+            play(d, c, a, b, rnd)
+        rows = conn.execute("SELECT * FROM matches WHERE matchday_id = ? AND round = ?",
+                            (d, rnd)).fetchall()
+        courts = formats.retas_move([{**dict(r), "a1_id": r["a1"], "a2_id": r["a2"],
+                                      "b1_id": r["b1"], "b2_id": r["b2"]} for r in rows])
+    # Rey de la cancha: four pairs in line, two matches played, the third to play.
+    t = new("Rey de la cancha", "rey_cancha", today - timedelta(days=1))
+    d = matchday(t, 1, today - timedelta(days=1))
+    pairs = [tuple(ids[i:i + 2]) for i in range(0, 8, 2)]
+    conn.executemany("INSERT INTO queue_pairs VALUES (?, ?, ?, ?)",
+                     [(d, n, *pr) for n, pr in enumerate(pairs, 1)])
+    play(d, 1, pairs[0], pairs[1], 1)
+    for rnd in (2, 3):
+        sets_ = [dict(r) | {"a1_id": r["a1"], "a2_id": r["a2"], "b1_id": r["b1"], "b2_id": r["b2"]}
+                 for r in conn.execute("SELECT * FROM matches WHERE matchday_id = ? ORDER BY round",
+                                       (d,))]
+        king, challenger, _line = formats.king_line(pairs, sets_)
+        play(d, 1, tuple(sorted(king)), tuple(sorted(challenger)), rnd, played=rnd == 2)
+    # Escalafón: six pairs, two retos played (the first one swapped places), one pending.
+    t = new("Escalafón Demo", "escalafon", today - timedelta(days=14))
+    pair_ids = [conn.execute("INSERT INTO ladder_pairs (tournament_id, player1_id, player2_id, seed) "
+                             "VALUES (?, ?, ?, ?)", (t, ids[i], ids[i + 1], i // 2 + 1)).lastrowid
+                for i in range(0, 12, 2)]
+    retos = [((ids[6], ids[7]), (ids[2], ids[3]), [(6, 4), (3, 6), (10, 7)]),
+             ((ids[10], ids[11]), (ids[8], ids[9]), [(4, 6), (5, 7)]),
+             ((ids[4], ids[5]), (ids[0], ids[1]), None)]
+    for n, (a, b, sets) in enumerate(retos, 1):
+        d = matchday(t, n, today - timedelta(days=10 - 4 * n))
+        play(d, 1, a, b, 1, played=sets is not None, sets=sets)
+    assert pair_ids
 
 
 def ids(dbfile):
@@ -119,6 +191,11 @@ def ids(dbfile):
     out["pending"] = one("SELECT m.id FROM matches m WHERE m.matchday_id = ? AND ? IN "
                          "(m.a1, m.a2, m.b1, m.b2) ORDER BY m.id", out["md4"], out["ana"])
     out["played"] = one("SELECT m.id FROM matches m WHERE m.matchday_id = ? ORDER BY m.id", out["md3"])
+    for key, name in (("retas", "Retas del sábado"), ("rey", "Rey de la cancha"),
+                      ("ladder", "Escalafón Demo")):
+        out[key] = one("SELECT id FROM tournaments WHERE name = ?", name)
+        out[key + "_md"] = one("SELECT MAX(id) FROM matchdays WHERE tournament_id = ?", out[key])
+    out["ladder_match"] = one("SELECT id FROM matches WHERE matchday_id = ?", out["ladder_md"])
     conn.close()
     return out
 
@@ -241,6 +318,13 @@ def pages_for(i):
         "vs": ("player", f"{s}/players/{i['ana']}/vs?other={i['bruno']}"),
         "recap": ("player", f"{s}/matchdays/{i['md3']}/recap?player={i['ana']}"),
         "me": ("player", "/me"),
+        "retas_md": ("admin", f"{s}/matchdays/{i['retas_md']}"),
+        "retas_next": ("admin", f"{s}/matchdays/{i['retas_md']}/next-round"),
+        "rey_new": ("admin", f"{s}/tournaments/{i['rey']}/matchdays/new"),
+        "rey_md": ("admin", f"{s}/matchdays/{i['rey_md']}"),
+        "ladder": ("admin", f"{s}/tournaments/{i['ladder']}"),
+        "ladder_player": ("player", f"{s}/tournaments/{i['ladder']}"),
+        "ladder_sets": ("player", f"{s}/matches/{i['ladder_match']}/edit"),
         "install": ("player", "/install"),
     }
 

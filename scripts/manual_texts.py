@@ -149,7 +149,16 @@ ADMIN_MANUAL = {
                        ["Mexicano", "Rondas; la primera se sortea y después el ranking arma "
                                     "las canchas. Mínimo 4 jugadores."],
                        ["Manual individual", "Jornadas con solo la fecha; los sets se agregan a "
-                                             "mano. Cada quien suma la diferencia de juegos."]]),
+                                             "mano. Cada quien suma la diferencia de juegos."],
+                       ["Retas", "Una jornada por rondas en varias canchas: los ganadores suben y "
+                                 "los perdedores bajan; parejas nuevas en cada ronda. Cada quien "
+                                 "suma la diferencia de juegos (puede ser negativa)."],
+                       ["Rey de la cancha", "Una cancha y una fila de parejas: la que gana se "
+                                            "queda y la que pierde se va al final. 1 punto por "
+                                            "set ganado."],
+                       ["Escalafón", "Parejas fijas con posición que retan hasta 3 lugares "
+                                     "arriba; si gana la retadora, intercambian lugar. Cada reto "
+                                     "es una jornada, a 2 de 3 sets."]]),
             ("tip", "Puedes cambiar la lista de jugadores después, en la página del torneo."),
         ]},
         {"title": "La página del torneo", "blocks": [
@@ -223,6 +232,53 @@ ADMIN_MANUAL = {
                          "descansa y **Eliminar jornada**."]),
             ("shots", [("matchday_admin", 0, 1080, "Una jornada: la tarjeta y los sets"),
                        ("matchday_admin", 1080, 2050, "La tabla de la cancha")]),
+        ]},
+        {"title": "Retas, Rey de la cancha y Escalafón", "blocks": [
+            ("p", "Estos tres tipos de torneo se crean igual que los demás (capítulo 4), pero se "
+                  "juegan distinto. Las reglas completas de cada uno están en **Reglamento**."),
+            ("h", "Retas: rondas en varias canchas"),
+            ("steps", ["Crea la jornada: la app **sortea** a los jugadores en las canchas, 4 por "
+                       "cancha (los dos primeros contra los dos últimos). Cámbialos si ya se "
+                       "acomodaron en la cancha, y toca **Guardar**.",
+                       "Registren el resultado de cada set de la ronda.",
+                       "Toca **Siguiente ronda**: los ganadores **suben** una cancha y los "
+                       "perdedores **bajan** (en la cancha 1 los ganadores se quedan; en la "
+                       "última, los perdedores).",
+                       "En cada cancha elige las parejas: la app ya marcó un **sorteo**, o marca "
+                       "las que armaron en la cancha. Si una pareja **ya jugó junta** ese día "
+                       "aparece un aviso, pero se permite.",
+                       "Toca **Guardar ronda** y repite."]),
+            ("shots", [("retas_md", 680, 1650, "Una jornada de Retas por rondas"),
+                       ("retas_next", 0, None, "Siguiente ronda: las parejas de cada cancha")]),
+            ("p", "Cada jugador suma la **diferencia de juegos** de cada set (un 6-3 da +3 y -3), "
+                  "así que puede quedar en negativo. La jornada tiene su propia **tabla**."),
+            ("h", "Rey de la cancha: el que gana se queda"),
+            ("steps", ["Crea la jornada: arma las **parejas del día** en el orden de la fila. La "
+                       "app ya las sorteó (**Sortear de nuevo** para otro sorteo) o elígelas a "
+                       "mano. Las dos primeras juegan primero.",
+                       "Registren el resultado del partido.",
+                       "Toca **Siguiente partido**: la pareja ganadora se queda (el **rey**) y la "
+                       "perdedora se va al final de la fila; entra la siguiente."]),
+            ("shots", [("rey_new", 0, 900, "Las parejas y la fila"),
+                       ("rey_md", 740, 1400, "El rey, la retadora y la fila")]),
+            ("p", "Cada jugador suma **1 punto por set ganado**."),
+            ("h", "Escalafón: retos entre parejas"),
+            ("steps", ["En la página del torneo, en **Escalafón**, agrega cada **pareja** "
+                       "(entra al último lugar).",
+                       "Opcional, antes del primer reto: **Sortear posiciones**.",
+                       "Para retar: en la fila de la pareja retadora elige a quién retar (solo "
+                       "aparecen las válidas: hasta 3 lugares arriba, o 5 si no hay nadie libre "
+                       "en esos 3), la fecha, y toca **Retar**. Los jugadores de esa pareja "
+                       "también pueden hacerlo desde su cuenta.",
+                       "El reto es su propia **jornada**. El resultado se escribe **set por set** "
+                       "(a 2 de 3; el tercero solo si van 1-1, puede ser súper tie-break).",
+                       "Si gana la retadora, **intercambian lugar**. **Dar de baja** saca a una "
+                       "pareja y las de abajo suben un lugar."]),
+            ("shots", [("ladder", 0, 760, "El escalafón: posiciones y retos"),
+                       ("ladder", 740, 1500, "Retar y agregar parejas")]),
+            ("shots", [("ladder_sets", 0, None, "El resultado, set por set")]),
+            ("tip", "Una pareja con un reto pendiente no puede retar ni ser retada hasta que se "
+                    "juegue."),
         ]},
         {"title": "Registrar y corregir resultados", "blocks": [
             ("p", "Los resultados se registran siempre en la página **Editar** de cada set. "
@@ -389,8 +445,8 @@ PLAYER_MANUAL = {
                          "barra muestra la **probabilidad de ganar**: en azul tu pareja (A) y en "
                          "rojo la otra. **Resultado** abre el set para registrar el marcador.",
                          "**Mis torneos:** tus torneos con tu posición y puntos."]),
-            ("shots", [("player_home", 0, 760, "Inicio: tu última jornada y tus sets"),
-                       ("player_home", 760, 1442, "Más sets y tus torneos")]),
+            ("shots", [("player_home", 0, 1200, "Inicio: tu última jornada y tus sets"),
+                       ("player_home", 1200, None, "Tus torneos")]),
             ("p", "La probabilidad se calcula con los sets que ha jugado cada jugador: el "
                   "porcentaje de sets ganados de cada pareja, comparados entre sí."),
         ]},
@@ -433,6 +489,27 @@ PLAYER_MANUAL = {
                   "decide por sets ganados, luego por diferencia de juegos. Si faltas, sumas 0 "
                   "esa jornada. Al final de cada jornada los mejores suben de cancha y los "
                   "últimos bajan. Las reglas completas están en **Reglamento**."),
+        ]},
+        {"title": "Retas, Rey de la cancha y Escalafón", "blocks": [
+            ("h", "Retas"),
+            ("p", "Se juega una jornada por rondas: en cada ronda tu cancha juega un set. Si "
+                  "ganas, **subes** de cancha; si pierdes, **bajas**. En cada ronda armas pareja "
+                  "nueva con los de tu cancha. Sumas la **diferencia de juegos** de cada set (puede "
+                  "ser negativa)."),
+            ("h", "Rey de la cancha"),
+            ("p", "Una cancha y una fila de parejas. Si tu pareja gana, **se queda** en la cancha; "
+                  "si pierde, se va al **final de la fila**. Sumas **1 punto por set ganado**."),
+            ("h", "Escalafón"),
+            ("p", "Juegas con una **pareja fija** que tiene una posición. En la página del torneo, "
+                  "en la fila de tu pareja, eliges a quién **retar** (hasta 3 lugares arriba, o 5 "
+                  "si no hay nadie libre), la fecha, y tocas **Retar**. Si ganan, **intercambian "
+                  "lugar** con la pareja retada."),
+            ("steps", ["Abre el reto (su jornada) y toca **Editar** en el partido.",
+                       "Escribe los juegos de **cada set**: el tercero solo si van 1-1 (puede "
+                       "ser súper tie-break).",
+                       "Toca **Guardar**: el escalafón se actualiza solo."]),
+            ("shots", [("ladder_player", 0, 1000, "El escalafón, desde tu cuenta"),
+                       ("ladder_sets", 0, None, "El resultado de un reto")]),
         ]},
         {"title": "Tus estadísticas y medallas", "blocks": [
             ("p", "En el menú, **Mi resumen** abre tu página de jugador, con cuatro pestañas:"),

@@ -1,0 +1,63 @@
+{# 🪜 Escalafón (main.ladder_state): the pairs by position, their record, their pending
+   reto, and ⚔️ Retar for admins and the players of each pair, to the pairs within range
+   (formats.targets). Admins add pairs, draw the starting positions and remove pairs. #}
+{% set names = {} %}{% for r in ladder %}{% set _ignored = names.update({r.id: r.name}) %}{% endfor %}
+<h2 id="ladder">{{ _("ladder_title") }}</h2>
+<p class="muted">{{ _("ladder_hint") }}</p>
+{% if ladder %}
+<div class="scroll">
+<table class="standings ladder">
+  <thead><tr><th>#</th><th>👥 {{ _("ladder_pair") }}</th><th>{{ _("ladder_record") }}</th><th>{{ _("ladder_reto") }}</th></tr></thead>
+  <tbody>
+  {% for r in ladder %}
+  <tr>
+    <td><span class="pos pos-{{ r.position }}">{{ r.position }}</span></td>
+    <td>{{ r.name }}</td>
+    <td>{{ r.won }}-{{ r.lost }}</td>
+    <td>
+      {% if r.busy %}<a href="/matchdays/{{ r.busy }}">{{ _("reto_pending") }}</a>
+      {% elif editor or my_player_id in r.players %}
+        {% if r.targets %}
+        <form method="post" action="/tournaments/{{ tournament.id }}/retos" class="inline reto-form">
+          <input type="hidden" name="challenger" value="{{ r.id }}">
+          <select name="challenged" aria-label="{{ _('challenge_to') }}">
+            {% for t in r.targets %}<option value="{{ t }}">#{{ (ladder|selectattr("id", "equalto", t)|first).position }} {{ names[t] }}</option>{% endfor %}
+          </select>
+          <input type="date" name="played_on" value="{{ today }}" aria-label="{{ _('date') }}">
+          <button type="submit" class="small">{{ _("challenge") }}</button>
+        </form>
+        {% else %}<span class="muted">{{ _("no_targets") }}</span>{% endif %}
+      {% endif %}
+      {% if editor and not r.busy %}
+      <form method="post" action="/tournaments/{{ tournament.id }}/pairs/{{ r.id }}/leave" class="inline"
+            onsubmit="return confirm('{{ _('confirm_leave_pair') }}')">
+        <button type="submit" class="link">{{ _("leave_pair") }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p class="empty">{{ _("no_pairs") }}</p>{% endif %}
+{% if editor %}
+<form method="post" action="/tournaments/{{ tournament.id }}/pairs" class="card stack add-pair">
+  <strong>{{ _("add_pair") }}</strong>
+  <div class="inline">
+    {% for n in (1, 2) %}
+    <select name="player{{ n }}" aria-label="{{ _('player') }} {{ n }}" required>
+      <option value="">— {{ _("player") }} {{ n }} —</option>
+      {% for p in participants or players %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+    </select>
+    {% endfor %}
+    <button type="submit">{{ _("add_pair_button") }}</button>
+  </div>
+</form>
+{% if ladder|length > 1 and not ladder_started %}
+<form method="post" action="/tournaments/{{ tournament.id }}/pairs/draw" class="inline"
+      onsubmit="return confirm('{{ _('confirm_draw_ladder') }}')">
+  <button type="submit" class="secondary">{{ _("draw_ladder") }}</button>
+</form>
+{% endif %}
+{% endif %}

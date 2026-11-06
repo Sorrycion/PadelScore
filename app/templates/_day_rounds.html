@@ -1,0 +1,43 @@
+{# Retas and Rey de la cancha (app/formats.py): the jornada by rounds (Retas: one set per
+   court each round; Rey: one match after another), what comes next, and the jornada's
+   table. Needs: rounds, day_table, rey, next_round_ready (main.matchday_page). #}
+{% if rey %}
+<section class="card rey-box">
+  <h2>{{ _("rey_title") }}</h2>
+  {% if rey.king %}<p>{{ _("rey_king") }}: <strong>{{ rey.king }}</strong></p>{% endif %}
+  {% if rey.challenger %}<p>{{ _("rey_challenger") }}: <strong>{{ rey.challenger }}</strong></p>{% endif %}
+  {% if rey.line %}<p class="muted">{{ _("rey_line") }}: {{ rey.line|join(" · ") }}</p>{% endif %}
+  {% if rey.can_next and scorer %}
+  <form method="post" action="/matchdays/{{ matchday.id }}/next-match" class="inline">
+    <button type="submit">{{ _("next_match") }}</button>
+  </form>
+  {% elif scorer %}<p class="muted">{{ _("next_match_hint") }}</p>{% endif %}
+</section>
+{% endif %}
+{% for number, round_sets in rounds.items() %}
+<section class="court-block {{ loop.cycle('court-a', 'court-b') }}" id="round-{{ number }}">
+  <div class="court-head"><h2>{{ _("match_n" if rey else "round_n", n=number) }}</h2></div>
+  <ul class="matches">{% for m in round_sets %}{% include "_match_row.html" %}{% endfor %}</ul>
+</section>
+{% endfor %}
+{% if tournament.rule_code == RETAS and scorer %}
+{% if next_round_ready %}
+<p class="inline"><a class="button" href="/matchdays/{{ matchday.id }}/next-round">{{ _("next_round") }}</a></p>
+{% else %}<p class="muted">{{ _("next_round_hint") }}</p>{% endif %}
+{% endif %}
+{% if day_table %}
+<h2>{{ _("day_table") }}</h2>
+<div class="scroll">
+<table class="standings">
+  <thead><tr><th>#</th><th>👤 {{ _("player") }}</th>
+    <th>{{ _("games_diff") if tournament.rule_code == RETAS else _("sets_won") }}</th><th>{{ _("sets_played") }}</th><th>🎯 {{ _("pts") }}</th></tr></thead>
+  <tbody>
+  {% for r in day_table %}
+    <tr><td>{{ loop.index }}</td><td><a class="plain" href="/players/{{ r.id }}">{{ r.name }}</a></td>
+      <td>{% if tournament.rule_code == RETAS %}{{ "%+d"|format(r.diff) }}{% else %}{{ r.sets_won }}{% endif %}</td>
+      <td>{{ r.sets }}</td><td class="pts">{{ r.points }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}

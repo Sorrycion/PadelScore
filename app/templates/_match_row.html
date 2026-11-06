@@ -16,6 +16,7 @@
     <div class="team a {% if m.winner == 'A' %}winner{% endif %}"><a href="/players/{{ m.a1_id }}">{{ m.a1 }}</a><a href="/players/{{ m.a2_id }}">{{ m.a2 }}</a></div>
     <div class="team b {% if m.winner == 'B' %}winner{% endif %}"><a href="/players/{{ m.b1_id }}">{{ m.b1 }}</a><a href="/players/{{ m.b2_id }}">{{ m.b2 }}</a></div>
   </div>
+  {% if m.sets_detail %}<p class="sets-detail">🎾 {{ m.sets_detail }}</p>{% endif %}
   {% set chance = chance_of(m) %}
   {% if chance is not none %}{% include "_chance.html" %}{% endif %}
   {% if not in_matchday or can_edit %}

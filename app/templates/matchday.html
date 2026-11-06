@@ -21,15 +21,16 @@
 {% include "_matchday_tabs.html" %}
 {% if tournament.rule_code == MANUAL and scorer %}
 <p class="inline"><a class="button" href="/matches/new?matchday={{ matchday.id }}">{{ _("new_set") }}</a></p>
-{% elif editor %}
+{% elif editor and tournament.rule_code not in (REY, LADDER) and rounds|length <= 1 %}
 <p class="inline"><a class="button" href="/matchdays/{{ matchday.id }}/courts">{{ _("assign_courts") }}</a></p>
 {% endif %}
 {% if scorer and not editor %}<p class="muted">{{ _("player_mode_note") }}</p>{% endif %}
 {% if recap_players %}<p><a href="/matchdays/{{ matchday.id }}/recap">📲 {{ _("recap_title") }}</a></p>{% endif %}
 {% include "_jornada_pdf.html" %}
 
-{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+{% if error %}<p class="error">{{ _(error, n=error_n) }}</p>{% endif %}
 {% if matchday.courts %}
+{% if tournament.rule_code in DAY_ROUNDS %}{% include "_day_rounds.html" %}{% else %}
 {% for court, rows in matchday.courts.items() %}
 <section class="court-block {{ loop.cycle('court-a', 'court-b') }}">
   <div class="court-head">
@@ -45,6 +46,7 @@
   <div class="scroll">{% include "_court_table.html" %}</div>
 </section>
 {% endfor %}
+{% endif %}
 
 {% if resting %}
 <h2>{{ _("resting") }}</h2>
@@ -66,7 +68,7 @@
   {% endfor %}
 </ul>
 {% endif %}
-{% if editor and next_number %}
+{% if editor and next_number and tournament.rule_code != LADDER %}
 <form method="get" action="/tournaments/{{ tournament.id }}/matchdays/new" class="inline next-matchday">
   {% if liga %}<input type="hidden" name="move" value="{{ move }}">{% endif %}
   <input type="date" name="played_on" value="{{ next_date if liga else matchday.played_on }}" aria-label="{{ _('date') }}" required>
@@ -79,6 +81,9 @@
 <p class="muted">{{ _(tournament.rule_code ~ "_note") }} {{ _("points_ranking_note") }}</p>
 {% elif tournament.rule_code == MANUAL %}
 <p class="muted">{{ _("manual_note") }}</p>
+{% elif tournament.rule_code == RETAS %}<p class="muted">{{ _("retas_note") }}</p>
+{% elif tournament.rule_code == REY %}<p class="muted">{{ _("rey_cancha_note") }}</p>
+{% elif tournament.rule_code == LADDER %}<p class="muted">{{ _("escalafon_note") }}</p>
 {% else %}
 <p class="muted">ℹ️ {{ _("places_note", url="/rules") }}</p>
 {% endif %}

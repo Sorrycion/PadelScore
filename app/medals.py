@@ -47,7 +47,7 @@ SET_ICONS = {
     "cantado": "🔮",     # Estaba cantado
 }
 
-GAME_RULES = ("liga_amigos", "manual")  # rule types whose sets count games
+GAME_RULES = ("liga_amigos", "manual", "retas", "rey_cancha")  # sets that count games
 LIGA = "liga_amigos"
 TIERS = {"racha": (3, 5, 10), "gafe": (3, 5, 8), "veterano": (25, 50, 100)}
 # Medals for a total reaching a threshold (counted across tournaments).
