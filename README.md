@@ -131,6 +131,13 @@ shows if it ever changes.
 Then add the repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and
 `AZURE_SUBSCRIPTION_ID` (Settings → Secrets and variables → Actions).
 
+## User manuals
+
+`docs/manuales/` has two PDF manuals in Spanish, with phone screenshots: **Manual del
+administrador** and **Manual del jugador**. The app links them from the menu (📘 Manual;
+admins get theirs). Regenerate them with `python scripts/make_manuals.py` (needs Chrome)
+when screens change: see the `padelscore-manuals` skill.
+
 ## Run the tests
 
 ```powershell
@@ -157,7 +164,9 @@ app/
   templates/     # HTML pages
   static/        # CSS, picker.js, medals/*.svg
 sql/predeployment/  # numbered database changes, run before each deploy
-scripts/         # make_medals.py (medal images), make_icons.py (app icons), render_pages.py (screenshots)
+scripts/         # make_medals.py (medal images), make_icons.py (app icons), render_pages.py (screenshots),
+                 # make_manuals.py (user manuals, PDF)
+docs/manuales/   # 📘 the user manuals: manual-administrador.pdf, manual-jugador.pdf
 docs/            # league rules (REGLAMENTO.md), processes/ (how each part works, diagrams)
 CLAUDE.md        # context Claude Code loads in every session
 .claude/skills/  # Claude Code skills: feature, db-change, deploy, live admin, screenshot, medal

@@ -68,6 +68,8 @@
     <div class="top-actions">
       {% if editor %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
       <a class="install-link" href="/install">📲 {{ _("install_app") }}</a>
+      {# The user manual (PDF, Spanish; scripts/make_manuals.py): admins get theirs. #}
+      <a class="install-link" href="/static/manuals/manual-{{ 'administrador' if editor else 'jugador' }}.pdf" target="_blank" rel="noopener">📘 {{ _("manual") }}</a>
       {% if login_enabled %}
         {% if user %}<a href="/me" title="{{ _('my_profile') }}">👤 {{ user.display_name or user.username }}</a>
         {% elif not editor %}<a href="/login?next={{ path|urlencode }}">{{ _("login") }}</a>{% endif %}

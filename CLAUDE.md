@@ -26,6 +26,7 @@ It's live at https://padelscore-sorrycion.azurewebsites.net (repo `Sorrycion/Pad
 | `padelscore-live-admin` | Look at or fix the live database on Azure |
 | `padelscore-screenshot` | See pages at phone width, light and dark |
 | `padelscore-medal` | Add or change a medal |
+| `padelscore-manuals` | Regenerate the user manuals (PDF) after screens or processes change |
 
 ## Rules (from the user; keep them)
 
