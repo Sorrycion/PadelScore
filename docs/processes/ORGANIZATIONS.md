@@ -25,6 +25,29 @@ user or password), its link (`/<slug>`), admin user and password, and its tourna
 and players. 📧 Probar email sends a test to your own address, and "Crear organización"
 adds one.
 
+**Creating an organization** (the user asked 2026-11-06): its name, and its admin, from
+the **👤 Administrador** list: either an existing **player account** or **➕ Crear una
+cuenta nueva** (then its user and password; those fields hide, by CSS `:has()`, once
+an account is picked).
+
+```mermaid
+flowchart TD
+    F["⭐ Crear organización: name + 👤 Administrador"] --> Q{"An account picked?"}
+    Q -- "yes (player accounts only)" --> E["that account: role player → org_admin<br/>of the new organization (users.set_role)<br/>keeps its password and its players"]
+    Q -- "➕ new account" --> N["user + password → new org_admin account<br/>(user taken → 'pick it from the list')"]
+    E --> O[("organizations row + sync_org")]
+    N --> O
+```
+
+- **Only player accounts** are offered: an account has one role and one organization, so
+  an organization's admin (or a super admin) can't run a second one. A forced POST with
+  one is refused (`err_admin_account`).
+- **Passwords:** an account picked from the list keeps its own password, which is only
+  a hash, so `/orgs` shows "unknown" for it. A new account's password is readable there,
+  as before.
+- `orgs.create_org(conn, name, admin_user, password, user_id=None)` does both; the
+  Kudu command line (`python -m app.orgs create`) still makes a new account.
+
 ## Each organization's URLs (`/<slug>/...`)
 
 Every organization has a **slug**, its name in its URLs (`Nene` → `nene`). Its pages

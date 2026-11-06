@@ -13,8 +13,19 @@
   <summary class="button">{{ _("create_org") }}</summary>
   <form method="post" action="/orgs" class="stack card">
     <label>{{ _("org_name") }} <input name="name" required></label>
-    <label>{{ _("admin_user") }} <input name="admin_user" autocomplete="off" autocapitalize="off" required></label>
-    <label>{{ _("admin_password") }} <input type="password" name="admin_password" autocomplete="new-password" required></label>
+    {# Its admin: an existing player account, or a new one (its fields hide, by CSS, once
+       an account is picked). #}
+    <label>{{ _("org_admin_pick") }}
+      <select name="admin_account" class="admin-pick">
+        <option value="">{{ _("org_admin_new") }}</option>
+        {% for a in accounts %}<option value="{{ a.id }}">{{ a.name }} ({{ a.username }})</option>{% endfor %}
+      </select>
+    </label>
+    <p class="muted">{{ _("org_admin_pick_hint") }}</p>
+    <div class="stack new-admin">
+      <label>{{ _("admin_user") }} <input name="admin_user" autocomplete="off" autocapitalize="off"></label>
+      <label>{{ _("admin_password") }} <input type="password" name="admin_password" autocomplete="new-password"></label>
+    </div>
     <button type="submit">{{ _("create_org") }}</button>
   </form>
 </details>
