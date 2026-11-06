@@ -8,20 +8,34 @@ scores nothing.
 
 ```mermaid
 flowchart TD
-    A{Who?} -- Admin --> B["Everything: add, edit, delete sets<br/>(the whole set on its Edit page)"]
-    A -- "Player (account or tournament password)" --> C["✏️ Edit on a set of their tournament:<br/>a page with just the games"]
-    C --> D{Manual tournament?}
-    D -- yes --> E[Also add and edit whole sets]
-    D -- no --> F["Sets come from the courts;<br/>players only type the games"]
+    A{Who?} -- Admin --> B["Every set: add, edit, delete<br/>(the whole set on its Edit page)"]
+    A -- "Player account" --> C{"Plays in this set?"}
+    C -- yes --> D["✏️ boxes in the card + ✏️ Edit<br/>(any jornada)"]
+    C -- no --> G
+    A -- "Guest (tournament password, no account)" --> D2["✏️ every set of that tournament<br/>(no identity to check)"]
+    D --> E{Manual tournament?}
+    E -- yes --> F[Also add sets, and edit their own whole]
+    E -- no --> H["Only the games"]
     A -- Visitor --> G[Read only]
 ```
 
-- **Results are always entered on the set's Edit page** (`/matches/{id}/edit`), never
-  in the set card (the user's decision, 2026-10-30). On the jornada page every set has
-  ✏️ Editar for whoever may score it. Admins, and players of Manual tournaments, get
-  the whole set form. Other players get a page with just the two games boxes
-  (`match_score.html`), which posts to `/matches/{id}/score` and returns to the
-  jornada. Both games are required. A tie is allowed (no winner).
+- **Who may score a set** (`auth.can_score_set`, the user's decision 2026-11-06): the
+  admin, every set; a player account, only the sets it plays in (its player is one of
+  the four), in any jornada; a guest who logged in with the tournament's password, every
+  set of that tournament (a guest has no identity). `/matches/{id}/edit`, `/score`,
+  `/sets` and the Manual set form all check it; adding sets in Manual tournaments and
+  the Retas / Rey round buttons stay per tournament.
+- **Editable score boxes:** on the jornada page the cards of the sets this visitor may
+  score have their two boxes as inputs (`_match_row.html`, `scorable` from
+  `matchday_page`): white with a dashed blue border and a ✏️ badge, so they read as
+  editable; the others stay gray. `static/score-inline.js` posts to
+  `/matches/{id}/score` once both boxes have games (or both are emptied) and the page
+  comes back at the card. Escalafón matches (3 sets) keep only ✏️ Edit.
+- **The Edit page** (`/matches/{id}/edit`) is still there for every set one may score.
+  Admins, and players of Manual tournaments, get the whole set form. Other players get
+  a page with just the two games boxes (`match_score.html`, same editable look), which
+  posts to `/matches/{id}/score` and returns to the jornada. Both games are required.
+  A tie is allowed (no winner).
 - **Players find their sets** on the home page (`/`): "⏳ Mis próximos sets" lists the
   pending sets of every tournament they play, oldest date first, each with a link to
   enter its result.
@@ -50,9 +64,9 @@ sequenceDiagram
     participant H as Home / Jornada page
     participant E as Set's Edit page
     participant DB as matches table
-    P->>H: ✏️ Editar (or Resultado in "Mis próximos sets")
-    H->>E: /matches/{id}/edit
-    P->>E: type games 6 - 3 → Guardar
+    P->>H: types 6 and 3 in the ✏️ boxes of their set
+    H->>DB: POST /matches/{id}/score (score-inline.js)
+    Note over P,E: or ✏️ Editar / Resultado → Edit page → Guardar
     E->>DB: team_a_games=6, team_b_games=3, winner=A
     E-->>P: back to the jornada: court table and standings recalculated
 ```

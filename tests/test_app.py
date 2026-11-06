@@ -1095,6 +1095,32 @@ def test_player_password_lets_players_enter_results_only(with_players):
                   follow_redirects=False).status_code == 303
 
 
+def test_an_account_scores_only_its_own_sets(with_players):
+    c = with_players
+    with db.connect() as conn:  # set 3: Ana isn't in it
+        conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2) "
+                     "VALUES (1, 2, 5, 6, 7, 8)")
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # the account of Ana (player 1)
+    c.cookies.delete("player_1")
+    page = c.get("/matchdays/1").text
+    assert page.count("data-score-inline") == 2 and page.count('/edit">✏️') == 2
+    assert 'action="/club/matches/3/score"' not in page and "/matches/3/edit" not in page
+    assert 'class="pencil"' in page and "score-inline.js" in page
+    for url, data in [("/matches/3/score", {"team_a_games": "6", "team_b_games": "4"}),
+                      ("/club/matches/3/edit", None)]:
+        r = c.post(url, data=data, follow_redirects=False) if data else \
+            c.get(url, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"].startswith("/login"), url
+    # Its own set, typed in the card's boxes: saved, back to the card.
+    r = c.post("/matches/2/score", data={"team_a_games": "6", "team_b_games": "3"})
+    assert str(r.url).endswith("/matchdays/1#set-2") and 'value="6"' in r.text
+    # The admin types in every set.
+    c.post("/logout")
+    c.post("/login", data={"username": "admin", "password": "secreto", "next": "/"})
+    assert c.get("/matchdays/1").text.count("data-score-inline") == 3
+
+
 def test_players_of_one_tournament_cannot_score_another(with_players):
     from app import auth
     with db.connect() as conn:

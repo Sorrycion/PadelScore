@@ -1,10 +1,19 @@
 {# One set as a scoreboard card. Needs: m. A pending set shows each pair's chance of
-   winning (chance_of, _chance.html). On the matchday page (in_matchday) the
-   tournament's players (scorer) and editors get its ✏️ Edit link: results are always
-   entered and corrected on the set's Edit page, never in the card itself. #}
+   winning (chance_of, _chance.html). On the matchday page (in_matchday) the sets this
+   browser may score (scorable: all for editors, a player's own) get its ✏️ Edit link
+   and editable score boxes with a ✏️ (score-inline.js saves them; not for Escalafón,
+   whose 3 sets are typed on the Edit page). #}
 {% set pending = m.team_a_games is none %}
-{% set can_edit = editor or (in_matchday and scorer) %}
+{% set can_edit = editor or (in_matchday and m.id in scorable) %}
+{% set inline = in_matchday and can_edit and m.rule_code != LADDER %}
 <li class="match" id="set-{{ m.id }}">
+  {% if inline %}
+  <form class="scoreboard editable" method="post" action="/matches/{{ m.id }}/score" data-score-inline aria-label="{{ _('pending') if pending else '%s-%s'|format(m.team_a_games, m.team_b_games) }}">
+    {% for side, games, team in (("a", m.team_a_games, _("team_a")), ("b", m.team_b_games, _("team_b"))) %}
+    <span class="score-edit"><input class="score-box editable {% if m.winner == side|upper %}win{% endif %}" type="number" name="team_{{ side }}_games" min="0" inputmode="numeric" placeholder="–" value="{{ games if games is not none else '' }}" aria-label="{{ team }} ·{{ _('games_legend') }}" title="{{ _('score_inline_hint') }}"><span class="pencil" aria-hidden="true">✏️</span></span>
+    {% endfor %}
+  </form>
+  {% else %}
   <div class="scoreboard">
     {% if pending %}
       <span class="score pending" aria-label="{{ _('pending') }}"><span class="score-box pending">–</span><span class="score-box pending">–</span></span>
@@ -12,6 +21,7 @@
       <span class="score" aria-label="{{ m.team_a_games }}-{{ m.team_b_games }}"><span class="score-box {% if m.winner == 'A' %}win{% endif %}">{{ m.team_a_games }}</span><span class="score-box {% if m.winner == 'B' %}win{% endif %}">{{ m.team_b_games }}</span></span>
     {% endif %}
   </div>
+  {% endif %}
   <div class="teams">
     <div class="team a {% if m.winner == 'A' %}winner{% endif %}"><a href="/players/{{ m.a1_id }}">{{ m.a1 }}</a><a href="/players/{{ m.a2_id }}">{{ m.a2 }}</a></div>
     <div class="team b {% if m.winner == 'B' %}winner{% endif %}"><a href="/players/{{ m.b1_id }}">{{ m.b1 }}</a><a href="/players/{{ m.b2_id }}">{{ m.b2 }}</a></div>

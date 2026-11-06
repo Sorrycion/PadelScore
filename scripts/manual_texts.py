@@ -281,9 +281,12 @@ ADMIN_MANUAL = {
                     "juegue."),
         ]},
         {"title": "Registrar y corregir resultados", "blocks": [
-            ("p", "Los resultados se registran siempre en la página **Editar** de cada set. "
-                  "Pueden hacerlo el administrador y los jugadores del set."),
-            ("steps", ["Abre la jornada y toca **Editar** en el set.",
+            ("p", "El administrador registra el resultado de **todos** los sets; cada jugador, "
+                  "solo el de **sus** sets, en cualquier jornada. Las cajas del marcador "
+                  "que alguien puede editar se ven blancas, con borde azul punteado y un "
+                  "lápiz: ahí se escriben los juegos directo y se guarda al llenar las dos."),
+            ("steps", ["Abre la jornada y escribe los juegos en las cajas del set, o toca "
+                       "**Editar** en el set.",
                        "Escribe los **juegos** de la pareja A y de la pareja B.",
                        "Toca **Guardar cambios**. La clasificación se actualiza al instante."]),
             ("shots", [("set_edit_admin", 0, None, "Editar set (administrador)")]),
@@ -459,14 +462,18 @@ PLAYER_MANUAL = {
              + MENU_COMMON[1:]),
         ]},
         {"title": "Registrar un resultado", "blocks": [
-            ("p", "Cualquiera de los cuatro jugadores de un set puede registrar su resultado."),
+            ("p", "Cualquiera de los cuatro jugadores de un set puede registrar su resultado, "
+                  "en cualquier jornada. Solo puedes editar **tus** sets: sus cajas del "
+                  "marcador se ven blancas, con borde azul punteado y un lápiz."),
+            ("tip", "Lo más rápido: en la jornada escribe los juegos en las dos cajas de tu "
+                    "set. Al llenar las dos se guarda solo."),
             ("steps", ["En **Inicio**, en **Mis próximos sets**, toca **Resultado**. (O abre "
                        "la jornada y toca **Editar** en tu set.)",
                        "Escribe los **juegos** de cada pareja: la de la izquierda (A) y la de "
                        "la derecha (B).",
                        "Toca **Guardar**. Regresas a la jornada con el resultado y la "
                        "clasificación al día."]),
-            ("shots", [("matchday_player", 0, 1150, "La jornada: Editar en cada set"),
+            ("shots", [("matchday_player", 0, 1150, "La jornada: tus sets con cajas editables"),
                        ("set_score", 0, None, "Resultado: los juegos de cada pareja")]),
             ("bullets", ["Se permite el empate.",
                        "¿Te equivocaste? Entra otra vez a **Editar** y corrígelo.",
@@ -564,7 +571,8 @@ PLAYER_MANUAL = {
             ("p", "Únete con la contraseña del torneo en **Inicio > Unirme a un torneo**. Pídesela "
                   "al organizador."),
             ("h", "Registré mal un resultado"),
-            ("p", "Abre el set, toca **Editar**, corrígelo y guarda."),
+            ("p", "Escribe los juegos correctos en las cajas de tu set, o toca **Editar**, "
+                  "corrígelo y guarda."),
             ("h", "Aparezco dos veces en la lista"),
             ("p", "Al unirte con la contraseña, elige tu nombre y confirma que eres tú: se unen. "
                   "O pídele al organizador que los una."),

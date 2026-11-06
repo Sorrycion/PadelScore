@@ -550,10 +550,10 @@ def create_reto(request: Request, tournament_id: int, challenger: int = Form(...
 def save_sets(request: Request, match_id: int, a1: str = Form(""), b1: str = Form(""),
               a2: str = Form(""), b2: str = Form(""), a3: str = Form(""), b3: str = Form("")):
     """An Escalafón match's result, best of 3 sets (formats.best_of_three): editors and
-    the tournament's players. All empty clears it."""
+    the players of the match. All empty clears it."""
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
-        auth.require_scorer(request, tournament_of(conn, match["matchday_id"]))
+        auth.require_set_scorer(request, tournament_of(conn, match["matchday_id"]), match)
         edit = f"/matches/{match_id}/edit"
         try:
             games = [(opt_games(a), opt_games(b)) for a, b in ((a1, b1), (a2, b2), (a3, b3))]
@@ -1799,6 +1799,9 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
             "in_matchday": True,
             "recap_players": md_players(result),
             "scorer": auth.can_score(request, tournament),
+            # The sets this browser may score: all for the admin, a player's own.
+            "scorable": {s["id"] for s in sets if auth.can_score_set(
+                request, tournament, {k: s[k + "_id"] for k in ("a1", "a2", "b1", "b2")})},
             **summary_card(request, conn, result if last_played([result]) else None,
                            queued=summary == "queued"),
         })
@@ -3323,14 +3326,14 @@ def add_match(request: Request, form: dict = Depends(match_form_data)):
 
 @app.get("/matches/{match_id}/edit", response_class=HTMLResponse)
 def edit_match_page(request: Request, match_id: int, error: str | None = None):
-    """Every set is changed here. Editors (and players of Manual tournaments) get the
-    whole set; the other players of its tournament, just its games."""
+    """Every set is changed here. Editors get the whole set, and so do the players of a
+    Manual tournament for their own sets; other players, just the games of their sets."""
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
         tournament = tournament_of(conn, match["matchday_id"])
+        if not auth.can_score_set(request, tournament, match):
+            raise LoginRequired(here(request))
         if tournament["rule_code"] == LADDER:  # a match to 2 of 3 sets
-            if not auth.can_score(request, tournament):
-                raise LoginRequired(here(request))
             row = next(s for s in set_rows(conn, matchday_id=match["matchday_id"])
                        if s["id"] == match_id)
             sets = formats.parse_sets(row["sets_detail"]) + [(None, None)] * 3
@@ -3341,9 +3344,6 @@ def edit_match_page(request: Request, match_id: int, error: str | None = None):
             return render_match_form(request, conn, {c: match[c] for c in MATCH_COLUMNS},
                                      match_id=match_id,
                                      error=translator(get_lang(request))(error) if error else None)
-        tournament = tournament_of(conn, match["matchday_id"])
-        if not auth.can_score(request, tournament):
-            raise LoginRequired(here(request))
         row = next(s for s in set_rows(conn, matchday_id=match["matchday_id"])
                    if s["id"] == match_id)
         return templates.TemplateResponse(request, "match_score.html", {
@@ -3356,6 +3356,7 @@ def update_match(request: Request, match_id: int,
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
         require_set_maker(request, conn, match["matchday_id"], form["matchday_id"])
+        auth.require_set_scorer(request, tournament_of(conn, match["matchday_id"]), match)
         error, winner = validate_match(conn, form, translator(get_lang(request)))
         if error:
             return render_match_form(request, conn, form, match_id=match_id,
@@ -3379,11 +3380,11 @@ def delete_match(match_id: int):
 @app.post("/matches/{match_id}/score")
 def save_score(request: Request, match_id: int, team_a_games: str = Form(""),
                team_b_games: str = Form("")):
-    """Enter (or clear) the games of a set, from its Edit page: editors and the
-    tournament's players."""
+    """Enter (or clear) the games of a set, from its Edit page or the boxes of its card
+    on the jornada page: editors and the set's players."""
     with db.connect() as conn:
         match = get_or_404(conn, "matches", match_id)
-        auth.require_scorer(request, tournament_of(conn, match["matchday_id"]))
+        auth.require_set_scorer(request, tournament_of(conn, match["matchday_id"]), match)
         back = f"/matchdays/{match['matchday_id']}"
         edit = f"/matches/{match_id}/edit"
         try:
