@@ -275,6 +275,16 @@ input.score-box::placeholder { color: var(--score-text); opacity: .6; }
 input.score-box::-webkit-inner-spin-button, input.score-box::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .score { display: flex; gap: 10px; }
 form.score-form { display: none; }
+/* Boxes this visitor may type in: the card's color, a dashed blue border and a ✏️. */
+.score-edit { position: relative; display: inline-flex; }
+.score-box.editable { background: var(--card); color: var(--accent); border: 2.5px dashed var(--accent);
+                      box-shadow: var(--shadow); }
+.score-box.editable.win { background: var(--accent-soft); border-style: solid; }
+.score-box.editable:focus { outline: 3px solid var(--accent-soft); border-style: solid; }
+input.score-box.editable::placeholder { color: var(--accent); opacity: .5; }
+.score-edit .pencil { position: absolute; top: -9px; right: -9px; width: 24px; height: 24px; border-radius: 50%;
+                      display: flex; align-items: center; justify-content: center; font-size: .8rem;
+                      background: var(--accent); box-shadow: var(--shadow); pointer-events: none; }
 .teams { display: grid; grid-template-columns: 1fr 1fr; }
 /* A pending set's chances: pair A (left) in blue against pair B (right) in red. */
 .chance { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;

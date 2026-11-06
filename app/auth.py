@@ -176,6 +176,29 @@ def can_score(request: Request, tournament) -> bool:
     return is_editor(request) or is_player(request, tournament)
 
 
+def plays_in(user, match, organization_id) -> bool:
+    """The account's player in this organization is one of the set's four."""
+    with db.connect() as conn:
+        return conn.execute(
+            "SELECT 1 FROM players WHERE user_id = ? AND organization_id = ? AND id IN "
+            "(?, ?, ?, ?)", (user["id"], organization_id, match["a1"], match["a2"],
+                             match["b1"], match["b2"])).fetchone() is not None
+
+
+def can_score_set(request: Request, tournament, match) -> bool:
+    """May enter this set's result: the admin (every set), a guest with the tournament's
+    password (no identity, so every set of it), or an account that plays in this set."""
+    if is_editor(request) or is_guest_player(request, tournament):
+        return True
+    user = current_user(request)
+    return bool(user) and plays_in(user, match, tournament["organization_id"])
+
+
+def require_set_scorer(request: Request, tournament, match):
+    if not can_score_set(request, tournament, match):
+        raise LoginRequired("/")
+
+
 def is_https(request: Request) -> bool:
     # Behind Azure's front end the app itself sees plain HTTP.
     return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"

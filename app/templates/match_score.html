@@ -9,8 +9,8 @@
 <ul class="matches">
 <li class="match">
   <div class="scoreboard">
-    <input class="score-box" form="score-{{ m.id }}" type="number" name="team_a_games" min="0" inputmode="numeric" placeholder="00" required value="{{ m.team_a_games if m.team_a_games is not none else '' }}" aria-label="{{ _('team_a') }} · {{ _('games_legend') }}" autofocus>
-    <input class="score-box" form="score-{{ m.id }}" type="number" name="team_b_games" min="0" inputmode="numeric" placeholder="00" required value="{{ m.team_b_games if m.team_b_games is not none else '' }}" aria-label="{{ _('team_b') }} · {{ _('games_legend') }}">
+    <span class="score-edit"><input class="score-box editable" form="score-{{ m.id }}" type="number" name="team_a_games" min="0" inputmode="numeric" placeholder="00" required value="{{ m.team_a_games if m.team_a_games is not none else '' }}" aria-label="{{ _('team_a') }} · {{ _('games_legend') }}" autofocus><span class="pencil" aria-hidden="true">✏️</span></span>
+    <span class="score-edit"><input class="score-box editable" form="score-{{ m.id }}" type="number" name="team_b_games" min="0" inputmode="numeric" placeholder="00" required value="{{ m.team_b_games if m.team_b_games is not none else '' }}" aria-label="{{ _('team_b') }} · {{ _('games_legend') }}"><span class="pencil" aria-hidden="true">✏️</span></span>
   </div>
   <div class="teams">
     <div class="team a"><span>{{ m.a1 }}</span><span>{{ m.a2 }}</span></div>

@@ -182,8 +182,13 @@ TEXT = {
         "en": 'Remove or add players any time (e.g. to replace someone); results so far are '
               'kept. Type a new name to create the player right here.'},
     "player_mode_note": {
-        "es": "🔑 Entraste como jugador: con ✏️ Editar registras o corriges un resultado.",
-        "en": "🔑 Logged in as a player: use ✏️ Edit to enter or correct a result."},
+        "es": "🔑 Entraste como jugador: en tus sets escribe los games en las cajas con ✏️, "
+              "o usa ✏️ Editar.",
+        "en": "🔑 Logged in as a player: in your sets type the games in the ✏️ boxes, or use "
+              "✏️ Edit."},
+    "score_inline_hint": {
+        "es": "Escribe los games: se guarda al llenar las dos cajas",
+        "en": "Type the games: it saves once both boxes are filled"},
     "nav_home": {"es": "Inicio", "en": "Home"},
     "login_player_signup_hint": {
         "es": "¿No tienes cuenta? Créala. Ya adentro, escribe la contraseña de tu torneo "
