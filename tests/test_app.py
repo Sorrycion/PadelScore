@@ -304,6 +304,14 @@ def test_language_switch_only_redirects_within_the_site(client, next_url):
     assert r.headers["location"] == "/"
 
 
+def test_help_menu_links_both_manuals(locked):
+    page = locked.get("/club/rules").text  # a visitor, not only admins, sees both
+    assert 'id="help-menu"' in page and "Help" in page
+    for f in ("manual-jugador.pdf", "manual-administrador.pdf"):
+        assert f'href="/static/manuals/{f}"' in page
+        assert (APP_DIR / "static" / "manuals" / f).exists()
+
+
 def test_knowledge_base_is_linked():
     """Every process page is in the index, and every skill is in CLAUDE.md (see the
     "Every PR documents itself" rule)."""

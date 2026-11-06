@@ -12,7 +12,7 @@ flowchart LR
     A --> H["pages as admin / player / anon<br/>(pages_for)"]
     H --> C["headless Chrome 500 px<br/>→ PNG, cut at page end"]
     C --> P["manual_pdf.py + manual_texts.py<br/>(fpdf2)"]
-    P --> O["docs/manuales/*.pdf<br/>app/static/manuals/*.pdf (menu 📘 Manual)"]
+    P --> O["docs/manuales/*.pdf<br/>app/static/manuals/*.pdf (menu ❓ Ayuda)"]
 ```
 
 1. **Run:** `.venv/Scripts/python.exe -X utf8 scripts/make_manuals.py` (Chrome needed; port
@@ -27,6 +27,8 @@ flowchart LR
    still frame the right part (render the PDF pages, e.g. with PyMuPDF, and look).
 5. **Never real data:** the demo league is seeded by `seed()` with made-up names.
 6. **Look at every page** before committing; commit both PDF copies.
+7. **Port 8765 must be free:** a server left from `padelscore-screenshot` answers with the
+   wrong database and the pages come out as ~488 px stubs (crops then fail).
 
 ## When (the user's rule): every commit that changes what users see
 

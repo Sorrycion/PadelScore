@@ -134,8 +134,7 @@ Then add the repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and
 ## User manuals
 
 `docs/manuales/` has two PDF manuals in Spanish, with phone screenshots: **Manual del
-administrador** and **Manual del jugador**. The app links them from the menu (📘 Manual;
-admins get theirs). Regenerate them with `python scripts/make_manuals.py` (needs Chrome)
+administrador** and **Manual del jugador**. The app links both from the menu (❓ Ayuda). Regenerate them with `python scripts/make_manuals.py` (needs Chrome)
 when screens change: see the `padelscore-manuals` skill.
 
 ## Run the tests
