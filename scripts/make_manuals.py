@@ -289,7 +289,7 @@ def pages_for(i):
         # who, url, options
         "login": ("anon", "/"),
         "admin_home": ("admin", "/"),
-        "admin_menu": ("admin", f"{s}/standings", "menu"),
+        "admin_menu": ("admin", f"{s}/standings", "menu", "open=help-menu"),
         "standings": ("admin", f"{s}/standings"),
         "tournaments": ("admin", f"{s}/tournaments", "open=new-tournament"),
         "tournament": ("admin", f"{s}/tournaments/{i['t']}"),
@@ -308,7 +308,7 @@ def pages_for(i):
         "rules": ("admin", "/rules"),
         "signup": ("anon", "/signup"),
         "player_home": ("player", "/", "banner"),
-        "player_menu": ("player", f"{s}/standings", "menu"),
+        "player_menu": ("player", f"{s}/standings", "menu", "open=help-menu"),
         "player_tournament": ("player", f"{s}/tournaments/{i['t']}"),
         "matchday_player": ("player", f"{s}/matchdays/{i['md4']}"),
         "set_score": ("player", f"{s}/matches/{i['pending']}/edit", "games"),

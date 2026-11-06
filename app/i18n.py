@@ -602,7 +602,9 @@ TEXT = {
                      "en": "Install it as an app: it opens full screen, with its icon, "
                            "without the browser bar."},
     "install_app": {"es": "Instalar app", "en": "Install the app"},
-    "manual": {"es": "Manual", "en": "Manual (Spanish)"},
+    "help": {"es": "Ayuda", "en": "Help"},
+    "manual_player": {"es": "Manual del jugador", "en": "Player's manual (Spanish)"},
+    "manual_admin": {"es": "Manual del administrador", "en": "Admin's manual (Spanish)"},
     "install_banner": {"es": "Instala la app en tu teléfono", "en": "Install the app on your phone"},
     "close": {"es": "Cerrar", "en": "Close"},
     "install_now": {"es": "Instalar", "en": "Install"},

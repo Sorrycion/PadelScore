@@ -35,9 +35,9 @@ MENU_COMMON = [
     "**Sets:** todos los sets jugados y por jugar, con filtros por torneo, jornada y jugador.",
     "**Jugadores:** la lista de jugadores de la organización y la página de cada uno.",
     "**Reglamento:** las reglas de cada tipo de torneo (Liga de amigos, Americano, "
-    "Mexicano, Manual).",
+    "Mexicano, Manual, Retas, Rey de la cancha, Escalafón).",
     "**Instalar app:** cómo poner PadelScore en tu teléfono.",
-    "**Manual:** este manual, en PDF.",
+    "**Ayuda:** los dos manuales en PDF, el del jugador y el del administrador.",
     "**Tu nombre:** tu perfil (Mis datos, contraseña, emails).",
     "**Salir:** cerrar sesión.",
     "**ES / EN:** el idioma de la app.",
@@ -114,7 +114,7 @@ ADMIN_MANUAL = {
             ("p", "En el teléfono, el menú se abre con el botón de las tres rayas, arriba a la "
                   "derecha (en la computadora las opciones se ven como una fila). Estas son "
                   "sus opciones:"),
-            ("shots", [("admin_menu", 0, 570, "El menú abierto")]),
+            ("shots", [("admin_menu", 0, 640, "El menú abierto")]),
             ("bullets", MENU_COMMON + [
                 "**Canchas** (solo administradores): va directo a asignar las canchas de la "
                 "jornada más reciente."]),
@@ -456,7 +456,7 @@ PLAYER_MANUAL = {
         {"title": "El menú", "blocks": [
             ("p", "En el teléfono, el menú se abre con el botón de las tres rayas, arriba a la "
                   "derecha:"),
-            ("shots", [("player_menu", 0, 570, "El menú abierto")]),
+            ("shots", [("player_menu", 0, 680, "El menú abierto")]),
             ("bullets", MENU_COMMON[:1] + ["**Mi resumen:** tu página de jugador (resumen, "
                                            "estadísticas, cara a cara y medallas)."]
              + MENU_COMMON[1:]),

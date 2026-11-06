@@ -75,6 +75,20 @@ sequenceDiagram
   On wide screens the sections are a row of pills under the header. On
   phones (640 px or less) they fold, with the account links and the language, into a
   ☰ menu. It's a hidden checkbox (`#menu-toggle`) and CSS, with no JavaScript.
+- **❓ Ayuda** (`base.html`, `#help-menu`): a `<details>` with both user manuals
+  (📘 jugador, 🛠️ administrador; PDFs in `app/static/manuals/`), for everyone. A small
+  drop-down on wide screens, an open list inside the ☰ menu on phones, and unlike
+  📲 Instalar app it also shows in the installed app (the user asked 2026-11-06).
+
+```mermaid
+flowchart LR
+    T["top bar / ☰ menu"] --> H["❓ Ayuda (details)"]
+    H --> J["📘 Manual del jugador<br/>/static/manuals/manual-jugador.pdf"]
+    H --> A["🛠️ Manual del administrador<br/>/static/manuals/manual-administrador.pdf"]
+```
+
+- **Reglamento** (`/rules`): the rule-type tabs wrap into rows (`.rules-tabs`
+  `flex-wrap`) so every type is in view; other tab rows still scroll sideways.
 
 ## Installable app (PWA)
 
