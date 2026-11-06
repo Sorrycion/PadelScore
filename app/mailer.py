@@ -69,22 +69,28 @@ def signed_headers(endpoint, key, body, date=None):
                              f"&Signature={signature}"}
 
 
-def message(sender, to, name, subject, text, html):
-    return {"senderAddress": sender,
+def message(sender, to, name, subject, text, html, attachments=None):
+    """The ACS request body. `attachments`: [(file name, content type, bytes)]."""
+    body = {"senderAddress": sender,
             "recipients": {"to": [{"address": to, "displayName": name or to}]},
             "content": {"subject": subject, "plainText": text, "html": html}}
+    if attachments:
+        body["attachments"] = [{"name": n, "contentType": t,
+                                "contentInBase64": base64.b64encode(data).decode()}
+                               for n, t, data in attachments]
+    return body
 
 
-def send(to, name, subject, text, html):
-    """Send one email. True when ACS accepted it, False when email is off or it failed
-    (the reason goes to the app's log)."""
+def send(to, name, subject, text, html, attachments=None):
+    """Send one email (with `attachments`, see message()). True when ACS accepted it,
+    False when email is off or it failed (the reason goes to the app's log)."""
     global last_status, last_error
     last_status = last_error = None
     config = settings()
     if config is None:
         return False
     endpoint, key, sender = config
-    body = json.dumps(message(sender, to, name, subject, text, html)).encode()
+    body = json.dumps(message(sender, to, name, subject, text, html, attachments)).encode()
     request = urllib.request.Request(endpoint + API, data=body, method="POST",
                                      headers=signed_headers(endpoint, key, body))
     try:

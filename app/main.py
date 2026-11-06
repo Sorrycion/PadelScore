@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import os
 import re
+import threading
 import time
 import unicodedata
 from collections import Counter
@@ -13,12 +14,13 @@ from pathlib import Path
 from urllib.parse import quote, urlencode
 
 import markdown
-from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import auth, charts, countries, db, mailer, medals, migrate, orgs, rounds, stats, users
+from . import (auth, charts, countries, db, mailer, medals, migrate, orgs, report, rounds,
+               stats, users)
 from .auth import LoginRequired, require_editor, require_super
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
 from .scoring import (ROUND_MODES, SCORING, ScoreError, check_set, court_moves,
@@ -162,7 +164,8 @@ templates.env.globals.update(
     COUNTRIES=countries.COUNTRIES, DEFAULT_COUNTRY=countries.DEFAULT,
     EMAIL_KIND_KEYS={"recap": "email_kind_recap", "reminder": "email_kind_reminder",
                      "test-recap": "email_kind_test_recap",
-                     "test-reminder": "email_kind_test_reminder", "test": "email_kind_test"},
+                     "test-reminder": "email_kind_test_reminder", "test": "email_kind_test",
+                     "summary": "email_kind_summary"},
     EMAIL_STATUS_KEYS={"sent": "email_status_sent", "failed": "email_status_failed",
                        "throttled": "email_status_throttled"},
     chance_of=lambda m: chance_of(m),  # defined below
@@ -1249,6 +1252,7 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
             "mail_sent": mail == "sent",
             "today": league_today().isoformat(),
             "error": error,
+            **summary_card(request, conn, last_played(results)),
         })
 
 
@@ -1428,7 +1432,7 @@ def delete_tournament(tournament_id: int):
 
 @app.get("/matchdays/{matchday_id}", response_class=HTMLResponse)
 def matchday_page(request: Request, matchday_id: int, move: int = 1,
-                  error: str | None = None):
+                  error: str | None = None, summary: str | None = None):
     move = 2 if move == 2 else 1
     with db.connect() as conn:
         matchday = get_or_404(conn, "matchdays", matchday_id)
@@ -1454,6 +1458,8 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
             "in_matchday": True,
             "recap_players": md_players(result),
             "scorer": auth.can_score(request, tournament),
+            **summary_card(request, conn, result if last_played([result]) else None,
+                           queued=summary == "queued"),
         })
 
 
@@ -2095,10 +2101,12 @@ def recaps_due(conn):
               (today - timedelta(days=1)).isoformat())).fetchall()
 
 
-def deliver(conn, user, kind, subject, text, html, org=None, matchday_id=None):
+def deliver(conn, user, kind, subject, text, html, org=None, matchday_id=None,
+            attachments=None):
     """Send one email to an account (mailer.send) and log the attempt, sent or not, in
-    email_log (📬 Emails). `kind`: recap, reminder, test-recap, test-reminder or test."""
-    ok = mailer.send(user["email"], user["display_name"] or user["username"], subject, text, html)
+    email_log (📬 Emails). `kind`: one of EMAIL_KINDS."""
+    ok = mailer.send(user["email"], user["display_name"] or user["username"], subject, text,
+                     html, *([attachments] if attachments else []))
     status = "sent" if ok else ("throttled" if mailer.last_status == mailer.THROTTLED else "failed")
     conn.execute(
         "INSERT INTO email_log (day, organization_id, user_id, address, kind, matchday_id, "
@@ -2114,26 +2122,38 @@ def mail_error():
     return "err_mail_throttled" if mailer.last_status == mailer.THROTTLED else "err_mail_failed"
 
 
-def build_due_email(request, conn, kind, org, due, user):
-    """(subject, text, HTML) of a due reminder or recap (inside its organization), or None
-    when there's nothing to say any more."""
+def build_due_email(request, conn, kind, org, due, user, cache):
+    """(subject, text, HTML[, attachments]) of a due reminder, jornada summary or recap
+    (inside its organization), or None when there's nothing to say any more. `cache`:
+    what one run builds once (the summary's PDF)."""
     if kind == "reminder":
         data = reminder_data(conn, due["matchday_id"], due["player_id"])
         return data and reminder_email(request, org, data, user)
+    if kind == "summary":  # the same PDF for everyone: built once per run
+        key = ("summary", due["matchday_id"])
+        if key not in cache:
+            data = jornada_summary(conn, due["matchday_id"], "es")
+            cache[key] = (data, report.build(data, translator("es")))
+        return summary_email(request, org, *cache[key], user)
     recap = jornada_recap(conn, due["matchday_id"], due["player_id"], "es")
     return recap and recap_email(request, org, recap, user, email_extras(conn, recap))
 
 
+DUE = {"reminder": lambda conn: reminders_due(conn), "recap": lambda conn: recaps_due(conn),
+       "summary": lambda conn: summaries_due(conn)}  # each kind's due emails
+SENDING = threading.Lock()  # one batch at a time (the hourly job, an admin's 📄 send)
+
+
 def send_due(request, kinds):
-    """Send the due emails of these kinds ("reminder" first, then "recap"), at most
+    """Send the due emails of these kinds ("reminder", "summary", "recap"), at most
     mailer.per_run() of them, mailer.pause() seconds apart, for Azure's limits. If Azure
     answers 429 (over its limit) it stops: nothing more is marked sent, and the next
     hourly run carries on. Returns the counts."""
     out = {"sent": 0, "failed": 0, "left": 0, "throttled": False}
-    budget = mailer.per_run()
-    with db.connect() as conn:
+    budget, cache = mailer.per_run(), {}
+    with SENDING, db.connect() as conn:
         for kind in kinds:
-            for due in (reminders_due if kind == "reminder" else recaps_due)(conn):
+            for due in DUE[kind](conn):
                 if out["throttled"] or out["sent"] + out["failed"] >= budget:
                     out["left"] += 1
                     continue
@@ -2141,12 +2161,13 @@ def send_due(request, kinds):
                                    (due["organization_id"],)).fetchone()
                 user = users.get(conn, due["user_id"])
                 email = in_org(org["id"], lambda: build_due_email(request, conn, kind, org,
-                                                                  due, user))
+                                                                  due, user, cache))
                 if email is None:
                     continue
                 if out["sent"] + out["failed"]:
                     time.sleep(mailer.pause())
-                if deliver(conn, user, kind, *email, org=org["id"], matchday_id=due["matchday_id"]):
+                if deliver(conn, user, kind, *email[:3], org=org["id"],
+                           matchday_id=due["matchday_id"], attachments=email[3:] and email[3]):
                     conn.execute("INSERT INTO sent_emails (kind, user_id, matchday_id) "
                                  "VALUES (?, ?, ?)", (kind, user["id"], due["matchday_id"]))
                     conn.commit()  # each one counts, even if a later one fails
@@ -2157,7 +2178,7 @@ def send_due(request, kinds):
     return out
 
 
-EMAIL_KINDS = ("recap", "reminder", "test-recap", "test-reminder", "test")
+EMAIL_KINDS = ("recap", "reminder", "summary", "test-recap", "test-reminder", "test")
 EMAIL_STATUSES = ("sent", "failed", "throttled")
 
 
@@ -2202,7 +2223,7 @@ def send_emails(request: Request):
     require_task_token(request)
     if not mailer.enabled():
         return {"enabled": False, "sent": 0, "failed": 0}
-    return {"enabled": True, **send_due(request, ("reminder", "recap"))}
+    return {"enabled": True, **send_due(request, ("reminder", "summary", "recap"))}
 
 
 @app.post("/tasks/send-recaps")
@@ -2244,6 +2265,226 @@ def chance_of(m):
 
 def plays(s, pid):
     return pid in (s["a1_id"], s["a2_id"], s["b1_id"], s["b2_id"])
+
+
+# --- 📄 Jornada summary (PDF) ---------------------------------------------------------
+
+SET_MEDAL_KEYS = {  # stats.set_highlights code: (name, how) text keys
+    "renido": ("set_medal_renido", "set_medal_renido_how"),
+    "parejo": ("set_medal_parejo", "set_medal_parejo_how"),
+    "aplastante": ("set_medal_aplastante", "set_medal_aplastante_how"),
+    "sorpresa": ("set_medal_sorpresa", "set_medal_sorpresa_how"),
+    "cantado": ("set_medal_cantado", "set_medal_cantado_how"),
+}
+
+
+def last_played(results):
+    """The latest matchday of these with a played set, or None."""
+    return next((md for md in reversed(results)
+                 if any(is_played(s) for s in md.get("sets", []))), None)
+
+
+def by_court(sets, rates):
+    """[(court, its sets with "chance": % pair A wins, from these records)]."""
+    courts = {}
+    for s in sorted(sets, key=lambda s: (s["court"], s["id"])):
+        chance = round(100 * stats.win_probability(rates, (s["a1_id"], s["a2_id"]),
+                                                   (s["b1_id"], s["b2_id"])))
+        courts.setdefault(s["court"], []).append({**s, "chance": chance})
+    return list(courts.items())
+
+
+def jornada_summary(conn, matchday_id, lang):
+    """What the 📄 jornada summary (report.build) shows, inside the organization: the
+    ranking after the jornada (points, that day's, places moved, medals in the
+    tournament), its sets by court with the chance each pair had before the jornada, the
+    set medals (stats.set_highlights), everyone's points jornada by jornada, and the next
+    jornada's sets with their chances now, if it has any."""
+    _ = translator(lang)
+    matchday = get_or_404(conn, "matchdays", matchday_id)
+    tournament = get_tournament(conn, matchday["tournament_id"])
+    results, standings = load_results(conn, tournament["id"])
+    md = next(r for r in results if r["id"] == matchday_id)
+    n, round_mode = md["number"], tournament["rule_code"] in ROUND_MODES
+    label_key = "round_n" if round_mode else "matchday_n"
+    after, before = ranking_upto(standings, n), ranking_upto(standings, n - 1)
+    won = tournament_medals(conn, tournament["id"], standings, lang)
+    names = {m["code"]: m["name"] for m in medal_types(conn, lang)}
+    ranking = sorted((
+        {"id": r["id"], "name": r["name"], "position": after[r["id"]],
+         "points": sum(p for k, p in r["by_matchday"].items() if k <= n),
+         "today": r["by_matchday"].get(n),
+         "moved": before[r["id"]] - after[r["id"]] if r["id"] in before else None,
+         "medals": [m["code"] for m in won.get(r["id"], [])]}
+        for r in standings if r["id"] in after), key=lambda r: (r["position"], r["name"].lower()))
+    shown = {code for r in ranking for code in r["medals"]}
+    # Each pair's chance as it was before this jornada: the records of the earlier sets.
+    earlier = [s for s in set_rows(conn) if is_played(s) and (
+        s["played_on"] < matchday["played_on"]
+        or (s["tournament_id"] == tournament["id"] and s["matchday"] < n))]
+    rates_before = stats.player_rates(earlier)
+    sets = set_rows(conn, matchday_id=matchday_id)
+    highlights = []
+    for hl in stats.set_highlights([s for s in sets if is_played(s)], rates_before):
+        s, name, how = hl["set"], *SET_MEDAL_KEYS[hl["code"]]
+        a, b = s["team_a_games"], s["team_b_games"]
+        highlights.append({**hl, "name": str(_(name)), "how": str(_(
+            how, n=hl["chance"], games=a + b, gap=abs(a - b)))})
+    numbers = [d["number"] for d in results if d["number"] <= n]
+    evolution = []
+    for r in ranking:
+        days = next(row for row in standings if row["id"] == r["id"])["by_matchday"]
+        total, values = 0, []
+        for k in numbers:
+            total += days.get(k, 0)
+            values.append(total)
+        evolution.append({"name": r["name"], "position": r["position"], "values": values})
+    upcoming = next((d for d in results if d["number"] == n + 1), None)
+    upcoming_sets = set_rows(conn, matchday_id=upcoming["id"]) if upcoming else []
+    org = conn.execute("SELECT * FROM organizations WHERE id = ?", (org_id(),)).fetchone()
+    short = lambda k: str(_("round_short" if round_mode else "matchday_short", n=k))  # noqa: E731
+    return {
+        "org": org["name"], "org_slug": org["slug"], "tournament": tournament,
+        "matchday": md, "label": str(_(label_key, n=n)), "short": short(n),
+        "signed": tournament["rule_code"] == "manual",
+        "ranking": ranking,
+        "legend": [(code, names[code]) for code in names if code in shown],
+        "highlights": highlights,
+        "courts": by_court(sets, rates_before),
+        "evolution": {"numbers": numbers, "players": evolution,
+                      "first": short(numbers[0]) if numbers else "", "last": short(n)},
+        "next": upcoming_sets and {
+            "label": str(_(label_key, n=n + 1)), "played_on": upcoming["played_on"],
+            "courts": by_court(upcoming_sets, org_rates(conn))},
+    }
+
+
+def summary_file_name(data):
+    """e.g. liga-de-otono-j3.pdf"""
+    return f"{orgs.slugify(data['tournament']['name'])}-{orgs.slugify(data['short'])}.pdf"
+
+
+def summary_pdf(data, lang):
+    return Response(report.build(data, translator(lang)), media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{summary_file_name(data)}"'})
+
+
+@app.get("/matchdays/{matchday_id}/summary.pdf")
+def jornada_summary_pdf(request: Request, matchday_id: int):
+    """📄 The jornada summary as a PDF, for whoever can see the jornada (to keep or share)."""
+    lang = get_lang(request)
+    with db.connect() as conn:
+        data = jornada_summary(conn, matchday_id, lang)
+    return summary_pdf(data, lang)
+
+
+# Before /r/{org}/{jornada}/{player}/{token} (the recap), which would take "summary".
+@app.get("/r/{org_id}/{matchday_id}/summary/{token}")
+def shared_summary_pdf(request: Request, org_id: int, matchday_id: int, token: str):
+    """The summary PDF's public link, as sent on WhatsApp: it opens without entering the
+    organization (the token proves the link came from the app)."""
+    lang = get_lang(request)
+    with db.connect() as conn:
+        org = conn.execute("SELECT * FROM organizations WHERE id = ?", (org_id,)).fetchone()
+        if org is None or not hmac.compare_digest(token, auth.summary_token(org, matchday_id)):
+            raise HTTPException(404, "Not found")
+        data = in_org(org_id, lambda: jornada_summary(conn, matchday_id, lang))
+    return summary_pdf(data, lang)
+
+
+def summary_whatsapp(request, conn, md, tournament):
+    """The 📲 WhatsApp message of a jornada summary: its title and the PDF's public link
+    (phones that can share files send the PDF itself, with this text)."""
+    _ = translator(get_lang(request))
+    org = conn.execute("SELECT * FROM organizations WHERE id = ?", (org_id(),)).fetchone()
+    url = f"{site_base(request)}/r/{org['id']}/{md['id']}/summary/{auth.summary_token(org, md['id'])}"
+    label = _("round_n" if tournament["rule_code"] in ROUND_MODES else "matchday_n", n=md["number"])
+    text = str(_("pdf_whatsapp_text", label=label, tournament=tournament["name"]))
+    return {"pdf_text": text, "pdf_url": url,
+            "pdf_whatsapp": "https://wa.me/?text=" + quote(f"{text}\n{url}", safe="")}
+
+
+SUMMARY_AUDIENCE = """
+    FROM matchdays d
+    JOIN tournaments t ON t.id = d.tournament_id
+    JOIN players p ON p.organization_id = t.organization_id
+    JOIN users u ON u.id = p.user_id
+    WHERE u.email IS NOT NULL AND u.email_recaps = 1
+      AND (p.id IN (SELECT player_id FROM tournament_players WHERE tournament_id = t.id)
+           OR EXISTS (SELECT 1 FROM matches x JOIN matchdays y ON y.id = x.matchday_id
+                      WHERE y.tournament_id = t.id AND p.id IN (x.a1, x.a2, x.b1, x.b2)))
+"""  # who gets a jornada's summary: accounts with an email and a player in its tournament
+
+
+def summaries_due(conn):
+    """(matchday, player, account, organization) for every account still to get a jornada
+    summary an admin asked to send in the last 3 days (SUMMARY_AUDIENCE)."""
+    return conn.execute(
+        "SELECT DISTINCT d.id AS matchday_id, p.id AS player_id, u.id AS user_id, "
+        "t.organization_id " + SUMMARY_AUDIENCE.replace(
+            "FROM matchdays d", "FROM summary_requests r JOIN matchdays d ON d.id = r.matchday_id")
+        + " AND r.requested_at >= datetime('now', '-3 days') AND NOT EXISTS (SELECT 1 "
+        "FROM sent_emails s WHERE s.kind = 'summary' AND s.user_id = u.id "
+        "AND s.matchday_id = d.id) ORDER BY r.requested_at, u.id").fetchall()
+
+
+def summary_card(request, conn, md, queued=False):
+    """The 📄 card's context for a matchday with played sets (None: no card): its
+    WhatsApp message and, for admins, who would get it by email and how many did."""
+    if md is None:
+        return {"pdf_md": None}
+    tournament = conn.execute("SELECT t.*, r.code AS rule_code FROM matchdays d "
+                              "JOIN tournaments t ON t.id = d.tournament_id "
+                              "JOIN rule_types r ON r.id = t.rule_type_id WHERE d.id = ?",
+                              (md["id"],)).fetchone()
+    out = {"pdf_md": md, "pdf_queued": queued, **summary_whatsapp(request, conn, md, tournament)}
+    if auth.is_editor(request):
+        out["pdf_to"] = conn.execute("SELECT COUNT(DISTINCT u.id) " + SUMMARY_AUDIENCE
+                                     + " AND d.id = ?", (md["id"],)).fetchone()[0]
+        out["pdf_sent"] = conn.execute(
+            "SELECT COUNT(*) FROM sent_emails WHERE kind = 'summary' AND matchday_id = ?",
+            (md["id"],)).fetchone()[0]
+        out["pdf_asked"] = conn.execute("SELECT requested_at FROM summary_requests "
+                                        "WHERE matchday_id = ?", (md["id"],)).fetchone()
+    return out
+
+
+def summary_email(request, org, data, pdf, user):
+    """(subject, text, HTML, attachments) of the jornada summary email: a few lines and
+    the PDF attached. In Spanish, like the other emails."""
+    _ = translator("es")
+    t = data["tournament"]
+    link = f"{site_base(request)}/{org['slug']}/tournaments/{t['id']}"
+    unsubscribe = unsubscribe_url(request, user, "recaps")
+    subject = str(_("summary_email_subject", label=data["label"], tournament=t["name"]))
+    leader = data["ranking"][0] if data["ranking"] else None
+    lines = [str(_("summary_email_intro", label=data["label"], tournament=t["name"]))]
+    if leader:
+        lines.append(str(_("summary_email_leader", name=leader["name"], points=leader["points"])))
+    lines += [f"{medals.SET_ICONS[h['code']]} {h['name']}: {h['how']}" for h in data["highlights"]]
+    text = "\n".join(lines) + f"\n\n{link}\n\n{_('recap_email_unsubscribe')}: {unsubscribe}"
+    html = templates.env.get_template("email_summary.html").render(
+        _=_, data=data, lines=lines, link=link, unsubscribe=unsubscribe, org_name=org["name"],
+        name=user["display_name"] or user["username"])
+    return subject, text, html, [(summary_file_name(data), "application/pdf", pdf)]
+
+
+@app.post("/matchdays/{matchday_id}/summary/send", dependencies=EDIT)
+def send_jornada_summary(request: Request, matchday_id: int, background: BackgroundTasks):
+    """📧 An admin sends the jornada summary to the tournament's players: it's queued
+    (summary_requests) and a first batch goes right after this answer; the hourly email
+    job sends the rest within Azure's limits (send_due)."""
+    with db.connect() as conn:
+        get_or_404(conn, "matchdays", matchday_id)
+        if not mailer.enabled():
+            return redirect(f"/matchdays/{matchday_id}?error=err_mail_off#summary")
+        user = auth.current_user(request)
+        conn.execute(
+            "INSERT INTO summary_requests (matchday_id, requested_by) VALUES (?, ?) "
+            "ON CONFLICT (matchday_id) DO UPDATE SET requested_at = datetime('now'), "
+            "requested_by = excluded.requested_by", (matchday_id, user and user["id"]))
+    background.add_task(send_due, request, ("summary",))
+    return redirect(f"/matchdays/{matchday_id}?summary=queued#summary")
 
 
 def reminder_data(conn, matchday_id, player_id):

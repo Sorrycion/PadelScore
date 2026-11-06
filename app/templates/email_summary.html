@@ -1,0 +1,16 @@
+<!doctype html>
+{# The jornada summary email (main.summary_email): a few lines; the PDF goes attached.
+   Inline styles only, like the other emails. Needs: data (main.jornada_summary), lines,
+   name, link, unsubscribe, org_name. #}
+<html lang="es">
+<body style="margin:0;padding:16px;background:#f1f2f6;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#141b2d">
+  <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:16px;padding:20px">
+    <p style="margin:0;color:#6b7280;font-size:13px">🏢 {{ org_name }} · {{ data.tournament.name }} · 📅 {{ data.matchday.played_on }}</p>
+    <h1 style="margin:6px 0 10px;font-size:22px">📄 {{ data.label }}</h1>
+    <p style="margin:0 0 10px;font-size:15px">{{ _("summary_email_hi", name=name) }}</p>
+    {% for line in lines %}<p style="margin:0 0 8px;font-size:15px">{{ line }}</p>{% endfor %}
+    <p style="margin:18px 0 0"><a href="{{ link }}" style="display:inline-block;background:#4568f5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:12px;font-weight:600">{{ _("summary_email_open") }}</a></p>
+    <p style="margin:20px 0 0;color:#6b7280;font-size:12px"><a href="{{ unsubscribe }}" style="color:#6b7280">{{ _("recap_email_unsubscribe") }}</a></p>
+  </div>
+</body>
+</html>

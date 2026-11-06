@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app import db, orgs, users
+from app import db, orgs, stats, users
 from app.i18n import LANGS, TEXT
 from app.main import app, league_today
 from app.scoring import (ScoreError, check_set, court_moves, court_rotation, court_table,
@@ -2069,6 +2069,83 @@ def test_jornada_recaps_are_emailed_the_next_day_once(with_players, monkeypatch)
     with db.connect() as conn:
         assert conn.execute("SELECT email_recaps FROM users WHERE username = 'analo'"
                             ).fetchone()[0] == 0
+
+
+def test_set_highlights_find_the_jornada_set_medals():
+    def a_set(a1, a2, b1, b2, ga, gb):
+        return {"a1_id": a1, "a2_id": a2, "b1_id": b1, "b2_id": b2, "team_a_games": ga,
+                "team_b_games": gb, "winner": "A" if ga > gb else "B" if gb > ga else None}
+    rates = {1: (9, 10), 2: (9, 10), 3: (1, 10), 4: (1, 10)}  # 1 and 2 win nearly always
+    sets = [a_set(1, 2, 3, 4, 7, 6),   # the favorites, a long and close set
+            a_set(1, 2, 3, 4, 2, 6),   # the underdogs win: an upset
+            a_set(1, 3, 2, 4, 6, 0),   # even pairs, a wide gap
+            a_set(1, 4, 2, 3, 5, 4)]   # even pairs, one game apart
+    found = {h["code"]: h for h in stats.set_highlights(sets, rates)}
+    assert found["renido"]["set"] is sets[0] and found["parejo"]["set"] is sets[3]
+    assert found["aplastante"]["set"] is sets[2]
+    assert found["sorpresa"]["set"] is sets[1] and found["sorpresa"]["chance"] < 45
+    assert found["cantado"]["set"] is sets[0] and found["cantado"]["chance"] >= 70
+    assert stats.set_highlights(sets[:1], {}) == []  # one even set: nothing stands out
+
+
+def score_both_sets():
+    with db.connect() as conn:
+        conn.execute("UPDATE matches SET team_a_games = 6, team_b_games = 0, winner = 'A' WHERE id = 1")
+        conn.execute("UPDATE matches SET team_a_games = 4, team_b_games = 6, winner = 'B' WHERE id = 2")
+
+
+def test_jornada_summary_pdf_and_whatsapp(with_players):
+    c = with_players
+    c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
+    assert 'id="summary"' not in c.get("/club/tournaments/1").text  # nothing played yet
+    score_both_sets()
+    page = c.get("/club/tournaments/1").text
+    assert 'id="summary"' in page and "Send on WhatsApp" in page and "https://wa.me/?text=" in page
+    assert 'href="/club/matchdays/1/summary.pdf"' in page and "pdf-share.js" in page
+    assert "Nobody in the tournament has an account" in page  # nobody to email yet
+    pdf = c.get("/club/matchdays/1/summary.pdf")
+    assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content.startswith(b"%PDF") and "liga-amigos-m1.pdf" in pdf.headers["content-disposition"]
+    assert 'id="summary"' in c.get("/club/matchdays/1").text
+    # The public link (sent on WhatsApp) opens without entering the organization.
+    public = re.search(r'data-share-pdf="https?://[^/]+(/r/1/1/summary/\w+)"', page).group(1)
+    c.post("/logout")
+    c.cookies.clear()
+    assert c.get(public).content.startswith(b"%PDF")
+    assert c.get(public[:-2] + "00").status_code == 404
+    assert c.get("/r/1/2/summary/" + public.rsplit("/", 1)[1]).status_code == 404  # another jornada
+
+
+def test_jornada_summary_is_emailed_with_the_pdf_once(with_players, monkeypatch):
+    outbox = email_on(monkeypatch)
+    c = with_players
+    c.post("/login", data={"password": "jugamos", "role": "player"})
+    signup(c)  # Ana, ana@example.com
+    score_both_sets()
+    c.post("/logout")
+    c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
+    assert "Email 1 player" in c.get("/club/matchdays/1").text
+    r = c.post("/club/matchdays/1/summary/send")
+    assert str(r.url).endswith("/club/matchdays/1?summary=queued#summary") and "Sending by email" in r.text
+    assert len(outbox) == 1  # the first batch goes right away
+    to, name, subject, text, html, attachments = outbox[0]
+    assert to == "ana@example.com" and "Resumen de la Jornada 1" in subject
+    assert "Liga Amigos" in html and "/club/tournaments/1" in text
+    (file_name, kind, data), = attachments
+    assert file_name.endswith(".pdf") and kind == "application/pdf" and data.startswith(b"%PDF")
+    assert "Sent to 1 of 1" in r.text
+    c.post("/club/matchdays/1/summary/send")
+    assert c.post("/tasks/send-emails", headers={"X-Task-Token": "tarea-secreta"}).json()["sent"] == 0
+    assert len(outbox) == 1  # once per account
+    assert "📄 Matchday summary (PDF)" in c.get("/club/emails").text
+
+
+def test_jornada_summary_send_needs_email_and_an_admin(with_players):
+    score_both_sets()
+    c = with_players
+    assert c.post("/club/matchdays/1/summary/send", follow_redirects=False).status_code in (303, 307)
+    c.post("/login", data={"username": "admin", "password": "secreto", "role": "account"})
+    assert "Email is off" in c.post("/club/matchdays/1/summary/send").text
 
 
 def test_profile_switches_recap_emails(with_players):

@@ -37,6 +37,16 @@ ICONS = {  # code: icon of the situation
     "fantasma": "👻",       # Se lo tragó la tierra
 }
 
+# The jornada's set medals (stats.set_highlights, in the 📄 jornada summary): one set
+# each, not a player's medal. Their images are app/static/medals/set_<code>.svg/.png.
+SET_ICONS = {
+    "renido": "🥵",      # El más reñido
+    "parejo": "⚖️",      # El más parejo
+    "aplastante": "🧹",  # La barrida (el más aplastante)
+    "sorpresa": "😱",    # La sorpresa (el batacazo)
+    "cantado": "🔮",     # Estaba cantado
+}
+
 GAME_RULES = ("liga_amigos", "manual")  # rule types whose sets count games
 LIGA = "liga_amigos"
 TIERS = {"racha": (3, 5, 10), "gafe": (3, 5, 8), "veterano": (25, 50, 100)}

@@ -1,0 +1,33 @@
+{# 📄 The jornada summary (main.jornada_summary_pdf). First choice, 📲 WhatsApp from your
+   own phone: phones that can share files send the PDF itself to the chat or group you
+   pick; otherwise WhatsApp opens with the text and the PDF's public link
+   (static/pdf-share.js). Second, for admins: 📧 email it to the tournament's players.
+   Needs: pdf_md, pdf_text, pdf_url, pdf_whatsapp and, for admins, pdf_to, pdf_sent,
+   pdf_asked, pdf_queued (main.summary_card). #}
+{% if pdf_md %}
+{% set pdf_label = _("round_n" if tournament.rule_code in ROUND_MODES else "matchday_n", n=pdf_md.number) %}
+<section class="card pdf-card" id="summary">
+  <h2>{{ _("pdf_card_title", label=pdf_label) }}</h2>
+  <p class="muted">{{ _("pdf_card_note") }}</p>
+  <p class="inline">
+    <a class="button whatsapp" href="{{ pdf_whatsapp }}" target="_blank" rel="noopener"
+       data-share-pdf="{{ pdf_url }}" data-text="{{ pdf_text }}">{{ _("pdf_whatsapp") }}</a>
+    <a class="button secondary" href="/matchdays/{{ pdf_md.id }}/summary.pdf" target="_blank" rel="noopener">{{ _("pdf_download") }}</a>
+  </p>
+  <p class="muted small">{{ _("pdf_whatsapp_note") }}</p>
+  {% if editor %}
+  {% if pdf_queued %}<p class="saved">{{ _("pdf_queued") }}</p>{% endif %}
+  {% if pdf_to %}
+  <p class="muted">{{ _("pdf_or_email") }}</p>
+  <form method="post" action="/matchdays/{{ pdf_md.id }}/summary/send" class="inline"
+        onsubmit="return confirm('{{ _('pdf_send_confirm') }}')">
+    <button type="submit" class="secondary">{{ _("pdf_send", n=pdf_to) }}</button>
+  </form>
+  {% if pdf_asked or pdf_sent %}<p class="muted">{{ _("pdf_sent_status", sent=pdf_sent, to=pdf_to) }}</p>{% endif %}
+  {% else %}
+  <p class="muted">{{ _("pdf_no_audience") }}</p>
+  {% endif %}
+  {% endif %}
+</section>
+<script src="/static/pdf-share.js?v={{ css_version }}" defer></script>
+{% endif %}

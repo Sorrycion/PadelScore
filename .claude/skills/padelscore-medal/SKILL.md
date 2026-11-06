@@ -42,4 +42,8 @@ flowchart LR
    reads right in both.
 5. **Test** it in `tests/test_app.py` next to `test_medals_are_computed_from_sets_and_tournaments`,
    then look at `/medals` and a tournament page on a phone.
-6. **Update** the table in `docs/processes/MEDALS.md` and the `padelscore-medals` memory.
+6. **Set medals** (one set of a jornada, in the 📄 PDF: el más reñido, la sorpresa...)
+   are not catalog rows: icon in `medals.SET_ICONS`, rule in `stats.set_highlights`,
+   texts `set_medal_<code>` and `_how` in `i18n.py`, `main.SET_MEDAL_KEYS`. Run
+   `scripts/make_medals.py` (it also draws the PNGs the PDF uses, with Chrome).
+7. **Update** the table in `docs/processes/MEDALS.md` and the `padelscore-medals` memory.

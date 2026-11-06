@@ -94,6 +94,54 @@ sequenceDiagram
 No message is sent by the app: the player chooses the chat. Sending automatically
 (email or the WhatsApp Business API) needs a paid or registered service.
 
+## 📄 Resumen de la jornada (PDF, for WhatsApp or email)
+
+The tournament page has a card for its **last jornada with a played set**, and each
+jornada page has one for itself. The PDF (`GET /<slug>/matchdays/<id>/summary.pdf`,
+`main.jornada_summary` → `app/report.py`, fpdf2) has:
+
+1. **Ranking** after that jornada: points, that jornada's points, places moved (+2, -1,
+   =), and each player's **medals in the tournament** (icons, with a legend).
+2. **Medallas de la jornada**, one set each (`stats.set_highlights`):
+
+   | Icon | Set medal | Which set |
+   |---|---|---|
+   | 🥵 | El más reñido | the longest set (most games), if 2 games apart or less |
+   | ⚖️ | El más parejo | the closest of the others (a tie or 1 game) |
+   | 🧹 | El más aplastante | the widest gap, 3 games or more ("¡los barrieron!") |
+   | 😱 | La sorpresa | the winners with the lowest chance, under 45% ("¡batacazo!") |
+   | 🔮 | Estaba cantado | the winners with the highest chance, 70% or more |
+
+   The chances are each pair's **before the jornada**: `stats.win_probability` on the
+   records of the earlier sets only.
+3. **Sets y resultados** by court: pair A blue, pair B red, winners in bold, and the
+   chance the winners had.
+4. **Así van los puntos:** one small chart per player (by position): their total
+   points after each jornada in blue, everyone else's in gray, all on the same scale.
+5. **Próxima jornada**, if it already has sets: each set with each pair's chance now
+   (blue and red bar).
+
+Two ways to send it, **WhatsApp first**:
+
+```mermaid
+flowchart TD
+    C["📄 card (tournament / jornada page)"] --> W["📲 Enviar por WhatsApp<br/>(from your own phone)"]
+    C --> V["⬇️ Ver PDF"]
+    C --> E["📧 Enviar por email a N jugadores<br/>(admins)"]
+    W -- "phone can share files<br/>(Android Chrome, iPhone Safari)" --> S["share sheet: the PDF itself<br/>→ WhatsApp → chat or group"]
+    W -- "computer / other" --> L["wa.me with the text and the PDF's<br/>public link /r/&lt;org&gt;/&lt;jornada&gt;/summary/&lt;token&gt;"]
+    E --> Q["summary_requests (0009)"] --> J["send_due('summary'): first batch now,<br/>the rest with the hourly job (EMAIL.md)"]
+```
+
+- **WhatsApp** is `static/pdf-share.js`: it loads the PDF with the page (Safari only
+  shares right after a tap) and opens the share sheet with the file. Where files can't
+  be shared, the link opens `wa.me` with the title and a **public link**, signed by
+  `auth.summary_token` (that jornada only, no login, like the recap's `/r/` links).
+- **Email** (admins): to every account with an email and a player in the tournament
+  (recaps on), the PDF attached. See [EMAIL.md](EMAIL.md).
+- PDF core fonts only speak Latin-1 (enough for Spanish): icons are PNGs drawn by
+  `scripts/make_medals.py` (`app/static/medals/png/`).
+
 ## Americano and Mexicano (rounds)
 
 ```mermaid
