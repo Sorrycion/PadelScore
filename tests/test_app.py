@@ -2937,6 +2937,34 @@ def test_escalafon_pairs_challenges_and_best_of_three(league):
     assert "Escalafón" in c.get("/rules").text
 
 
+def test_escalafon_retos_of_one_date_share_its_jornada(league):
+    c = league
+    tid = format_tournament(c, 7)
+    for a, b in ((1, 2), (3, 4), (5, 6), (7, 8)):
+        c.post(f"/club/tournaments/{tid}/pairs", data={"player1": str(a), "player2": str(b)})
+    with db.connect() as conn:
+        pair = dict(conn.execute("SELECT player1_id, id FROM ladder_pairs").fetchall())
+
+    def reto(challenger, challenged, day):
+        r = c.post(f"/club/tournaments/{tid}/retos", data={
+            "challenger": pair[challenger], "challenged": pair[challenged], "played_on": day})
+        return int(re.search(r"/matchdays/(\d+)", str(r.url)).group(1))
+
+    md = reto(7, 1, "2026-11-03")
+    assert reto(5, 3, "2026-11-03") == md  # same date: the same jornada, next court
+    assert [(s["court"], s["a1"]) for s in md_sets(md)] == [(1, 7), (2, 5)]
+    c.post(f"/club/matches/{md_sets(md)[0]['id']}/sets", data={"a1": "6", "b1": "4",
+                                                              "a2": "6", "b2": "4"})
+    other = reto(1, 7, "2026-11-04")  # another date: a new jornada
+    assert other != md and len(md_sets(other)) == 1
+    with db.connect() as conn:
+        days = conn.execute("SELECT number, played_on FROM matchdays WHERE tournament_id = ? "
+                            "ORDER BY number", (tid,)).fetchall()
+    assert [tuple(d) for d in days] == [(1, "2026-11-03"), (2, "2026-11-04")]
+    page = c.get(f"/club/matchdays/{md}").text
+    assert "Court 1" in page and "Court 2" in page
+
+
 def test_jornada_pdf_has_a_positions_chart(league):
     from app import report
     calls = []
