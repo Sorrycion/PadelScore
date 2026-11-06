@@ -785,9 +785,15 @@ TEXT = {
     "pdf_download": {"es": "⬇️ Ver PDF", "en": "⬇️ View PDF"},
     "pdf_whatsapp": {"es": "📲 Enviar por WhatsApp", "en": "📲 Send on WhatsApp"},
     "pdf_whatsapp_note": {"es": "Desde tu WhatsApp: en el celular se manda el PDF al chat o grupo "
-                                "que elijas; en la computadora, un enlace al PDF.",
+                                "que elijas; en la computadora, se abre WhatsApp con un enlace "
+                                "al PDF. O copia el mensaje con el enlace y pégalo donde quieras.",
                           "en": "From your WhatsApp: on a phone the PDF goes to the chat or "
-                                "group you pick; on a computer, a link to the PDF."},
+                                "group you pick; on a computer, WhatsApp opens with a link to "
+                                "the PDF. Or copy the message with the link and paste it "
+                                "anywhere."},
+    "pdf_copy": {"es": "📋 Copiar mensaje", "en": "📋 Copy message"},
+    "pdf_copied": {"es": "✅ Copiado", "en": "✅ Copied"},
+    "pdf_copy_manual": {"es": "Copia este mensaje:", "en": "Copy this message:"},
     "pdf_whatsapp_text": {"es": "📄 Resumen de la {label} · {tournament}",
                           "en": "📄 {label} summary · {tournament}"},
     "pdf_or_email": {"es": "O por email, a los jugadores del torneo con cuenta:",

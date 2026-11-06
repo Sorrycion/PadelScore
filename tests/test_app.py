@@ -2102,6 +2102,8 @@ def test_jornada_summary_pdf_and_whatsapp(with_players):
     page = c.get("/club/tournaments/1").text
     assert 'id="summary"' in page and "Send on WhatsApp" in page and "https://wa.me/?text=" in page
     assert 'href="/club/matchdays/1/summary.pdf"' in page and "pdf-share.js" in page
+    assert re.search(r'data-copy="📄 Matchday 1 summary · Liga Amigos&#10;https?://[^"]+/r/1/1/summary/\w+"', page)
+    assert "📋 Copy message" in page
     assert "Nobody in the tournament has an account" in page  # nobody to email yet
     pdf = c.get("/club/matchdays/1/summary.pdf")
     assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf"
