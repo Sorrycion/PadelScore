@@ -2334,7 +2334,7 @@ def jornada_summary(conn, matchday_id, lang):
     evolution = []
     for r in ranking:
         days = next(row for row in standings if row["id"] == r["id"])["by_matchday"]
-        total, values = 0, []
+        total, values = 0, [0]  # from 0 at the start: a line even after one jornada
         for k in numbers:
             total += days.get(k, 0)
             values.append(total)
@@ -2352,7 +2352,7 @@ def jornada_summary(conn, matchday_id, lang):
         "highlights": highlights,
         "courts": by_court(sets, rates_before),
         "evolution": {"numbers": numbers, "players": evolution,
-                      "first": short(numbers[0]) if numbers else "", "last": short(n)},
+                      "first": str(_("pdf_start")), "last": short(n)},
         "next": upcoming_sets and {
             "label": str(_(label_key, n=n + 1)), "played_on": upcoming["played_on"],
             "courts": by_court(upcoming_sets, org_rates(conn))},

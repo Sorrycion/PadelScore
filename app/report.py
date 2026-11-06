@@ -287,10 +287,10 @@ def highlights(pdf, data, _):
 
 
 def evolution(pdf, data, _):
-    """Small multiples: one panel per player (by position), their total points after
-    each jornada in blue over everyone else's in gray, all on the same scale."""
+    """Small multiples: one panel per player (by position), their total points from 0
+    at the start and after each jornada in blue over everyone else's in gray, all on the same scale."""
     evo = data["evolution"]
-    if len(evo["numbers"]) < 2:
+    if not evo["numbers"]:
         return
     section(pdf, _("pdf_evolution"), _("pdf_evolution_note"), keep=33)
     per_row, gap, ph = 4, 3, 30
@@ -298,7 +298,7 @@ def evolution(pdf, data, _):
     every = [p["values"] for p in evo["players"]]
     lo = min(0, min(min(v) for v in every))
     hi = max(1, max(max(v) for v in every))
-    n = len(evo["numbers"])
+    n = len(evo["numbers"]) + 1  # the points start at 0, before the first jornada
     for i, p in enumerate(evo["players"]):
         if i % per_row == 0:
             room(pdf, ph + gap)
@@ -314,7 +314,7 @@ def evolution(pdf, data, _):
         pdf.set_text_color(*ACCENT)
         pdf.set_xy(x + pw - 13, y + 1.2)
         pdf.cell(11.2, 4, str(p["values"][-1]), align="R")
-        cx, cy, cw, ch = x + 3, y + 7, pw - 6, ph - 10
+        cx, cy, cw, ch = x + 3, y + 7, pw - 6, ph - 12
 
         def point(k, v):
             return (cx + cw * k / (n - 1), cy + ch - ch * (v - lo) / (hi - lo))

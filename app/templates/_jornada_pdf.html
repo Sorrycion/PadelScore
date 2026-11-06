@@ -1,7 +1,8 @@
 {# 📄 The jornada summary (main.jornada_summary_pdf). First choice, 📲 WhatsApp from your
    own phone: phones that can share files send the PDF itself to the chat or group you
    pick; otherwise WhatsApp opens with the text and the PDF's public link
-   (static/pdf-share.js). Second, for admins: 📧 email it to the tournament's players.
+   (static/pdf-share.js). 📋 Copiar mensaje copies the text and that link, to paste
+   anywhere. Second, for admins: 📧 email it to the tournament's players.
    Needs: pdf_md, pdf_text, pdf_url, pdf_whatsapp and, for admins, pdf_to, pdf_sent,
    pdf_asked, pdf_queued (main.summary_card). #}
 {% if pdf_md %}
@@ -12,6 +13,8 @@
   <p class="inline">
     <a class="button whatsapp" href="{{ pdf_whatsapp }}" target="_blank" rel="noopener"
        data-share-pdf="{{ pdf_url }}" data-text="{{ pdf_text }}">{{ _("pdf_whatsapp") }}</a>
+    <button type="button" class="secondary" data-copy="{{ pdf_text }}&#10;{{ pdf_url }}"
+            data-done="{{ _('pdf_copied') }}" data-ask="{{ _('pdf_copy_manual') }}">{{ _("pdf_copy") }}</button>
     <a class="button secondary" href="/matchdays/{{ pdf_md.id }}/summary.pdf" target="_blank" rel="noopener">{{ _("pdf_download") }}</a>
   </p>
   <p class="muted small">{{ _("pdf_whatsapp_note") }}</p>

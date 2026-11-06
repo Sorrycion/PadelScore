@@ -117,7 +117,8 @@ jornada page has one for itself. The PDF (`GET /<slug>/matchdays/<id>/summary.pd
 3. **Sets y resultados** by court: pair A blue, pair B red, winners in bold, and the
    chance the winners had.
 4. **Así van los puntos:** one small chart per player (by position): their total
-   points after each jornada in blue, everyone else's in gray, all on the same scale.
+   points from 0 at the start ("Inicio", so there's a line from the first jornada) and
+   after each jornada in blue, everyone else's in gray, all on the same scale.
 5. **Próxima jornada**, if it already has sets: each set with each pair's chance now
    (blue and red bar).
 
@@ -127,8 +128,9 @@ Two ways to send it, **WhatsApp first**:
 flowchart TD
     C["📄 card (tournament / jornada page)"] --> W["📲 Enviar por WhatsApp<br/>(from your own phone)"]
     C --> V["⬇️ Ver PDF"]
+    C --> P["📋 Copiar mensaje<br/>(title + public link → clipboard)"]
     C --> E["📧 Enviar por email a N jugadores<br/>(admins)"]
-    W -- "phone can share files<br/>(Android Chrome, iPhone Safari)" --> S["share sheet: the PDF itself<br/>→ WhatsApp → chat or group"]
+    W -- "a phone that can share files<br/>(Android Chrome, iPhone Safari)" --> S["share sheet: the PDF itself<br/>→ WhatsApp → chat or group"]
     W -- "computer / other" --> L["wa.me with the text and the PDF's<br/>public link /r/&lt;org&gt;/&lt;jornada&gt;/summary/&lt;token&gt;"]
     E --> Q["summary_requests (0009)"] --> J["send_due('summary'): first batch now,<br/>the rest with the hourly job (EMAIL.md)"]
 ```
@@ -137,6 +139,10 @@ flowchart TD
   shares right after a tap) and opens the share sheet with the file. Where files can't
   be shared, the link opens `wa.me` with the title and a **public link**, signed by
   `auth.summary_token` (that jornada only, no login, like the recap's `/r/` links).
+- **📋 Copiar mensaje** copies the title and that public link to the clipboard (with
+  a fallback box to copy by hand), to paste in WhatsApp or anywhere. File sharing is
+  only offered on phones: on a computer, Chrome's share window (Windows) shows a
+  "Copy" that doesn't copy the PDF, so the WhatsApp button opens `wa.me` there.
 - **Email** (admins): to every account with an email and a player in the tournament
   (recaps on), the PDF attached. See [EMAIL.md](EMAIL.md).
 - PDF core fonts only speak Latin-1 (enough for Spanish): icons are PNGs drawn by
