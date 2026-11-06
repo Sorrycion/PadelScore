@@ -494,8 +494,9 @@ PLAYER_MANUAL = {
                   "marcador se ven blancas, con borde azul punteado y un lápiz."),
             ("tip", "Lo más rápido: en la jornada escribe los juegos en las dos cajas de tu "
                     "set. Al llenar las dos se guarda solo."),
-            ("steps", ["En **Inicio**, en **Mis próximos sets**, toca **Resultado**. (O abre "
-                       "la jornada y toca **Editar** en tu set.)",
+            ("steps", ["En **Inicio**, en **Mis próximos sets**, escribe los juegos en las "
+                       "cajas de tu set (se guarda al llenar las dos) o toca **Resultado**. (O "
+                       "abre la jornada y toca **Editar** en tu set.)",
                        "Escribe los **juegos** de cada pareja: la de la izquierda (A) y la de "
                        "la derecha (B).",
                        "Toca **Guardar**. Regresas a la jornada con el resultado y la "
