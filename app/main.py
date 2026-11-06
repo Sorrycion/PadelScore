@@ -4,6 +4,7 @@ import hmac
 import os
 import random
 import re
+import secrets
 import threading
 import time
 import unicodedata
@@ -24,7 +25,7 @@ from . import (auth, charts, countries, db, formats, mailer, medals, migrate, or
                rounds, stats, users)
 from .auth import LoginRequired, require_editor, require_super
 from .i18n import COOKIE, LANGS, get_lang, i18n_context, translator
-from .scoring import (DAY_ROUNDS, DRAWN, LADDER, ONE_MATCH, RETAS, REY, ROUND_MODES,
+from .scoring import (AMISTOSOS, DAY_ROUNDS, DRAWN, LADDER, ONE_MATCH, RETAS, REY, ROUND_MODES,
                       SCORING, ScoreError, check_set, court_moves, court_rotation,
                       is_played, next_courts)
 
@@ -34,7 +35,7 @@ DOCS = BASE.parent / "docs"
 RULES = [("liga_amigos", DOCS / "REGLAMENTO.md"), ("americano", DOCS / "AMERICANO.md"),
          ("mexicano", DOCS / "MEXICANO.md"), ("manual", DOCS / "MANUAL.md"),
          ("retas", DOCS / "RETAS.md"), ("rey_cancha", DOCS / "REY_CANCHA.md"),
-         ("escalafon", DOCS / "ESCALAFON.md")]
+         ("escalafon", DOCS / "ESCALAFON.md"), ("amistosos", DOCS / "AMISTOSOS.md")]
 
 
 @asynccontextmanager
@@ -162,11 +163,12 @@ templates.env.filters["phone"] = lambda u: countries.phone_display(u["phone_coun
 templates.env.filters["phone_link"] = lambda u: countries.phone_link(u["phone_country"], u["phone"])
 templates.env.globals.update(
     ROUND_MODES=ROUND_MODES, MANUAL=MANUAL, RETAS=RETAS, REY=REY, LADDER=LADDER,
+    AMISTOSOS=AMISTOSOS,
     DAY_ROUNDS=DAY_ROUNDS, DRAWN=DRAWN,
     ROLE_KEYS={"super": "role_super", "org_admin": "role_org_admin", "player": "role_player"},
     TIER_KEYS={1: "tier_bronze", 2: "tier_silver", 3: "tier_gold"},
     RULE_ICONS={"liga_amigos": "🏅", "americano": "🇺🇸", "mexicano": "🇲🇽", "manual": "✍️",
-                "retas": "🔄", "rey_cancha": "👑", "escalafon": "🪜"},
+                "retas": "🔄", "rey_cancha": "👑", "escalafon": "🪜", "amistosos": "🤝"},
     COUNTRIES=countries.COUNTRIES, DEFAULT_COUNTRY=countries.DEFAULT,
     EMAIL_KIND_KEYS={"recap": "email_kind_recap", "reminder": "email_kind_reminder",
                      "test-recap": "email_kind_test_recap",
@@ -458,6 +460,22 @@ def ladder_state(conn, tournament_id):
             for n, pid in enumerate(order, 1)]
 
 
+def matchday_on(conn, tournament_id, day):
+    """The tournament's jornada on this date (the latest, if several), or a new one."""
+    row = conn.execute("SELECT id FROM matchdays WHERE tournament_id = ? AND played_on = ? "
+                       "ORDER BY number DESC LIMIT 1", (tournament_id, day)).fetchone()
+    if row:
+        return row["id"]
+    return conn.execute(
+        "INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
+        (tournament_id, next_number(conn, tournament_id), day)).lastrowid
+
+
+def next_court(conn, matchday_id):
+    return conn.execute("SELECT COALESCE(MAX(court), 0) + 1 FROM matches WHERE matchday_id = ?",
+                        (matchday_id,)).fetchone()[0]
+
+
 def my_player_id(request, conn):
     """The logged-in account's player in this organization, or None."""
     user = auth.current_user(request)
@@ -537,18 +555,9 @@ def create_reto(request: Request, tournament_id: int, challenger: int = Form(...
             raise LoginRequired(f"/tournaments/{tournament_id}")
         if mine is None or challenged not in mine["targets"]:
             return redirect(f"/tournaments/{tournament_id}?error=err_reto_invalid#ladder")
-        day = parse_date(played_on) or league_today().isoformat()
-        same_day = conn.execute("SELECT id FROM matchdays WHERE tournament_id = ? AND "
-                                "played_on = ? ORDER BY number DESC LIMIT 1",
-                                (tournament_id, day)).fetchone()
-        if same_day:
-            matchday_id = same_day["id"]
-        else:
-            matchday_id = conn.execute(
-                "INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
-                (tournament_id, next_number(conn, tournament_id), day)).lastrowid
-        court = conn.execute("SELECT COALESCE(MAX(court), 0) + 1 FROM matches "
-                             "WHERE matchday_id = ?", (matchday_id,)).fetchone()[0]
+        matchday_id = matchday_on(conn, tournament_id,
+                                  parse_date(played_on) or league_today().isoformat())
+        court = next_court(conn, matchday_id)
         (a1, a2), (b1, b2) = mine["players"], rows[challenged]["players"]
         match_id = conn.execute(
             "INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, round) "
@@ -585,6 +594,111 @@ def save_sets(request: Request, match_id: int, a1: str = Form(""), b1: str = For
                      (won_a, won_b, "A" if won_a > won_b else "B", formats.sets_text(played),
                       match_id))
     return redirect(f"/matchdays/{match['matchday_id']}#set-{match_id}")
+
+
+# --- 🤝 Amistosos: friendly games, one tournament per organization -------------------------
+
+def friendlies_tournament(conn, create=False):
+    """This organization's Amistosos tournament (None if it has none yet and not
+    `create`). It is made with the first friendly; its player password is random (nobody
+    joins it by password: every player of the organization is in it)."""
+    row = conn.execute(
+        "SELECT t.id FROM tournaments t JOIN rule_types r ON r.id = t.rule_type_id "
+        "WHERE r.code = ? AND t.organization_id = ? ORDER BY t.id LIMIT 1",
+        (AMISTOSOS, org_id())).fetchone()
+    if row:
+        return get_tournament(conn, row["id"])
+    if not create:
+        return None
+    rule = conn.execute("SELECT id FROM rule_types WHERE code = ?", (AMISTOSOS,)).fetchone()
+    tournament_id = conn.execute(
+        "INSERT INTO tournaments (name, held_on, rule_type_id, player_password, "
+        "organization_id) VALUES (?, ?, ?, ?, ?)",
+        ("Amistosos", league_today().isoformat(), rule["id"], secrets.token_urlsafe(16),
+         org_id())).lastrowid
+    return get_tournament(conn, tournament_id)
+
+
+def can_add_friendly(request, conn):
+    """Admins, and accounts with a player in this organization."""
+    return auth.is_editor(request) or my_player_id(request, conn) is not None
+
+
+@app.get("/friendlies", response_class=HTMLResponse)
+def friendlies_page(request: Request):
+    """🤝 Amistosos: its tournament page, or (before the first friendly) how it works."""
+    with db.connect() as conn:
+        tournament = friendlies_tournament(conn)
+        if tournament:
+            return redirect(f"/tournaments/{tournament['id']}")
+        return templates.TemplateResponse(request, "friendlies.html", {
+            "can_add": can_add_friendly(request, conn)})
+
+
+def friendly_form(request, conn, form, error=None, status_code=200):
+    return templates.TemplateResponse(request, "friendly_form.html", {
+        "form": form, "error": error,
+        "players_json": [{"id": p["id"], "name": p["name"]} for p in all_players(conn)],
+        "tournament": friendlies_tournament(conn)}, status_code=status_code)
+
+
+@app.get("/friendlies/new", response_class=HTMLResponse)
+def new_friendly_page(request: Request, date: str = ""):
+    """🤝 A friendly: date, the two pairs (a new name creates the player) and the games.
+    A player's own name comes first."""
+    with db.connect() as conn:
+        if not can_add_friendly(request, conn):
+            raise LoginRequired(here(request))
+        mine = my_player_id(request, conn)
+        me = conn.execute("SELECT name FROM players WHERE id = ?", (mine,)).fetchone() if mine else None
+        return friendly_form(request, conn, {
+            "played_on": parse_date(date) or league_today().isoformat(),
+            "a1": me["name"] if me else ""})
+
+
+@app.post("/friendlies")
+def add_friendly(request: Request, played_on: str = Form(""), a1: str = Form(""),
+                 a2: str = Form(""), b1: str = Form(""), b2: str = Form(""),
+                 team_a_games: str = Form(""), team_b_games: str = Form("")):
+    """Save a friendly in the jornada of its date (made if there is none), on its next
+    court. Players who don't exist yet are created. A player must be one of the four."""
+    form = {"played_on": played_on, "a1": a1, "a2": a2, "b1": b1, "b2": b2,
+            "team_a_games": team_a_games, "team_b_games": team_b_games}
+    with db.connect() as conn:
+        if not can_add_friendly(request, conn):
+            raise LoginRequired("/friendlies")
+        _ = translator(get_lang(request))
+        names = [clean_name(n) for n in (a1, a2, b1, b2)]
+        day = parse_date(played_on)
+        keys = {name_key(n) for n in names}
+        error = None
+        if day is None:
+            error = "err_invalid_date"
+        elif not all(names) or len(keys) != 4:
+            error = "err_four_players"
+        else:
+            try:
+                games = opt_games(team_a_games), opt_games(team_b_games)
+                if (games[0] is None) != (games[1] is None):
+                    error = "err_both_games"
+                winner = check_set(*games) if games[0] is not None else None
+            except (ValueError, ScoreError):
+                error = "err_set"
+        mine = my_player_id(request, conn)
+        if not error and not auth.is_editor(request):
+            me = conn.execute("SELECT name FROM players WHERE id = ?", (mine,)).fetchone()
+            if name_key(me["name"]) not in keys:
+                error = "err_friendly_not_in"
+        if error:
+            return friendly_form(request, conn, form, error=_(error), status_code=400)
+        ids = [player_id(conn, n) for n in names]
+        tournament = friendlies_tournament(conn, create=True)
+        matchday_id = matchday_on(conn, tournament["id"], day)
+        match_id = conn.execute(
+            "INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, team_a_games, "
+            "team_b_games, winner) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (matchday_id, next_court(conn, matchday_id), *ids, *games, winner)).lastrowid
+    return redirect(f"/matchdays/{matchday_id}#set-{match_id}")
 
 
 # --- Retas and Rey de la cancha: the rounds of a jornada -------------------------------------
@@ -1261,6 +1375,9 @@ def my_summary(conn, player):
         sets = set_rows(conn, player_id=player["id"])
         ids = {s["tournament_id"] for s in sets} | {r[0] for r in conn.execute(
             "SELECT tournament_id FROM tournament_players WHERE player_id = ?", (player["id"],))}
+        friendlies = friendlies_tournament(conn)
+        if friendlies:  # every player of the organization is in it
+            ids.add(friendlies["id"])
         tournaments = []
         for t in all_tournaments(conn):
             if t["id"] in ids:
@@ -1273,6 +1390,7 @@ def my_summary(conn, player):
                             if s["team_a_games"] is None],
                 "recent": [s for s in sets if s["team_a_games"] is not None][:5],
                 "totals": stats.totals(played, player["id"]),
+                "friendlies": [s for s in played if s["rule_code"] == AMISTOSOS],
                 "medals": player_awards(conn, player["id"])}
     return in_org(player["organization_id"], work)
 
@@ -1307,7 +1425,23 @@ def me_page(request: Request, error: str | None = None, saved: str | None = None
         totals = career(conn, summaries, get_lang(request))
     return templates.TemplateResponse(request, "me.html", {
         "account": user, "summaries": summaries, "career": totals,
-        "error": error, "saved": saved})
+        "friendlies": my_friendlies(summaries), "error": error, "saved": saved})
+
+
+def my_friendlies(summaries):
+    """🤝 The account's friendlies in every organization: totals, each organization's
+    record and the latest ones (newest first)."""
+    orgs_ = []
+    for s in summaries:
+        if s["friendlies"]:
+            orgs_.append({"name": s["player"]["org_name"],
+                          "totals": stats.totals(s["friendlies"], s["player"]["id"])})
+    played = sorted((dict(m, org_name=s["player"]["org_name"]) for s in summaries
+                     for m in s["friendlies"]),
+                    key=lambda m: (m["played_on"], m["matchday"], m["court"]), reverse=True)
+    totals = {k: sum(o["totals"][k] for o in orgs_) for k in ("played", "won", "lost")}
+    totals["win_pct"] = round(100 * totals["won"] / totals["played"]) if totals["played"] else 0
+    return {"totals": totals, "orgs": orgs_, "recent": played[:5]}
 
 
 @app.post("/me")
@@ -1545,7 +1679,8 @@ def tournaments_page(request: Request, error: str | None = None, past: str = "")
             "tournaments": [t for t in everyone if bool(t["ended"]) == past], "error": error,
             "past": past, "n_past": sum(1 for t in everyone if t["ended"]),
             "n_current": sum(1 for t in everyone if not t["ended"]),
-            "rule_types": all_rule_types(conn),
+            "rule_types": [r for r in all_rule_types(conn) if r["code"] != AMISTOSOS],
+            "friendlies": friendlies_tournament(conn),
             "players": all_players(conn),
             "players_json": [{"id": p["id"], "name": p["name"]} for p in all_players(conn)],
             "today": league_today().isoformat(),
@@ -1564,7 +1699,7 @@ def add_tournament(name: str = Form(...), held_on: str = Form(""),
         return redirect("/tournaments?error=err_invalid_date")
     with db.connect() as conn:
         rule = conn.execute("SELECT * FROM rule_types WHERE id = ?", (rule_type_id,)).fetchone()
-        if not rule:
+        if not rule or rule["code"] == AMISTOSOS:  # Amistosos comes by itself
             return redirect("/tournaments?error=err_rule_type")
         players = set(players) & {p["id"] for p in all_players(conn)}
         players = sorted(players | {player_id(conn, n) for n in new_players if n.strip()})
@@ -1611,6 +1746,7 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
                       else None,
             "my_player_id": my_player_id(request, conn),
             "ladder_started": bool(set_rows(conn, tournament_id=tournament_id, limit=1)),
+            "can_add_friendly": can_add_friendly(request, conn),
         })
 
 
@@ -1826,6 +1962,7 @@ def matchday_page(request: Request, matchday_id: int, move: int = 1,
             "in_matchday": True,
             "recap_players": md_players(result),
             "scorer": auth.can_score(request, tournament),
+            "can_add_friendly": code == AMISTOSOS and can_add_friendly(request, conn),
             # The sets this browser may score: all for the admin, a player's own.
             "scorable": {s["id"] for s in sets if auth.can_score_set(
                 request, tournament, {k: s[k + "_id"] for k in ("a1", "a2", "b1", "b2")})},
@@ -2295,12 +2432,17 @@ def player_page(request: Request, player_id: int, error: str | None = None):
 
 
 @app.get("/players/{player_id}/stats", response_class=HTMLResponse)
-def player_stats_page(request: Request, player_id: int):
-    """The player's dashboard: totals, form, streaks, partners and rivals, with charts."""
+def player_stats_page(request: Request, player_id: int, only: str = ""):
+    """The player's dashboard: totals, form, streaks, partners and rivals, with charts.
+    only=friendlies: the 🤝 Amistosos alone."""
     _ = translator(get_lang(request))
+    friendlies_only = only == "friendlies"
     with db.connect() as conn:
         player = get_or_404(conn, "players", player_id)
         sets = set_rows(conn, player_id=player_id)
+        has_friendlies = any(s["rule_code"] == AMISTOSOS for s in sets)
+        if friendlies_only:
+            sets = [s for s in sets if s["rule_code"] == AMISTOSOS]
         tournaments = player_tournaments(conn, player_id, sets)
     played = [s for s in reversed(sets) if is_played(s)]  # oldest first
     board = stats.dashboard(played, player_id)
@@ -2312,13 +2454,14 @@ def player_stats_page(request: Request, player_id: int):
         for h in tour["history"]:
             total += h["points"]
             values.append(total)
-        if len(values) > 1:
+        if len(values) > 1 and tour["rule_code"] != AMISTOSOS:  # friendlies: win % says it
             points_charts.append({"tournament": tour, "chart": charts.line_chart(
                 values, f"{tour['name']}: {_('cumulative_points')}",
                 labels=[str(_("matchday_short", n=h["number"])) for h in tour["history"]])})
     partners = [p for p in board["partners"] if p["played"]][:8]
     return templates.TemplateResponse(request, "player_stats.html", {
         "player": player, "board": board, "tournaments": tournaments,
+        "friendlies_only": friendlies_only, "has_friendlies": has_friendlies,
         "points_charts": points_charts,
         "donut": charts.donut([(results["W"], t["won"], charts.COLORS["W"]),
                                (results["L"], t["lost"], charts.COLORS["L"]),

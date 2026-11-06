@@ -6,7 +6,11 @@
 <table class="standings">
   <thead><tr>
     <th>#</th><th>👤 {{ _("player") }}</th><th>🎯 {{ _("pts") }}</th>
+    {% if tournament.rule_code == AMISTOSOS %}{# a jornada per day: the record instead #}
+    <th title="{{ _('won') }}">✅</th><th title="{{ _('lost') }}">❌</th><th>%</th><th title="{{ _('games_diff') }}">±</th>
+    {% else %}
     {% for md in results %}<th title="{{ _('matchday_n', n=md.number) }}"><a class="plain" href="/matchdays/{{ md.id }}">{{ _("round_short" if tournament.rule_code in ROUND_MODES else "matchday_short", n=md.number) }}</a></th>{% endfor %}
+    {% endif %}
   </tr></thead>
   <tbody>
   {% for r in standings %}
@@ -16,9 +20,15 @@
         {% set won = (player_medals or {}).get(r.id) %}
         {% if won %}<a class="mini-medals" href="/players/{{ r.id }}/medals">{% for m in won %}<img class="medal {% if m.tier %}tier-{{ m.tier }}{% endif %}" src="{{ m.image }}?v={{ css_version }}" alt="{{ m.name }}" title="{{ m.name }}{% if m.tier %} · {{ _(TIER_KEYS[m.tier]) }}{% elif m.count > 1 %} ×{{ m.count }}{% endif %}" width="22" height="22">{% endfor %}</a>{% endif %}</td>
       <td class="pts">{{ r.points }}</td>
+      {% if tournament.rule_code == AMISTOSOS %}
+      <td>{{ r.sets_won }}</td><td>{{ r.sets_lost }}</td>
+      <td class="muted-cell">{{ (100 * r.sets_won / r.sets)|round|int if r.sets else 0 }}%</td>
+      <td class="muted-cell">{{ "%+d"|format(r.diff) if r.diff else 0 }}</td>
+      {% else %}
       {% for md in results %}
         <td class="muted-cell">{% if md.number in r.by_matchday %}{{ r.by_matchday[md.number] }}{% else %}–{% endif %}</td>
       {% endfor %}
+      {% endif %}
     </tr>
   {% endfor %}
   </tbody>

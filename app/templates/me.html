@@ -22,6 +22,22 @@
 {% endif %}
 {% endif %}
 
+{% if friendlies.totals.played %}
+<h2>🤝 {{ _("my_friendlies") }}</h2>
+<p class="muted">{{ _("my_friendlies_hint") }}</p>
+{% set f = friendlies.totals %}
+<div class="tiles">
+  <div class="tile"><strong>{{ f.played }}</strong><span>{{ _("sets") }}</span></div>
+  <div class="tile"><strong class="up">{{ f.won }}</strong><span>{{ _("won") }}</span></div>
+  <div class="tile"><strong class="down">{{ f.lost }}</strong><span>{{ _("lost") }}</span></div>
+  <div class="tile"><strong>{{ f.win_pct }}%</strong><span>{{ _("win_pct") }}</span></div>
+</div>
+{% if friendlies.orgs|length > 1 %}
+<ul class="players">{% for o in friendlies.orgs %}<li>🏢 {{ o.name }} <span class="muted">· ✅ {{ o.totals.won }} · ❌ {{ o.totals.lost }} · {{ o.totals.win_pct }}%</span></li>{% endfor %}</ul>
+{% endif %}
+<ul class="matches">{% for m in friendlies.recent %}{% include "_match_row.html" %}{% endfor %}</ul>
+{% endif %}
+
 {% for s in summaries %}
 <section class="court-block court-{{ loop.cycle('a', 'b') }}">
   <div class="court-head">

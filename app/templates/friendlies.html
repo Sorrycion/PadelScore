@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}🤝 Amistosos · PadelScore{% endblock %}
+{% block content %}
+{# 🤝 Amistosos before the organization's first friendly (afterwards /friendlies opens
+   its tournament). #}
+<p class="eyebrow"><a class="plain" href="/rules#amistosos">🤝 Amistosos</a></p>
+<h1>🤝 {{ _("friendlies") }}</h1>
+<p>{{ _("friendlies_intro") }}</p>
+{% if can_add %}<p class="inline"><a class="button" href="/friendlies/new">{{ _("new_friendly") }}</a></p>
+{% else %}<p class="muted">{{ _("friendlies_login") }}</p>{% endif %}
+<p class="muted">{{ _("amistosos_note") }}</p>
+{% endblock %}

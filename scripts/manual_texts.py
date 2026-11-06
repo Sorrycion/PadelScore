@@ -33,6 +33,7 @@ MENU_COMMON = [
     "**Clasificación:** la tabla del torneo actual de la organización.",
     "**Torneos:** todos los torneos, en curso y pasados.",
     "**Sets:** todos los sets jugados y por jugar, con filtros por torneo, jornada y jugador.",
+    "**Amistosos:** tus partidos amistosos con todos los de la organización.",
     "**Jugadores:** la lista de jugadores de la organización y la página de cada uno.",
     "**Reglamento:** las reglas de cada tipo de torneo (Liga de amigos, Americano, "
     "Mexicano, Manual, Retas, Rey de la cancha, Escalafón).",
@@ -114,7 +115,7 @@ ADMIN_MANUAL = {
             ("p", "En el teléfono, el menú se abre con el botón de las tres rayas, arriba a la "
                   "derecha (en la computadora las opciones se ven como una fila). Estas son "
                   "sus opciones:"),
-            ("shots", [("admin_menu", 0, 640, "El menú abierto")]),
+            ("shots", [("admin_menu", 0, 700, "El menú abierto")]),
             ("bullets", MENU_COMMON + [
                 "**Canchas** (solo administradores): va directo a asignar las canchas de la "
                 "jornada más reciente."]),
@@ -281,6 +282,30 @@ ADMIN_MANUAL = {
             ("shots", [("ladder_sets", 0, None, "El resultado, set por set")]),
             ("tip", "Una pareja con un reto pendiente no puede retar ni ser retada hasta que se "
                     "juegue."),
+        ]},
+        {"title": "Amistosos", "blocks": [
+            ("p", "**Amistosos** es el torneo de los partidos amistosos de la organización. "
+                  "Cada organización tiene uno, y todos sus jugadores están en él (también los "
+                  "nuevos). Se crea solo con el primer amistoso. Ábrelo desde el menú, en "
+                  "**Amistosos**."),
+            ("steps", ["Toca **Nuevo amistoso** (en Amistosos o en una de sus jornadas).",
+                       "Elige la **fecha**. Si ese día ya hay jornada de amistosos, el amistoso "
+                       "se agrega a ella en la siguiente cancha; si no, se crea una jornada "
+                       "nueva.",
+                       "Escribe a los **cuatro jugadores** y elige cada uno de la lista. Si "
+                       "alguno no existe, escribe su nombre completo: se crea al guardar.",
+                       "Escribe los **juegos** de cada pareja (o déjalos vacíos si aún no se "
+                       "juega) y toca **Guardar amistoso**."]),
+            ("shots", [("friendly_new", 0, 900, "Nuevo amistoso"),
+                       ("friendlies", 0, 900, "Amistosos: la clasificación")]),
+            ("bullets", ["**Puntos:** 1 por set ganado, 0 por perdido o empatado. La tabla "
+                         "muestra también ganados, perdidos, % de victorias y diferencia de "
+                         "juegos.",
+                         "Las jornadas son **por día**: cada pestaña es una fecha.",
+                         "Cada jugador corrige solo los amistosos donde juega; el administrador, "
+                         "todos.",
+                         "Quien juega más puede sumar más puntos: para comparar, mira el **%** y "
+                         "el **Cara a cara**."]),
         ]},
         {"title": "Registrar y corregir resultados", "blocks": [
             ("p", "El administrador registra el resultado de **todos** los sets; cada jugador, "
@@ -458,7 +483,7 @@ PLAYER_MANUAL = {
         {"title": "El menú", "blocks": [
             ("p", "En el teléfono, el menú se abre con el botón de las tres rayas, arriba a la "
                   "derecha:"),
-            ("shots", [("player_menu", 0, 680, "El menú abierto")]),
+            ("shots", [("player_menu", 0, 740, "El menú abierto")]),
             ("bullets", MENU_COMMON[:1] + ["**Mi resumen:** tu página de jugador (resumen, "
                                            "estadísticas, cara a cara y medallas)."]
              + MENU_COMMON[1:]),
@@ -521,6 +546,30 @@ PLAYER_MANUAL = {
             ("shots", [("ladder_player", 0, 1000, "El escalafón, desde tu cuenta"),
                        ("ladder_sets", 0, None, "El resultado de un reto")]),
         ]},
+        {"title": "Amistosos", "blocks": [
+            ("p", "**Amistosos** es el torneo de los partidos amistosos de la organización. "
+                  "Cada organización tiene uno, y todos sus jugadores están en él (también los "
+                  "nuevos). Se crea solo con el primer amistoso. Ábrelo desde el menú, en "
+                  "**Amistosos**."),
+            ("steps", ["Toca **Nuevo amistoso** (en Amistosos o en una de sus jornadas).",
+                       "Elige la **fecha**. Si ese día ya hay jornada de amistosos, el amistoso "
+                       "se agrega a ella en la siguiente cancha; si no, se crea una jornada "
+                       "nueva.",
+                       "Escribe a los **cuatro jugadores** y elige cada uno de la lista. Si "
+                       "alguno no existe, escribe su nombre completo: se crea al guardar.",
+                       "Escribe los **juegos** de cada pareja (o déjalos vacíos si aún no se "
+                       "juega) y toca **Guardar amistoso**."]),
+            ("shots", [("friendly_new", 0, 900, "Nuevo amistoso"),
+                       ("friendlies", 0, 900, "Amistosos: la clasificación")]),
+            ("bullets", ["**Puntos:** 1 por set ganado, 0 por perdido o empatado. La tabla "
+                         "muestra también ganados, perdidos, % de victorias y diferencia de "
+                         "juegos.",
+                         "Las jornadas son **por día**: cada pestaña es una fecha.",
+                         "Tú tienes que ser uno de los cuatro, y solo corriges los amistosos donde "
+                         "juegas.",
+                         "Quien juega más puede sumar más puntos: para comparar, mira el **%** y "
+                         "el **Cara a cara**."]),
+        ]},
         {"title": "Tus estadísticas y medallas", "blocks": [
             ("p", "En el menú, **Mi resumen** abre tu página de jugador, con cuatro pestañas:"),
             ("bullets", ["**Resumen:** tus torneos (jornada por jornada), tus compañeros y "
@@ -532,6 +581,9 @@ PLAYER_MANUAL = {
                          "**Cara a cara:** elige a otro jugador para ver sus sets frente a "
                          "frente, como pareja, y la **probabilidad de ganarle**.",
                          "**Medallas:** las que ya ganaste y, en gris, las que te faltan."]),
+            ("tip", "En **Estadísticas**, la pestaña **Amistosos** muestra solo tus amistosos. "
+                    "En tu perfil, **Mis amistosos** suma los de todas tus organizaciones."),
+            ("shots", [("friendly_stats", 0, 1000, "Estadísticas: solo amistosos")]),
             ("shots", [("my_stats", 0, 1000, "Estadísticas"),
                        ("my_medals", 0, 900, "Medallas")]),
             ("shots", [("vs", 0, 900, "Cara a cara")]),

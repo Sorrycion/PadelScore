@@ -1099,6 +1099,47 @@ TEXT = {
                                 "organización o no existe.",
                           "en": "That account can't be the admin: it already runs an "
                                 "organization, or it doesn't exist."},
+    "friendlies": {"es": "Amistosos", "en": "Friendlies"},
+    "new_friendly": {"es": "🤝 Nuevo amistoso", "en": "🤝 New friendly"},
+    "save_friendly": {"es": "💾 Guardar amistoso", "en": "💾 Save friendly"},
+    "friendlies_intro": {
+        "es": "Registra tus partidos amistosos: con quién jugaste, contra quién y el "
+              "marcador. Todos los jugadores de la organización están en Amistosos, y así "
+              "llevas la cuenta de a quién le ganas.",
+        "en": "Record your friendly games: who you played with, against whom and the "
+              "score. Every player of the organization is in Friendlies, so you keep track "
+              "of whom you beat."},
+    "friendlies_login": {"es": "Entra con tu cuenta para registrar un amistoso.",
+                         "en": "Log in with your account to record a friendly."},
+    "friendlies_card": {"es": "Tus partidos amistosos, con todos los de la organización",
+                        "en": "Your friendly games, with everyone in the organization"},
+    "friendlies_everyone": {
+        "es": "Todos los <a href=\"{url}\">jugadores de la organización</a> están en "
+              "Amistosos; los nuevos entran solos.",
+        "en": "Every <a href=\"{url}\">player of the organization</a> is in Friendlies; "
+              "new ones join by themselves."},
+    "amistosos_note": {
+        "es": "🤝 Amistosos: cada set ganado da 1 punto (perder o empatar, 0). Los "
+              "amistosos de un mismo día van en la jornada de esa fecha, uno por cancha.",
+        "en": "🤝 Friendlies: each set won gives 1 point (a loss or a tie, 0). The "
+              "friendlies of one day go in that date's matchday, one per court."},
+    "friendly_date_hint": {
+        "es": "Si ese día ya hay jornada de amistosos, se agrega a ella; si no, se crea una.",
+        "en": "If that day already has a friendlies matchday it joins it; otherwise one is "
+              "created."},
+    "friendly_players_hint": {
+        "es": "Escribe y elige a cada jugador; un nombre nuevo crea al jugador en la "
+              "organización. Tú tienes que ser uno de los cuatro. Deja los games vacíos si "
+              "aún no se juega.",
+        "en": "Type and pick each player; a new name creates the player in the "
+              "organization. You must be one of the four. Leave the games empty if it isn't "
+              "played yet."},
+    "err_friendly_not_in": {"es": "Tú tienes que ser uno de los cuatro jugadores.",
+                            "en": "You must be one of the four players."},
+    "my_friendlies": {"es": "Mis amistosos", "en": "My friendlies"},
+    "my_friendlies_hint": {"es": "Tus amistosos de todas tus organizaciones.",
+                           "en": "Your friendlies in all your organizations."},
+    "all_sets": {"es": "Todo", "en": "Everything"},
     "org_admin_pick": {"es": "👤 Administrador", "en": "👤 Admin"},
     "org_admin_new": {"es": "➕ Crear una cuenta nueva", "en": "➕ Create a new account"},
     "org_admin_pick_hint": {

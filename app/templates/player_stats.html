@@ -3,6 +3,12 @@
 {% block content %}
 <h1>{{ player.name }}</h1>
 {% set tab = "stats" %}{% include "_player_tabs.html" %}
+{% if has_friendlies %}
+<nav class="tabs" aria-label="{{ _('tab_stats') }}">
+  <a href="/players/{{ player.id }}/stats" {% if not friendlies_only %}class="active" aria-current="page"{% endif %}>🎾 {{ _("all_sets") }}</a>
+  <a href="/players/{{ player.id }}/stats?only=friendlies" {% if friendlies_only %}class="active" aria-current="page"{% endif %}>🤝 {{ _("friendlies") }}</a>
+</nav>
+{% endif %}
 {% set t = board.totals %}
 {% if not t.played %}
 <p class="empty">{{ _("no_stats") }}</p>

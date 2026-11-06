@@ -172,6 +172,15 @@ def other_formats(conn, org, ids, rule, today):
         d = matchday(t, n, today - timedelta(days=10 - 4 * n))
         play(d, 1, a, b, 1, played=sets is not None, sets=sets)
     assert pair_ids
+    # 🤝 Amistosos: two days of friendlies with Ana (every player is in it; no list).
+    t = conn.execute("INSERT INTO tournaments (organization_id, name, held_on, rule_type_id, "
+                     "player_password) VALUES (?, 'Amistosos', ?, ?, 'amistosos-demo')",
+                     (org, (today - timedelta(days=3)).isoformat(), rule["amistosos"])).lastrowid
+    d = matchday(t, 1, today - timedelta(days=3))
+    play(d, 1, (ids[0], ids[4]), (ids[1], ids[5]), None)
+    play(d, 2, (ids[0], ids[6]), (ids[2], ids[7]), None)
+    d = matchday(t, 2, today - timedelta(days=1))
+    play(d, 1, (ids[0], ids[1]), (ids[8], ids[9]), None)
 
 
 def ids(dbfile):
@@ -196,6 +205,7 @@ def ids(dbfile):
         out[key] = one("SELECT id FROM tournaments WHERE name = ?", name)
         out[key + "_md"] = one("SELECT MAX(id) FROM matchdays WHERE tournament_id = ?", out[key])
     out["ladder_match"] = one("SELECT id FROM matches WHERE matchday_id = ?", out["ladder_md"])
+    out["friendlies"] = one("SELECT id FROM tournaments WHERE name = 'Amistosos'")
     conn.close()
     return out
 
@@ -326,6 +336,9 @@ def pages_for(i):
         "ladder_player": ("player", f"{s}/tournaments/{i['ladder']}"),
         "ladder_sets": ("player", f"{s}/matches/{i['ladder_match']}/edit"),
         "install": ("player", "/install"),
+        "friendly_new": ("player", f"{s}/friendlies/new"),
+        "friendlies": ("player", f"{s}/tournaments/{i['friendlies']}"),
+        "friendly_stats": ("player", f"{s}/players/{i['ana']}/stats?only=friendlies"),
     }
 
 

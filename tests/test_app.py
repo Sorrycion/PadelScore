@@ -2965,6 +2965,68 @@ def test_escalafon_retos_of_one_date_share_its_jornada(league):
     assert "Court 1" in page and "Court 2" in page
 
 
+def test_friendlies_by_date_with_new_players(league):
+    from app import users
+    c = league
+    assert "Friendlies" in c.get("/club/friendlies").text  # no tournament yet
+    assert "Amistosos" not in c.get("/club/tournaments").text.split('id="rule-type"')[1].split("</select>")[0]
+    with db.connect() as conn:  # Ana (player 1) has an account
+        ana = users.create_user(conn, "player", "analo", "clave-larga", email="ana@example.com")
+        users.link_player(conn, ana, 1)
+    c.post("/logout")
+    c.post("/login", data={"username": "analo", "password": "clave-larga", "role": "account"})
+    form = c.get("/club/friendlies/new?date=2026-11-06").text
+    assert 'value="2026-11-06"' in form and 'name="a1"' in form and 'value="Ana"' in form
+    # She must be one of the four.
+    r = c.post("/friendlies", data={"played_on": "2026-11-06", "a1": "Bea", "a2": "Carlos",
+                                    "b1": "Diego", "b2": "Elena", "team_a_games": "6",
+                                    "team_b_games": "3"})
+    assert r.status_code == 400 and "one of the four" in r.text
+    r = c.post("/friendlies", data={"played_on": "2026-11-06", "a1": "ana", "a2": "Zoe Nueva",
+                                    "b1": "Bea", "b2": "Carlos", "team_a_games": "6",
+                                    "team_b_games": "3"})
+    md = int(re.search(r"/matchdays/(\d+)", str(r.url)).group(1))
+    with db.connect() as conn:
+        t = conn.execute("SELECT * FROM tournaments WHERE name = 'Amistosos'").fetchone()
+        zoe = conn.execute("SELECT * FROM players WHERE name = 'Zoe Nueva'").fetchone()
+    assert zoe["organization_id"] == 1  # the new player joined the organization
+    (m,) = md_sets(md)
+    assert (m["a1"], m["a2"], m["winner"]) == (1, zoe["id"], "A")
+    # The same day: same jornada, next court; another day: a new jornada.
+    c.post("/friendlies", data={"played_on": "2026-11-06", "a1": "Ana", "a2": "Bea",
+                                "b1": "Zoe Nueva", "b2": "Diego", "team_a_games": "2",
+                                "team_b_games": "6"})
+    assert [s["court"] for s in md_sets(md)] == [1, 2]
+    r = c.post("/friendlies", data={"played_on": "2026-11-07", "a1": "Ana", "a2": "Bea",
+                                    "b1": "Carlos", "b2": "Diego"})  # pending
+    assert f"/matchdays/{md}" not in str(r.url)
+    # Standings: 1 point per set won, with the record.
+    page = c.get(f"/club/tournaments/{t['id']}").text
+    assert "🤝 Friendlies: each set won gives 1 point" in page and "New friendly" in page
+    row = page.split('href="/club/players/1">Ana')[1].split("</tr>")[0]
+    assert '<td class="pts">1</td>' in row and "<td>1</td><td>1</td>" in row and "50%" in row
+    assert "player of the organization</a> is in Friendlies" in page
+    assert "End tournament" not in page
+    # Every player of the organization is in it: on the home page and /me.
+    home = c.get("/").text
+    assert "Amistosos" in home
+    me = c.get("/me").text
+    assert "My friendlies" in me
+    stats = c.get("/club/players/1/stats?only=friendlies").text
+    assert 'href="/club/players/1/stats?only=friendlies" class="active"' in stats
+    # Bea, with no account: nobody but the admin and the four may change it.
+    assert c.get("/club/friendlies").status_code == 200  # → the tournament
+
+
+def test_friendlies_need_an_account_or_the_admin(locked):
+    r = locked.get("/club/friendlies/new", follow_redirects=False)
+    assert r.headers["location"].startswith("/login")
+    r = locked.post("/friendlies", data={"played_on": "2026-11-06", "a1": "Ana", "a2": "Bea",
+                                         "b1": "Carlos", "b2": "Diego"}, follow_redirects=False)
+    assert r.headers["location"].startswith("/login")
+    assert "Log in with your account" in locked.get("/club/friendlies").text
+
+
 def test_jornada_pdf_has_a_positions_chart(league):
     from app import report
     calls = []

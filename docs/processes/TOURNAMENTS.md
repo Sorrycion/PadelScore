@@ -33,6 +33,7 @@ password and, for Americano and Mexicano, the points per match.
 | 🔄 Retas | One jornada in rounds on several courts: winners move up, losers down; new pairs each round; points = games difference | courts of 4 |
 | 👑 Rey de la cancha | One court and a line of pairs: the winner stays, the loser goes to the end; 1 point per set won | ≥ 2 pairs |
 | 🪜 Escalafón | A ladder of fixed pairs that challenge up to 3 places above (5 if none free); a won challenge swaps places; the retos of one date share that date's jornada (one court each), best of 3 sets | pairs |
+| 🤝 Amistosos | One per organization, made with its first friendly; every player is in it; a jornada per day; 1 point per set won | nothing: it comes by itself |
 
 ## 🔄 Retas, 👑 Rey de la cancha and 🪜 Escalafón
 
@@ -78,6 +79,49 @@ flowchart TD
   their pair's place.
 - **Jornada pages:** Retas and Rey show the jornada by rounds (Ronda / Partido N), what
   comes next and the jornada's table; their courts screen only applies to Retas round 1.
+
+## 🤝 Amistosos (friendlies)
+
+The user's request, 2026-11-06: one tournament per organization where players record
+their friendly games and track whom they beat.
+
+```mermaid
+flowchart TD
+    N["🤝 Nuevo amistoso (/friendlies/new)<br/>account with a player here, or the admin"] --> F["date + 4 names + games"]
+    F --> V{"valid? 4 different names,<br/>the player is one of them"}
+    V -- no --> F
+    V -- yes --> P["unknown names → new players<br/>of the organization (player_id)"]
+    P --> T{"Amistosos tournament?"}
+    T -- "no (first friendly)" --> C["create it: rule amistosos,<br/>random player password"]
+    T -- yes --> D
+    C --> D{"a jornada on that date?"}
+    D -- yes --> J["add the set on its next court"]
+    D -- no --> K["new jornada on that date<br/>(matchday_on)"]
+    K --> J
+    J --> S["standings: 1 point per set won<br/>✅ ❌ % ± instead of a column per day"]
+```
+
+- **One per organization:** rule type 8 `amistosos` (`sql/predeployment/0011_amistosos.sql`).
+  `friendlies_tournament()` finds it, and creates it with the first friendly, so
+  organizations without friendlies have no empty tournament and ids don't shift. It
+  can't be created from the form (`err_rule_type`), nor ended (no button).
+- **Players:** every player of the organization, by rule (`auth.account_plays`; its
+  `tournament_players` stays empty, so `players_for` gives everyone). Its page says so
+  instead of the list, the password and Replace.
+- **Who records:** accounts with a player in the organization (they must be one of the
+  four) and the admin. A name that doesn't exist creates the player. Scoring a set
+  afterwards follows SETS.md (each player, only their sets).
+- **Jornadas by day:** `matchday_on(conn, tournament, date)` (shared with Escalafón
+  retos) and `next_court`. The jornada tabs show the date (MM-DD).
+- **Points:** 1 per set won, 0 for a loss or tie (`scoring.win_points`). We looked at
+  the options: wins alone reward whoever plays most, win % alone favors 1-0 records,
+  and Elo is hard to explain. So the points are wins (the user's idea) and the table adds
+  ✅ won, ❌ lost, % and ± games; ties go by games difference. Head-to-head (⚔️ Cara a
+  cara) answers "whom do I beat".
+- **Where players see it:** 🤝 Amistosos in the menu (`/friendlies`: its tournament, or
+  how it works before the first one); Amistosos is always in their tournaments (home,
+  `/me`); `/me` has **🤝 Mis amistosos** (every organization added up, and the latest);
+  Estadísticas has a **🎾 Todo | 🤝 Amistosos** filter (`?only=friendlies`).
 
 ## Players of a tournament
 

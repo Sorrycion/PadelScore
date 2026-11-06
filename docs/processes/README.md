@@ -49,4 +49,5 @@ flowchart LR
 ```
 
 Rule types: 1 `liga_amigos` (Liga de amigos score), 2 `americano`, 3 `mexicano`,
-4 `manual` (Manual individual). The full league rules are in [REGLAMENTO.md](../REGLAMENTO.md).
+4 `manual` (Manual individual), 5 `retas`, 6 `rey_cancha`, 7 `escalafon`,
+8 `amistosos` (one per organization, see Tournaments). The full league rules are in [REGLAMENTO.md](../REGLAMENTO.md).
