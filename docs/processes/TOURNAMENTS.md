@@ -32,7 +32,7 @@ password and, for Americano and Mexicano, the points per match.
 | Manual individual | Jornadas with only a date; sets added by hand; points = games difference | — |
 | 🔄 Retas | One jornada in rounds on several courts: winners move up, losers down; new pairs each round; points = games difference | courts of 4 |
 | 👑 Rey de la cancha | One court and a line of pairs: the winner stays, the loser goes to the end; 1 point per set won | ≥ 2 pairs |
-| 🪜 Escalafón | A ladder of fixed pairs that challenge up to 3 places above (5 if none free); a won challenge swaps places; each reto is a jornada, best of 3 sets | pairs |
+| 🪜 Escalafón | A ladder of fixed pairs that challenge up to 3 places above (5 if none free); a won challenge swaps places; the retos of one date share that date's jornada (one court each), best of 3 sets | pairs |
 
 ## 🔄 Retas, 👑 Rey de la cancha and 🪜 Escalafón
 
@@ -57,6 +57,9 @@ flowchart TD
     end
     subgraph Esc["🪜 Escalafón"]
         E1["pairs (ladder_pairs), last place on joining;<br/>🎲 draw before the first reto"] --> E2["⚔️ Retar: formats.targets<br/>3 places up (5 if none free), one reto at a time"]
+        E2 --> ED{"a jornada on the date picked?"}
+        ED -- yes --> EJ["the reto joins it, on its next court"]
+        ED -- no --> EN["a new jornada on that date"]
         E2 --> E3["a jornada with one match: challenger = pair A"]
         E3 --> E4["result set by set (best of 3, super tie-break)<br/>formats.best_of_three → sets_detail"]
         E4 --> E5["formats.ladder replays every reto: a won challenge swaps"]
@@ -137,3 +140,11 @@ wins together). Everything is calculated from the sets, like the standings.
 
 **Eliminar torneo** asks for confirmation, then deletes the tournament with all its
 jornadas, sets and absences. Players are kept.
+
+### 🪜 Escalafón: the date of a reto
+
+⚔️ Retar asks for a date (today by default). If the tournament already has a jornada
+on that date, the reto is added to it as one more match, on the next court (1, 2, 3…);
+if not, a new jornada is created on that date (the user's request, 2026-11-06). Before
+this, every reto was its own jornada; those stay as they are. `create_reto` in
+`app/main.py`.

@@ -270,7 +270,9 @@ ADMIN_MANUAL = {
                        "aparecen las válidas: hasta 3 lugares arriba, o 5 si no hay nadie libre "
                        "en esos 3), la fecha, y toca **Retar**. Los jugadores de esa pareja "
                        "también pueden hacerlo desde su cuenta.",
-                       "El reto es su propia **jornada**. El resultado se escribe **set por set** "
+                       "El reto va en la **jornada** de la fecha elegida: si ya hay una ese día se "
+                       "agrega a ella, en la siguiente cancha; si no, se crea una nueva. "
+                       "El resultado se escribe **set por set** "
                        "(a 2 de 3; el tercero solo si van 1-1, puede ser súper tie-break).",
                        "Si gana la retadora, **intercambian lugar**. **Dar de baja** saca a una "
                        "pareja y las de abajo suben un lugar."]),
@@ -509,7 +511,8 @@ PLAYER_MANUAL = {
             ("h", "Escalafón"),
             ("p", "Juegas con una **pareja fija** que tiene una posición. En la página del torneo, "
                   "en la fila de tu pareja, eliges a quién **retar** (hasta 3 lugares arriba, o 5 "
-                  "si no hay nadie libre), la fecha, y tocas **Retar**. Si ganan, **intercambian "
+                  "si no hay nadie libre), la fecha, y tocas **Retar**. Si ese día ya hay jornada, el "
+                  "reto se agrega a ella; si no, se crea una. Si ganan, **intercambian "
                   "lugar** con la pareja retada."),
             ("steps", ["Abre el reto (su jornada) y toca **Editar** en el partido.",
                        "Escribe los juegos de **cada set**: el tercero solo si van 1-1 (puede "

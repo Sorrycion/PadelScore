@@ -525,8 +525,9 @@ def leave_ladder(tournament_id: int, pair_id: int):
 @app.post("/tournaments/{tournament_id}/retos")
 def create_reto(request: Request, tournament_id: int, challenger: int = Form(...),
                 challenged: int = Form(...), played_on: str = Form("")):
-    """⚔️ A pair challenges a pair above it (formats.targets): the reto is a new jornada
-    with one match, pending. Admins, or a player of the challenging pair."""
+    """⚔️ A pair challenges a pair above it (formats.targets), on the date picked: the
+    reto joins the tournament's jornada of that date, on its next court, or a new jornada
+    if there is none that day. Admins, or a player of the challenging pair."""
     with db.connect() as conn:
         ladder_tournament(conn, tournament_id)
         rows = {r["id"]: r for r in ladder_state(conn, tournament_id)}
@@ -537,13 +538,22 @@ def create_reto(request: Request, tournament_id: int, challenger: int = Form(...
         if mine is None or challenged not in mine["targets"]:
             return redirect(f"/tournaments/{tournament_id}?error=err_reto_invalid#ladder")
         day = parse_date(played_on) or league_today().isoformat()
-        matchday_id = conn.execute(
-            "INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
-            (tournament_id, next_number(conn, tournament_id), day)).lastrowid
+        same_day = conn.execute("SELECT id FROM matchdays WHERE tournament_id = ? AND "
+                                "played_on = ? ORDER BY number DESC LIMIT 1",
+                                (tournament_id, day)).fetchone()
+        if same_day:
+            matchday_id = same_day["id"]
+        else:
+            matchday_id = conn.execute(
+                "INSERT INTO matchdays (tournament_id, number, played_on) VALUES (?, ?, ?)",
+                (tournament_id, next_number(conn, tournament_id), day)).lastrowid
+        court = conn.execute("SELECT COALESCE(MAX(court), 0) + 1 FROM matches "
+                             "WHERE matchday_id = ?", (matchday_id,)).fetchone()[0]
         (a1, a2), (b1, b2) = mine["players"], rows[challenged]["players"]
-        conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, round) "
-                     "VALUES (?, 1, ?, ?, ?, ?, 1)", (matchday_id, a1, a2, b1, b2))
-    return redirect(f"/matchdays/{matchday_id}")
+        match_id = conn.execute(
+            "INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, round) "
+            "VALUES (?, ?, ?, ?, ?, ?, 1)", (matchday_id, court, a1, a2, b1, b2)).lastrowid
+    return redirect(f"/matchdays/{matchday_id}#set-{match_id}")
 
 
 @app.post("/matches/{match_id}/sets")

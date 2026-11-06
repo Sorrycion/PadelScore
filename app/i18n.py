@@ -865,11 +865,13 @@ TEXT = {
                               "losing pair goes to the end of the line. Each player scores 1 "
                               "point per set won."},
     "escalafon_note": {"es": "Escalafón: cada pareja tiene una posición y reta a parejas de "
-                             "arriba; si gana la retadora, intercambian lugar. Cada reto es su "
-                             "propia jornada, a 2 de 3 sets.",
+                             "arriba; si gana la retadora, intercambian lugar. Los retos de un "
+                             "mismo día van en la jornada de esa fecha, cada uno en su cancha, "
+                             "a 2 de 3 sets.",
                        "en": "Ladder: each pair has a position and challenges pairs above it; "
-                             "if the challenger wins, they swap places. Each challenge is its "
-                             "own matchday, best of 3 sets."},
+                             "if the challenger wins, they swap places. The challenges of one "
+                             "day go in that date's matchday, each on its own court, best of 3 "
+                             "sets."},
     "retas_round1_hint": {"es": "Ronda 1: 4 jugadores por cancha; los dos primeros contra los "
                                 "dos últimos. La app ya los sorteó; cámbialos si los armaron en "
                                 "la cancha.",
@@ -920,10 +922,14 @@ TEXT = {
     "ladder_title": {"es": "🪜 Escalafón", "en": "🪜 Ladder"},
     "ladder_hint": {"es": "Cada pareja reta hasta 3 lugares arriba (hasta 5 si no hay ninguna "
                           "libre en esos 3). Una pareja con un reto pendiente no reta ni puede "
-                          "ser retada. Si gana la retadora, intercambian lugar.",
+                          "ser retada. Si gana la retadora, intercambian lugar. Elige la fecha "
+                          "del reto: si ya hay una jornada ese día se agrega a ella; si no, se "
+                          "crea una jornada nueva.",
                     "en": "Each pair challenges up to 3 places above (up to 5 if none of those "
                           "3 is free). A pair with a pending challenge can't challenge or be "
-                          "challenged. If the challenger wins, they swap places."},
+                          "challenged. If the challenger wins, they swap places. Pick the "
+                          "challenge's date: if that day already has a matchday it joins it; "
+                          "otherwise a new matchday is created."},
     "ladder_pair": {"es": "Pareja", "en": "Pair"},
     "ladder_record": {"es": "G-P", "en": "W-L"},
     "ladder_reto": {"es": "Reto", "en": "Challenge"},
