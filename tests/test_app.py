@@ -1499,6 +1499,37 @@ def test_super_admin_creates_and_enters_organizations(locked):
     assert "🏢 Nene" in r.text
 
 
+def test_a_new_organization_can_take_an_existing_account_as_admin(locked):
+    from app import users
+    with db.connect() as conn:
+        orgs.set_superadmin(conn, "julio", "super")
+        ana = users.create_user(conn, "player", "analo", "clave-larga",
+                                email="ana@example.com", display_name="Ana L")
+        users.link_player(conn, ana, 1)
+    locked.post("/login", data={"username": "julio", "password": "super"})
+    form = locked.get("/orgs").text.split('action="/orgs" ')[1].split("</form>")[0]
+    assert 'name="admin_account"' in form and f'value="{ana}">Ana L (analo)' in form
+    assert "admin (" not in form and "julio (" not in form  # admins can't be picked
+    # Typing the user of an existing account points to the list.
+    r = locked.post("/orgs", data={"name": "Padel Ana", "admin_user": "analo",
+                                   "admin_password": "x"})
+    assert "pick it from the list" in r.text
+    r = locked.post("/orgs", data={"name": "Padel Ana", "admin_account": str(ana)})
+    assert "<code>analo</code>" in r.text
+    with db.connect() as conn:
+        user = users.get(conn, ana)
+        new = conn.execute("SELECT id FROM organizations WHERE name = 'Padel Ana'").fetchone()
+        assert user["role"] == "org_admin" and user["organization_id"] == new["id"]
+        assert conn.execute("SELECT user_id FROM players WHERE id = 1").fetchone()[0] == ana
+    # Now an admin, it isn't offered again; forcing it is refused.
+    r = locked.post("/orgs", data={"name": "Otra", "admin_account": str(ana)})
+    assert "can't be the admin" in r.text and f'value="{ana}"' not in r.text
+    locked.post("/logout")  # Ana logs in with her own password and runs it
+    r = locked.post("/login", data={"username": "analo", "password": "clave-larga",
+                                    "role": "account"})
+    assert "Padel Ana" in r.text
+
+
 def test_login_page_has_an_account_and_a_player_section(with_players):
     with_players.cookies.delete("user")
     page = with_players.get("/login").text

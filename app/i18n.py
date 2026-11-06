@@ -1085,8 +1085,23 @@ TEXT = {
                        "en": "Type the name, the user and the password."},
     "err_org_exists": {"es": "Ya existe una organización con ese nombre.",
                        "en": "There's already an organization with that name."},
-    "err_admin_user_exists": {"es": "Ese usuario administrador ya existe.",
-                              "en": "That admin user already exists."},
+    "err_admin_user_exists": {"es": "Ese usuario ya existe: si es un jugador, elígelo en la "
+                                    "lista de cuentas.",
+                              "en": "That user already exists: if it's a player, pick it from "
+                                    "the list of accounts."},
+    "err_admin_account": {"es": "Esa cuenta no puede ser administradora: ya administra una "
+                                "organización o no existe.",
+                          "en": "That account can't be the admin: it already runs an "
+                                "organization, or it doesn't exist."},
+    "org_admin_pick": {"es": "👤 Administrador", "en": "👤 Admin"},
+    "org_admin_new": {"es": "➕ Crear una cuenta nueva", "en": "➕ Create a new account"},
+    "org_admin_pick_hint": {
+        "es": "Elige la cuenta de un jugador que ya existe (sigue jugando y conserva su "
+              "contraseña) o crea una nueva con su usuario y contraseña. Una cuenta "
+              "administra una sola organización.",
+        "en": "Pick an existing player's account (they keep playing and keep their "
+              "password) or create a new one with its user and password. An account runs "
+              "one organization only."},
     "password": {"es": "🔑 Contraseña", "en": "🔑 Password"},
     "club_password": {"es": "Contraseña del club", "en": "Club password"},
     "err_wrong_password": {"es": "Contraseña incorrecta.", "en": "Wrong password."},

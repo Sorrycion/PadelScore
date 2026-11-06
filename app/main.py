@@ -975,21 +975,38 @@ def orgs_page(request: Request, error: str | None = None, mail: str | None = Non
             "(SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id) AS players "
             "FROM organizations o LEFT JOIN users u ON u.id = (SELECT MIN(id) FROM users "
             "WHERE role = 'org_admin' AND organization_id = o.id) ORDER BY o.name").fetchall()
-    return templates.TemplateResponse(request, "orgs.html", {
+        return templates.TemplateResponse(request, "orgs.html", {
         "orgs": rows, "error": error, "mail_sent": mail == "sent",
-        "mail_enabled": mailer.enabled()})
+        "mail_enabled": mailer.enabled(),
+        # Accounts that may become a new organization's admin: the player accounts.
+        "accounts": admin_candidates(conn)})
+
+
+def admin_candidates(conn):
+    return conn.execute(
+        "SELECT id, username, COALESCE(display_name, first_name, username) AS name "
+        "FROM users WHERE role = 'player' "
+        "ORDER BY LOWER(COALESCE(display_name, first_name, username))").fetchall()
 
 
 @app.post("/orgs", dependencies=SUPER)
-def add_org(name: str = Form(""), admin_user: str = Form(""), admin_password: str = Form("")):
+def add_org(name: str = Form(""), admin_account: str = Form(""), admin_user: str = Form(""),
+            admin_password: str = Form("")):
+    """⭐ Create an organization. Its admin: an existing player account (admin_account)
+    or a new account (admin_user + admin_password)."""
+    account = opt_int(admin_account)
     with db.connect() as conn:
-        if not (" ".join(name.split()) and admin_user.strip() and admin_password):
+        if not " ".join(name.split()) or account is None and not (
+                admin_user.strip() and admin_password):
             return redirect("/orgs?error=err_org_fields")
         if auth.find_org(conn, name):
             return redirect("/orgs?error=err_org_exists")
-        if users.find_login(conn, admin_user) or "@" in admin_user:
+        if account is None and (users.find_login(conn, admin_user) or "@" in admin_user):
             return redirect("/orgs?error=err_admin_user_exists")
-        orgs.create_org(conn, name, admin_user, admin_password)
+        try:
+            orgs.create_org(conn, name, admin_user, admin_password, user_id=account)
+        except users.UserError as e:
+            return redirect(f"/orgs?error={e.args[0]}")
     return redirect("/orgs")
 
 

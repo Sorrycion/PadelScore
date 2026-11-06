@@ -401,6 +401,9 @@ form.filters select { flex: 1 1 180px; }
 
 @media (display-mode: standalone) { .install-link { display: none !important; } }  /* installed already */
 
+/* ⭐ Create organization: the new admin's fields only when no account is picked. */
+form:has(select.admin-pick option:checked:not([value=""])) .new-admin { display: none; }
+
 /* ❓ Help: a small drop-down with the two manuals (a list inside the phone menu). */
 .help-menu { position: relative; }
 .help-menu summary { cursor: pointer; list-style: none; white-space: nowrap; }

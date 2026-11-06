@@ -50,20 +50,33 @@ def unique_slug(conn, name, org_id=None):
     return slug
 
 
-def create_org(conn, name, admin_user, password):
-    """Add an organization with its admin account and return its id. The first one
-    adopts the players and tournaments that have no organization yet."""
-    name, admin_user = " ".join(name.split()), admin_user.strip()
-    if not name or not admin_user or not password:
+def create_org(conn, name, admin_user="", password="", user_id=None):
+    """Add an organization and return its id. Its admin is a new account (admin_user +
+    password) or, with `user_id`, an existing player account, which becomes its admin
+    (keeping its password and its players; an account administers one organization).
+    The first one adopts the players and tournaments that have no organization yet."""
+    name, admin_user = " ".join(name.split()), (admin_user or "").strip()
+    account = users.get(conn, user_id) if user_id is not None else None
+    if user_id is not None and (account is None or account["role"] != "player"):
+        raise users.UserError("err_admin_account")
+    if not name or not account and not (admin_user and password):
         raise ValueError("Name, admin user and password are required.")
-    users.check_fields(conn, users.clean({"username": admin_user}))
+    if account:
+        admin_user, hashed, plain = account["username"], account["password"], None
+    else:
+        users.check_fields(conn, users.clean({"username": admin_user}))
+        hashed, plain = hash_password(password), password
     first = conn.execute("SELECT COUNT(*) FROM organizations").fetchone()[0] == 0
     org_id = conn.execute(
         "INSERT INTO organizations (name, admin_user, admin_password, admin_password_plain, "
         "secret, slug) VALUES (?, ?, ?, ?, ?, ?)",
-        (name, admin_user, hash_password(password), password, secrets.token_hex(32),
+        (name, admin_user, hashed, plain, secrets.token_hex(32),
          unique_slug(conn, name))).lastrowid
-    user_id = users.create_user(conn, "org_admin", admin_user, password, organization_id=org_id)
+    if account:
+        users.set_role(conn, user_id, "org_admin", org_id)
+    else:
+        user_id = users.create_user(conn, "org_admin", admin_user, password,
+                                    organization_id=org_id)
     users.sync_org(conn, user_id)
     if first:
         for table in ("players", "tournaments"):
