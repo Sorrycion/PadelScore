@@ -45,6 +45,9 @@ flowchart LR
 
    Run all of them: `pytest -q`. Fake credentials only.
 6. **Look at it on a phone.** Follow `padelscore-screenshot`, at 500 px, light and dark.
+   **If the change shows on screen** (templates, static files, texts), refresh the user
+   manuals in the same commit (skill `padelscore-manuals`): the commit hook blocks it
+   otherwise. "[manuals: n/a]" in the message if no manual screen changed.
 7. **Document it: required for every PR** (the user's rule). In the same branch:
    - **Process docs:** the `docs/processes/` page of each area touched, with its Mermaid
      diagram redrawn if the flow, the data or the screens changed. A new area gets a
