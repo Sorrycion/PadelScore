@@ -9,4 +9,5 @@
 {% if can_add %}<p class="inline"><a class="button" href="/friendlies/new">{{ _("new_friendly") }}</a></p>
 {% else %}<p class="muted">{{ _("friendlies_login") }}</p>{% endif %}
 <p class="muted">{{ _("amistosos_note") }}</p>
+{% if invite %}{% include "_invite_card.html" %}{% endif %}
 {% endblock %}

@@ -1748,7 +1748,8 @@ def test_signup_as_a_new_player_joins_the_tournament(with_players):
     r = signup(c, who="new", display_name="Zoe", username="zoe", email="zoe@example.com")
     assert str(r.url).endswith("/me")
     with db.connect() as conn:
-        zoe = conn.execute("SELECT * FROM players WHERE name = 'Zoe'").fetchone()
+        zoe = conn.execute("SELECT * FROM players WHERE name = 'Zoe' "
+                           "AND organization_id = 1").fetchone()
         assert zoe["user_id"] and conn.execute(
             "SELECT 1 FROM tournament_players WHERE tournament_id = 1 AND player_id = ?",
             (zoe["id"],)).fetchone()
@@ -1946,8 +1947,8 @@ def test_an_account_joins_a_tournament_with_its_password(with_players):
     assert str(r.url).endswith("/") and "Join a tournament" in r.text
     with db.connect() as conn:
         zoe = conn.execute("SELECT * FROM users WHERE username = 'zoe'").fetchone()
-        assert zoe and not conn.execute("SELECT 1 FROM players WHERE user_id = ?",
-                                        (zoe["id"],)).fetchone()
+        assert zoe and not conn.execute("SELECT 1 FROM players WHERE user_id = ? AND "
+                                        "organization_id = 1", (zoe["id"],)).fetchone()
     r = c.post("/join", data={"password": "nope"})
     assert "Wrong password" in r.text or "wrong" in r.text.lower()
     r = c.post("/join", data={"password": "jugamos"})
@@ -1958,7 +1959,8 @@ def test_an_account_joins_a_tournament_with_its_password(with_players):
     r = c.post("/welcome/link", data={"t": 1, "player_id": "new"})
     assert str(r.url).endswith("/") and "Liga Amigos" in r.text and "🎾 Player" in r.text
     with db.connect() as conn:
-        p = conn.execute("SELECT * FROM players WHERE user_id = ?", (zoe["id"],)).fetchone()
+        p = conn.execute("SELECT * FROM players WHERE user_id = ? AND organization_id = 1",
+                         (zoe["id"],)).fetchone()
         assert p["name"] == "Zoe" and conn.execute(
             "SELECT 1 FROM tournament_players WHERE tournament_id = 1 AND player_id = ?",
             (p["id"],)).fetchone()
@@ -3034,6 +3036,65 @@ def test_friendlies_need_an_account_or_the_admin(locked):
                                          "b1": "Carlos", "b2": "Diego"}, follow_redirects=False)
     assert r.headers["location"].startswith("/login")
     assert "Log in with your account" in locked.get("/club/friendlies").text
+
+
+def test_mi_padel_comes_with_the_account_and_is_private(locked):
+    c = locked
+    c.cookies.delete("org")
+    r = account_without_tournament(c)  # Zoe, no club
+    assert "My padel" in r.text and "Invite friends" in r.text
+    with db.connect() as conn:
+        zoe = conn.execute("SELECT * FROM users WHERE username = 'zoe'").fetchone()
+        mine = orgs.personal_of(conn, zoe["id"])
+        assert conn.execute("SELECT name FROM players WHERE organization_id = ? AND user_id = ?",
+                            (mine["id"], zoe["id"])).fetchone()[0] == "Zoe"
+    slug = mine["slug"]
+    assert f"/invite/{mine['invite_code']}" in r.text
+    # Friendlies with friends who have no account: they're remembered as hers.
+    r = c.post(f"/{slug}/friendlies", data={"played_on": "2026-11-06", "a1": "Zoe", "a2": "Max",
+                                            "b1": "Leo", "b2": "Eva", "team_a_games": "6",
+                                            "team_b_games": "4"})
+    assert r.status_code == 200 and "Max" in r.text
+    me = c.get("/me").text
+    friends = me.split("My friends without an account")[1].split("</ul>")[0]
+    assert all(n in friends for n in ("Max", "Leo", "Eva")) and "/claim/" in friends
+    claim_leo = re.search(r'data-copy="https?://[^/]+(/claim/\d+/[\w-]+)"',
+                          friends.split("👤 Leo")[1]).group(1)
+    # A Mi pádel has no club pages, and nobody else can open it.
+    assert c.get(f"/{slug}/users", follow_redirects=False).status_code == 404
+    assert 'id="new-tournament"' not in c.get(f"/{slug}/tournaments").text
+    assert c.post(f"/{slug}/tournaments", data={"name": "X"}, follow_redirects=False).status_code == 404
+    c.post("/logout")
+    r = c.get(f"/{slug}/friendlies", follow_redirects=False)
+    assert r.headers["location"].startswith("/login")
+    with db.connect() as conn:
+        users.create_user(conn, "player", "bea", "clave-larga", email="bea@example.com",
+                          display_name="Bea")
+    c.post("/login", data={"username": "bea", "password": "clave-larga", "role": "account"})
+    assert c.get(f"/{slug}/friendlies", follow_redirects=False).headers["location"] == "/"
+    assert c.post("/enter", data={"name": mine["name"]}).status_code == 404
+    assert mine["name"] not in c.get("/enter").text
+    # Zoe's invitation: Bea says she is Max, and is in.
+    page = c.get(f"/invite/{mine['invite_code']}").text
+    assert "Who are you?" in page and "Max" in page and "I'm new: Bea" in page
+    with db.connect() as conn:
+        max_id = conn.execute("SELECT id FROM players WHERE name = 'Max'").fetchone()[0]
+    c.post(f"/invite/{mine['invite_code']}", data={"player_id": str(max_id)})
+    assert c.get(f"/{slug}/friendlies").status_code == 200
+    # Leo's own link: he makes his account from it and keeps his games.
+    c.post("/logout")
+    page = c.get(claim_leo).text
+    assert "Are you Leo?" in page and "Zoe recorded 1 set with you" in page
+    r = account_without_tournament(c, username="leo", email="leo@example.com",
+                                   display_name="Leo L", first_name="Leo",
+                                   next=claim_leo)
+    assert "Yes, I'm Leo" in r.text
+    r = c.post(claim_leo)
+    assert r.status_code == 200
+    with db.connect() as conn:
+        leo = conn.execute("SELECT * FROM users WHERE username = 'leo'").fetchone()
+        assert conn.execute("SELECT user_id FROM players WHERE name = 'Leo'").fetchone()[0] == leo["id"]
+    assert "Are you Leo?" in c.get(claim_leo).text and "already has an account" in c.get(claim_leo).text
 
 
 def test_jornada_pdf_has_a_positions_chart(league):

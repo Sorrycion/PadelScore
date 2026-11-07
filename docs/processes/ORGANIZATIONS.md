@@ -48,6 +48,43 @@ flowchart TD
 - `orgs.create_org(conn, name, admin_user, password, user_id=None)` does both; the
   Kudu command line (`python -m app.orgs create`) still makes a new account.
 
+## 🏠 Mi pádel (a player's own space)
+
+The user's request, 2026-11-06: a player without a club can still use the app. Every
+player account has **Mi pádel**, a private organization it owns (`organizations.owner_id`,
+`sql/predeployment/0012_mi_padel.sql`), named "Mi pádel de <username>", with the
+account's player in it.
+
+```mermaid
+flowchart TD
+    S["/signup (no club needed)<br/>or login of an older player account"] --> C["orgs.create_personal:<br/>organization with owner_id + invite_code<br/>+ the account's player"]
+    C --> H["Home: 🏠 Mi pádel card<br/>(🤝 Nuevo amistoso · Amistosos)<br/>+ 🔗 Invitar amigos (WhatsApp / copy)"]
+    H --> F["friendlies with friends' names:<br/>new players get created_by = the account"]
+    F --> U["/me: 👥 Mis amistades sin cuenta<br/>each with its own claim link"]
+    H --> I["/invite/<code>: sign up or log in →<br/>'¿Quién eres?' (a free player, or new)"]
+    U --> L["/claim/<player>/<token>: sign up or log in →<br/>'Sí, soy yo' (joined if already there)"]
+    I --> M["a member: can open it,<br/>scores their own sets"]
+    L --> M
+```
+
+- **Private:** `auth.can_open` lets in only the owner, accounts with a player in it and
+  super admins. The gate sends anyone else home (or to log in), and it's not in `/enter`'s
+  list nor findable by name there.
+- **The owner is its admin** (`auth.is_editor`), but `main.CLUB` keeps the club pages
+  out: Cuentas, Emails, Canchas and new tournaments answer 404, and their links are
+  hidden. That's on purpose: the owner must not manage their friends' accounts. It has
+  just its 🤝 Amistosos (see TOURNAMENTS.md).
+- **Members** (friends who joined) score only their own sets, as in a club.
+- **Invitation:** `/invite/<invite_code>` (an open path). A logged-in account picks
+  who it is among the unclaimed players, or joins as new; then it enters the space.
+- **Friends without an account:** a friendly that creates a player saves who wrote it
+  (`players.created_by`). Until someone claims it, it's listed in the writer's profile
+  with a **claim link** `/claim/<player>/<token>` (signed with the organization's
+  secret, `auth.claim_token`). Claiming links the player to the account
+  (`users.link_player(..., merge=True)`: an existing player there is joined).
+- **Older accounts** get their Mi pádel when they next log in. Converting a Mi pádel
+  into a club (the paid plan) is for later.
+
 ## Each organization's URLs (`/<slug>/...`)
 
 Every organization has a **slug**, its name in its URLs (`Nene` → `nene`). Its pages

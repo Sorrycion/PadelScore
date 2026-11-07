@@ -10,7 +10,7 @@ framework: only a small player picker (`app/static/picker.js`).
 flowchart TD
     subgraph web["app/main.py (routes, queries, templates)"]
         GATE[OrganizationGate middleware]
-        ROUTES[routes: tournaments, jornadas, sets, friendlies, players,<br/>accounts, profile, stats, medals, orgs, health]
+        ROUTES[routes: tournaments, jornadas, sets, friendlies, players,<br/>accounts, profile, invite / claim, stats, medals, orgs, health]
     end
     AUTH[auth.py<br/>cookies, roles, can_score] --> web
     USERS[users.py<br/>accounts, hashing — stdlib] --> AUTH
@@ -70,6 +70,9 @@ sequenceDiagram
   `in_org(org_id, work)`. That's `/` (the home: tournaments and next sets in every
   organization) and `/me`, which lists an account's players everywhere and adds them up
   (`career`).
+- **🏠 Mi pádel:** an organization with `owner_id` is a player's private space: the gate
+  checks `auth.can_open`, and `CLUB` (in place of `EDIT`) keeps club-only pages from its
+  owner. `/invite/<code>` and `/claim/<player>/<token>` are open paths (ORGANIZATIONS.md).
 - **Navigation:** Inicio, 🙋 Mi resumen (the account's player in this organization,
   `my_player` from `auth_context`), Clasificación, Torneos, Sets, 🤝 Amistosos
   (`/friendlies`, an organization section in `orgs.SECTIONS`), Jugadores, Reglamento.

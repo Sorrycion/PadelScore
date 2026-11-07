@@ -44,6 +44,7 @@
 
 
 {% if tournament.rule_code == AMISTOSOS %}
+{% if invite %}{% include "_invite_card.html" %}{% endif %}
 <h2 id="players">{{ _("tournament_players") }}</h2>
 <p class="muted">{{ _("friendlies_everyone", url="/players") }}</p>
 {% elif participants or editor %}

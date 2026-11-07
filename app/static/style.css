@@ -277,6 +277,8 @@ input.score-box::-webkit-inner-spin-button, input.score-box::-webkit-outer-spin-
 form.score-form { display: none; }
 /* Boxes this visitor may type in: the card's color, a dashed blue border and a ✏️. */
 .score-edit { position: relative; display: inline-flex; }
+.invite-url code { word-break: break-all; font-size: .8rem; }
+a.button.whatsapp { background: #25d366; color: #fff; }
 form.home-score { display: flex; justify-content: center; gap: 12px; margin: 14px 0 6px; }
 form.home-score .score-box { width: 64px; height: 54px; font-size: 1.7rem; }
 .score-box.editable { background: var(--card); color: var(--accent); border: 2.5px dashed var(--accent);

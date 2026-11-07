@@ -466,6 +466,28 @@ PLAYER_MANUAL = {
             ("tip", "Si ya tenías un jugador con otro nombre en esa organización, al elegirte "
                     "en la lista te pregunta si eres tú y une los dos."),
         ]},
+        {"title": "Mi pádel: tus amistosos sin club", "blocks": [
+            ("p", "Con tu cuenta tienes **Mi pádel**: tu espacio privado para registrar partidos "
+                  "con tus amigos aunque no estés en un club. Ahí tienes Amistosos, tus "
+                  "estadísticas, el cara a cara y tus medallas. Solo lo ven tú y los amigos que "
+                  "invites."),
+            ("shots", [("player_home", 480, 940, "Inicio: Mi pádel e Invitar amigos")]),
+            ("steps", ["En **Inicio**, en **Mi pádel**, toca **Nuevo amistoso** y registra el "
+                       "partido (como en el capítulo de Amistosos). Escribe el nombre de tus "
+                       "amigos aunque no tengan cuenta: se crean al guardar.",
+                       "Toca **Invitar por WhatsApp** (o **Copiar enlace**) y mándalo a tu grupo. "
+                       "Cada amigo crea su cuenta, dice quién es y entra a tu Mi pádel.",
+                       "Cada uno registra y corrige sus propios partidos."]),
+            ("shots", [("mp_invite", 0, 700, "La invitación, como la ve tu amigo")]),
+            ("h", "Mis amistades sin cuenta"),
+            ("p", "En tu perfil, **Mis amistades sin cuenta** lista a los jugadores que creaste "
+                  "al registrar amistosos. Cada uno tiene **su propio enlace**: cuando tu amigo "
+                  "lo abre, crea su cuenta (o entra), toca **Sí, soy yo** y se queda con todos "
+                  "sus partidos, estadísticas y medallas."),
+            ("shots", [("me", 1750, 2340, "Tu perfil: Mis amistades sin cuenta"),
+                       ("mp_claim", 0, 500, "El enlace de un amigo: ¿Eres Pepe Luna?")]),
+            ("tip", "Si tu amigo ya tenía un jugador en ese lugar, los dos se unen en uno solo."),
+        ]},
         {"title": "Tu inicio", "blocks": [
             ("p", "**Inicio** es tu tablero:"),
             ("bullets", ["**Tu última jornada:** con el enlace a **Mi jornada** (tu resumen "
@@ -475,7 +497,7 @@ PLAYER_MANUAL = {
                          "barra muestra la **probabilidad de ganar**: en azul tu pareja (A) y en "
                          "rojo la otra. **Resultado** abre el set para registrar el marcador.",
                          "**Mis torneos:** tus torneos con tu posición y puntos."]),
-            ("shots", [("player_home", 0, 1200, "Inicio: tu última jornada y tus sets"),
+            ("shots", [("player_home", 940, 1950, "Inicio: tus próximos sets"),
                        ("player_home", 1200, None, "Tus torneos")]),
             ("p", "La probabilidad se calcula con los sets que ha jugado cada jugador: el "
                   "porcentaje de sets ganados de cada pareja, comparados entre sí."),
@@ -610,7 +632,7 @@ PLAYER_MANUAL = {
                          "probabilidades).",
                          "**Contraseña:** escribe la actual y la nueva dos veces."]),
             ("shots", [("me", 0, 460, "Todo mi pádel"),
-                       ("me", 2420, 3793, "Datos de la cuenta, emails y contraseña")]),
+                       ("me", 5490, None, "Datos de la cuenta, emails y contraseña")]),
             ("tip", "Cada email trae al final un enlace para dejar de recibirlo."),
         ]},
         INSTALL,

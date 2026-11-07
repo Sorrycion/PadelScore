@@ -31,6 +31,18 @@
 </section>
 {% endif %}
 
+{% if personal %}
+<section class="card join-card mi-padel">
+  <h2>🏠 {{ _("mi_padel") }}</h2>
+  <p class="muted">{{ _("mi_padel_hint") }}</p>
+  <p class="inline">
+    <a class="button" href="/{{ personal.slug }}/friendlies/new">{{ _("new_friendly") }}</a>
+    <a class="button secondary" href="/{{ personal.slug }}/friendlies">🤝 {{ _("friendlies") }}</a>
+  </p>
+</section>
+{% include "_invite_card.html" %}
+{% endif %}
+
 <h2>⏳ {{ _("my_upcoming_sets") }}</h2>
 {% if upcoming %}
 <ul class="cards upcoming">

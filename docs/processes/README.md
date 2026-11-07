@@ -22,6 +22,8 @@ erDiagram
     organizations ||--o{ players : has
     organizations ||--o{ tournaments : has
     organizations ||--o{ users : "org_admin of"
+    users ||--o| organizations : "owns (🏠 Mi pádel)"
+    users ||--o{ players : "created_by (friends without an account)"
     users ||--o{ players : "claims (one per organization)"
     rule_types ||--o{ tournaments : "scored with"
     tournaments ||--o{ tournament_players : lists

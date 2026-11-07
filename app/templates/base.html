@@ -43,8 +43,8 @@
     <div class="brand-box">
       <a class="brand" href="/">🎾 PadelScore</a>
       {% if org or superadmin %}<div class="org-line">
-        {% if org %}<a href="/enter" title="{{ _('change_org') }}">🏢 {{ org.name }}</a>{% endif %}
-        {% if editor %}<a href="/users">🔑 {{ _("nav_users") }}</a><a href="/emails">📬 {{ _("nav_emails") }}</a>{% endif %}
+        {% if org %}<a href="/enter" title="{{ _('change_org') }}">{{ "🏠" if org.owner_id else "🏢" }} {{ org.name }}</a>{% endif %}
+        {% if editor and not org.owner_id %}<a href="/users">🔑 {{ _("nav_users") }}</a><a href="/emails">📬 {{ _("nav_emails") }}</a>{% endif %}
         {% if superadmin %}<a href="/orgs">⭐ {{ _("nav_orgs") }}</a>{% endif %}
       </div>{% endif %}
     </div>
@@ -67,7 +67,7 @@
       {% endfor %}
     </nav>
     <div class="top-actions">
-      {% if editor %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
+      {% if editor and not org.owner_id %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
       <a class="install-link" href="/install">📲 {{ _("install_app") }}</a>
       {# ❓ Help: both user manuals (PDF, Spanish; scripts/make_manuals.py), for everyone,
          on wide screens, in the phone's ☰ menu and in the installed app. #}

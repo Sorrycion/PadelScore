@@ -1,5 +1,7 @@
 # Users and logins
 
+> **🏠 Mi pádel** (2026-11-06): every player account comes with its own private space for friendlies, and can invite friends and hand them their players. See [ORGANIZATIONS.md](ORGANIZATIONS.md#-mi-pádel-a-players-own-space).
+
 Everyone who logs in has an **account** (table `users`, code in `app/users.py`), with a
 unique username, an optional email (required for players), names and a role. An account
 logs in with its **username or email** and password. Players can also come in as

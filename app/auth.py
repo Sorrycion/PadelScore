@@ -60,6 +60,11 @@ def summary_token(org, matchday_id: int) -> str:
     return _sign(org, f"summary:{matchday_id}")[:20]
 
 
+def claim_token(org, player_id: int) -> str:
+    """Signs a player's claim link (/claim/...): whoever has it may make that player theirs."""
+    return _sign(org, f"claim:{player_id}")[:20]
+
+
 def unsubscribe_token(user) -> str:
     """Signs an email's unsubscribe link (/unsubscribe/...), so it works without logging
     in, for that account only."""
@@ -119,12 +124,29 @@ def is_super(request: Request) -> bool:
 
 
 def is_editor(request: Request) -> bool:
-    """Admin of the organization being viewed: its own admin, or a super admin."""
+    """Admin of the organization being viewed: its own admin, a super admin, or the
+    owner of a 🏠 Mi pádel (in theirs; main.CLUB keeps club-only pages from them)."""
     org, user = current_org(request), current_user(request)
     if org is None or user is None:
         return False
     return user["role"] == "super" or (
-        user["role"] == "org_admin" and user["organization_id"] == org["id"])
+        user["role"] == "org_admin" and user["organization_id"] == org["id"]) or (
+        org["owner_id"] == user["id"])
+
+
+def can_open(request: Request, org) -> bool:
+    """Clubs are open to anyone who enters them. A 🏠 Mi pádel only to its owner, the
+    accounts with a player in it (friends it invited) and super admins."""
+    if org["owner_id"] is None:
+        return True
+    user = current_user(request)
+    if user is None:
+        return False
+    if user["role"] == "super" or user["id"] == org["owner_id"]:
+        return True
+    with db.connect() as conn:
+        return conn.execute("SELECT 1 FROM players WHERE organization_id = ? AND user_id = ?",
+                            (org["id"], user["id"])).fetchone() is not None
 
 
 def require_super(request: Request):

@@ -1100,6 +1100,56 @@ TEXT = {
                           "en": "That account can't be the admin: it already runs an "
                                 "organization, or it doesn't exist."},
     "friendlies": {"es": "Amistosos", "en": "Friendlies"},
+    "mi_padel": {"es": "Mi pádel", "en": "My padel"},
+    "mi_padel_hint": {
+        "es": "Tu espacio para tus partidos con amigos, aunque no estés en un club: registra "
+              "amistosos y mira tus estadísticas, tu cara a cara y tus medallas.",
+        "en": "Your space for games with friends, even without a club: record friendlies "
+              "and see your stats, head-to-head and medals."},
+    "signup_mi_padel": {
+        "es": "Con tu cuenta tienes Mi pádel: tus amistosos y estadísticas, aunque no estés en "
+              "un club.",
+        "en": "Your account comes with My padel: your friendlies and stats, even without a "
+              "club."},
+    "invite_title": {"es": "Invitar amigos", "en": "Invite friends"},
+    "my_unclaimed": {"es": "Mis amistades sin cuenta", "en": "My friends without an account"},
+    "my_unclaimed_hint": {
+        "es": "Jugadores que creaste al registrar amistosos. Mándale a cada uno su enlace: "
+              "crea su cuenta y se queda con todos sus partidos.",
+        "en": "Players you created when recording friendlies. Send each one their link: "
+              "they make an account and keep all their games."},
+    "claim_message": {"es": "🎾 {name}, ya registré nuestros partidos en PadelScore. Crea tu "
+                            "cuenta y quédate con tus resultados:",
+                      "en": "🎾 {name}, I've recorded our games on PadelScore. Make your "
+                            "account and keep your results:"},
+    "claim_title": {"es": "¿Eres {name}?", "en": "Are you {name}?"},
+    "claim_intro": {"es": "{who} registró {sets} contigo en PadelScore. Crea tu cuenta (o "
+                          "entra) y quédate con tus resultados, estadísticas y medallas.",
+                    "en": "{who} recorded {sets} with you on PadelScore. Make your account "
+                          "(or log in) and keep your results, stats and medals."},
+    "claim_yes": {"es": "Sí, soy {name}", "en": "Yes, I'm {name}"},
+    "claim_taken": {"es": "Este jugador ya tiene cuenta.", "en": "This player already has an account."},
+    "claim_merge_hint": {
+        "es": "Si ya tienes un jugador en ese lugar, los dos se unen en uno solo.",
+        "en": "If you already have a player there, the two become one."},
+    "invite_hint": {
+        "es": "Manda este enlace a tus amigos: crean su cuenta, entran a tu Mi pádel y cada "
+              "uno registra y corrige sus partidos.",
+        "en": "Send this link to your friends: they make an account, join your My padel and "
+              "each records and corrects their own games."},
+    "invite_whatsapp": {"es": "Invitar por WhatsApp", "en": "Invite on WhatsApp"},
+    "invite_copy": {"es": "Copiar enlace", "en": "Copy link"},
+    "invite_message": {"es": "🎾 Registremos nuestros partidos de pádel en PadelScore. Únete:",
+                       "en": "🎾 Let's record our padel games on PadelScore. Join:"},
+    "invite_from": {"es": "Mi pádel de {name}", "en": "{name}'s padel"},
+    "invite_intro": {
+        "es": "Te invitaron a registrar sus partidos amistosos juntos: marcadores, "
+              "estadísticas, cara a cara y medallas.",
+        "en": "You're invited to record your friendly games together: scores, stats, "
+              "head-to-head and medals."},
+    "invite_who": {"es": "¿Quién eres?", "en": "Who are you?"},
+    "invite_new": {"es": "Soy nuevo: {name}", "en": "I'm new: {name}"},
+    "invite_join": {"es": "Entrar", "en": "Join"},
     "new_friendly": {"es": "🤝 Nuevo amistoso", "en": "🤝 New friendly"},
     "save_friendly": {"es": "💾 Guardar amistoso", "en": "💾 Save friendly"},
     "friendlies_intro": {

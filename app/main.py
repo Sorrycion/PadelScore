@@ -51,7 +51,7 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 # account's tournaments in every organization).
 OPEN_PATHS = ("/enter", "/login", "/logout", "/static", "/lang", "/rules", "/orgs", "/me",
               "/health", "/signup", "/join", "/sw.js", "/r/", "/install",
-              "/tasks/", "/unsubscribe/")
+              "/tasks/", "/unsubscribe/", "/invite/", "/claim/")
 def league_today():
     """Today where the league plays: UTC plus LEAGUE_UTC_OFFSET hours (app setting; Mexico
     City is -6 all year since 2022). The server runs on UTC, which is already tomorrow
@@ -125,6 +125,12 @@ class OrganizationGate:
         by_url = auth.org_from_slug(first) if first and first not in orgs.RESERVED else None
         request = Request(scope)
         cookie_org = auth.org_from_cookie(request)
+        if by_url and not auth.can_open(request, by_url):  # someone else's 🏠 Mi pádel
+            target = "/" if auth.current_user(request) else \
+                f"/login?next={quote(scope['path'], safe='/')}"
+            return await redirect(target)(scope, receive, send)
+        if cookie_org and not auth.can_open(request, cookie_org):
+            cookie_org = None
         org = by_url or cookie_org
         if by_url:
             scope["path"] = "/" + rest if rest else "/standings"
@@ -156,6 +162,18 @@ app.add_middleware(OrganizationGate)
 templates = Jinja2Templates(directory=BASE / "templates",
                             context_processors=[i18n_context, auth.auth_context])
 EDIT = [Depends(require_editor)]  # routes that change data need the organization's admin
+
+
+def require_club_editor(request: Request):
+    """An admin of a club: a 🏠 Mi pádel has no accounts, emails, courts or new
+    tournaments pages (its owner must not manage their friends' accounts)."""
+    require_editor(request)
+    org = auth.current_org(request)
+    if org["owner_id"] is not None and not auth.is_super(request):
+        raise HTTPException(404, "Not in Mi pádel")
+
+
+CLUB = [Depends(require_club_editor)]
 SUPER = [Depends(require_super)]  # managing organizations needs a super admin
 MANUAL = "manual"  # rule type whose sets are all made by hand
 templates.env.filters["pick_player"] = lambda p: {"id": p["id"], "name": p["name"]}
@@ -631,8 +649,10 @@ def friendlies_page(request: Request):
         tournament = friendlies_tournament(conn)
         if tournament:
             return redirect(f"/tournaments/{tournament['id']}")
+        org = auth.current_org(request)
         return templates.TemplateResponse(request, "friendlies.html", {
-            "can_add": can_add_friendly(request, conn)})
+            "can_add": can_add_friendly(request, conn),
+            "invite": invite_share(request, org) if org["owner_id"] else None})
 
 
 def friendly_form(request, conn, form, error=None, status_code=200):
@@ -691,7 +711,12 @@ def add_friendly(request: Request, played_on: str = Form(""), a1: str = Form("")
                 error = "err_friendly_not_in"
         if error:
             return friendly_form(request, conn, form, error=_(error), status_code=400)
+        new = [n for n in names if find_player(conn, n) is None]
         ids = [player_id(conn, n) for n in names]
+        user = auth.current_user(request)
+        if new and user:  # 👥 the account's friends without an account (/me)
+            conn.execute(f"UPDATE players SET created_by = ? WHERE organization_id = ? AND "
+                         f"name IN ({', '.join('?' * len(new))})", (user["id"], org_id(), *new))
         tournament = friendlies_tournament(conn, create=True)
         matchday_id = matchday_on(conn, tournament["id"], day)
         match_id = conn.execute(
@@ -870,11 +895,13 @@ def home(request: Request, error: str | None = None):
     with db.connect() as conn:
         tournaments, upcoming, latest = (account_home(conn, user) if user
                                          else guest_home(request, conn))
+        personal = orgs.personal_of(conn, user["id"]) if user else None
     if not user and not tournaments:
         return templates.TemplateResponse(request, "login.html", {"next": "/", "home": True})
     return templates.TemplateResponse(request, "home.html", {
         "tournaments": tournaments, "upcoming": upcoming, "account": user, "error": error,
-        "latest": latest})
+        "latest": latest, "personal": personal,
+        "invite": invite_share(request, personal) if personal else None})
 
 
 def home_tournament(t, org, role, me=None):
@@ -983,7 +1010,8 @@ def top_orgs(conn, limit=10):
     """The organizations with the most tournaments (then by name), for the enter page."""
     return conn.execute(
         "SELECT o.name, (SELECT COUNT(*) FROM tournaments t WHERE t.organization_id = o.id) "
-        "AS tournaments FROM organizations o ORDER BY tournaments DESC, o.name LIMIT ?",
+        "AS tournaments FROM organizations o WHERE o.owner_id IS NULL "  # clubs, not Mi pádel
+        "ORDER BY tournaments DESC, o.name LIMIT ?",
         (limit,)).fetchall()
 
 
@@ -999,6 +1027,8 @@ def enter_page(request: Request, next: str = "/"):
 def enter(request: Request, name: str = Form(""), next: str = Form("/")):
     with db.connect() as conn:
         org = auth.find_org(conn, name)
+        if org is not None and not auth.can_open(request, org):
+            org = None  # someone else's 🏠 Mi pádel: as if it didn't exist
         if org is None:
             time.sleep(1)  # slow down guessing
             return templates.TemplateResponse(request, "enter.html", {
@@ -1055,6 +1085,8 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
                 response = enter_org(request, org, wanted if current
                                      and current["id"] == org["id"] and wanted else "/")
             else:
+                if user["role"] == "player":
+                    orgs.create_personal(conn, user["id"])  # older accounts get theirs now
                 response = redirect(wanted or "/")
             response.set_cookie(auth.USER_COOKIE, auth.user_cookie(user), **cookie)
             return response
@@ -1280,19 +1312,21 @@ def join_tournament(request: Request, password: str = Form("")):
     return response
 
 
-def signup_form(request, conn, tournament, form=None, error=None, status_code=200):
+def signup_form(request, conn, tournament, form=None, error=None, status_code=200, next=""):
     return templates.TemplateResponse(request, "signup.html", {
         "tournament": tournament,
         "free": free_people(conn, tournament["id"]) if tournament else [],
-        "form": form or {}, "error": error}, status_code=status_code)
+        "form": form or {}, "error": error, "next": next}, status_code=status_code)
 
 
 @app.get("/signup", response_class=HTMLResponse)
-def signup_page(request: Request, t: int | None = None):
+def signup_page(request: Request, t: int | None = None, next: str = ""):
     """Make an account. From a tournament (`t`, after its password) it also claims who
-    you are in it; on its own, you join tournaments later from the home page."""
+    you are in it; on its own, you join tournaments later from the home page. `next`:
+    where to go after (an invitation to a 🏠 Mi pádel)."""
     with db.connect() as conn:
-        return signup_form(request, conn, guest_tournament(request, conn, t) if t else None)
+        return signup_form(request, conn, guest_tournament(request, conn, t) if t else None,
+                           next=safe_next(next) if next else "")
 
 
 @app.post("/signup")
@@ -1300,7 +1334,8 @@ def signup(request: Request, t: str = Form(""), who: str = Form(""),
            first_name: str = Form(""), last_name: str = Form(""),
            display_name: str = Form(""), username: str = Form(""), email: str = Form(""),
            phone_country: str = Form(""), phone: str = Form(""),
-           password: str = Form(""), password2: str = Form("")):
+           password: str = Form(""), password2: str = Form(""),
+           next_url: str = Form("", alias="next")):
     """Make a player account. From a tournament (`t`), also claim one of its players, or
     a new player ("new") who joins it; the display name becomes the player's name, so
     the tables show it. Without `t`, just the account: it joins tournaments later with
@@ -1335,7 +1370,9 @@ def signup(request: Request, t: str = Form(""), who: str = Form(""),
             except users.UserError as e:
                 error = str(e)
         if error:
-            return signup_form(request, conn, tournament, form, error, 400)
+            return signup_form(request, conn, tournament, form, error, 400,
+                               next=safe_next(next_url) if next_url else "")
+        orgs.create_personal(conn, user_id)  # 🏠 Mi pádel, with the account
         if not tournament:
             pid = None
         elif claimed:
@@ -1348,15 +1385,148 @@ def signup(request: Request, t: str = Form(""), who: str = Form(""),
         if pid:
             users.link_player(conn, user_id, pid)
         user = users.get(conn, user_id)
-    response = redirect("/me" if tournament else "/")
+    response = redirect(safe_next(next_url) if next_url else "/me" if tournament else "/")
     response.set_cookie(auth.USER_COOKIE, auth.user_cookie(user), **cookie_options(request))
     return response
+
+
+# --- 👥 Friends without an account: claim links ------------------------------------------------
+
+def claim_share(request, org, player):
+    _ = translator(get_lang(request))
+    scheme = "https" if auth.is_https(request) else "http"
+    url = (f"{scheme}://{request.url.netloc}/claim/{player['id']}/"
+           f"{auth.claim_token(org, player['id'])}")
+    text = f"{_('claim_message', name=player['name'])}\n{url}"
+    return {"url": url, "whatsapp": "https://wa.me/?text=" + quote(text, safe="")}
+
+
+def my_unclaimed(request, conn, user):
+    """👥 Players this account created in friendlies that no account has claimed yet,
+    each with its claim link."""
+    rows = conn.execute(
+        "SELECT p.*, o.name AS org_name, o.secret, o.id AS org_id, o.owner_id, "
+        "(SELECT COUNT(*) FROM matches m WHERE p.id IN (m.a1, m.a2, m.b1, m.b2)) AS sets "
+        "FROM players p JOIN organizations o ON o.id = p.organization_id "
+        "WHERE p.created_by = ? AND p.user_id IS NULL ORDER BY p.name", (user["id"],)).fetchall()
+    return [{"player": r, "share": claim_share(request, {"id": r["org_id"], "secret": r["secret"]}, r)}
+            for r in rows]
+
+
+def claimed_player(conn, player_id, token):
+    row = conn.execute("SELECT * FROM players WHERE id = ?", (player_id,)).fetchone()
+    org = row and conn.execute("SELECT * FROM organizations WHERE id = ?",
+                               (row["organization_id"],)).fetchone()
+    if not org or not hmac.compare_digest(token, auth.claim_token(org, player_id)):
+        raise HTTPException(404, "Invitation not found")
+    return row, org
+
+
+@app.get("/claim/{player_id}/{token}", response_class=HTMLResponse)
+def claim_page(request: Request, player_id: int, token: str, error: str | None = None):
+    """A friend's link to a player made for them in friendlies: make an account (or log
+    in) and say "that's me" to keep its games."""
+    with db.connect() as conn:
+        player, org = claimed_player(conn, player_id, token)
+        creator = users.get(conn, player["created_by"]) if player["created_by"] else None
+        sets = conn.execute("SELECT COUNT(*) FROM matches WHERE ? IN (a1, a2, b1, b2)",
+                            (player_id,)).fetchone()[0]
+    return templates.TemplateResponse(request, "claim.html", {
+        "player": player, "org": org, "creator": creator, "sets": sets, "error": error,
+        "account": auth.current_user(request), "here": f"/claim/{player_id}/{token}"})
+
+
+@app.post("/claim/{player_id}/{token}")
+def claim(request: Request, player_id: int, token: str):
+    """The logged-in account becomes this player. If it already has a player in that
+    organization, the two are joined (users.merge_players)."""
+    user = auth.current_user(request)
+    if user is None:
+        raise LoginRequired(f"/claim/{player_id}/{token}")
+    with db.connect() as conn:
+        player, org = claimed_player(conn, player_id, token)
+        if player["user_id"] not in (None, user["id"]):
+            return redirect(f"/claim/{player_id}/{token}?error=err_player_claimed")
+        try:
+            users.link_player(conn, user["id"], player_id, merge=True)
+        except users.UserError as e:
+            return redirect(f"/claim/{player_id}/{token}?error={e}")
+    return enter_org(request, org, "/friendlies")
+
+
+# --- 🏠 Mi pádel: invitations ---------------------------------------------------------------
+
+def invite_url(request, org):
+    scheme = "https" if auth.is_https(request) else "http"
+    return f"{scheme}://{request.url.netloc}/invite/{org['invite_code']}"
+
+
+def invite_share(request, org):
+    """The invitation link of a 🏠 Mi pádel and its WhatsApp message."""
+    _ = translator(get_lang(request))
+    url = invite_url(request, org)
+    text = f"{_('invite_message')}\n{url}"
+    return {"url": url, "whatsapp": "https://wa.me/?text=" + quote(text, safe="")}
+
+
+def invited_org(conn, code):
+    org = conn.execute("SELECT * FROM organizations WHERE invite_code = ? AND owner_id IS NOT "
+                       "NULL", (code,)).fetchone()
+    if org is None:
+        raise HTTPException(404, "Invitation not found")
+    return org
+
+
+@app.get("/invite/{code}", response_class=HTMLResponse)
+def invite_page(request: Request, code: str):
+    """A friend's invitation to their 🏠 Mi pádel: make an account (or log in), then say
+    who you are among its players (or be new)."""
+    user = auth.current_user(request)
+    with db.connect() as conn:
+        org = invited_org(conn, code)
+        owner = users.get(conn, org["owner_id"])
+        if user and conn.execute("SELECT 1 FROM players WHERE organization_id = ? AND "
+                                 "user_id = ?", (org["id"], user["id"])).fetchone():
+            return enter_org(request, org, "/friendlies")  # already in
+        free = conn.execute("SELECT * FROM players WHERE organization_id = ? AND user_id IS "
+                            "NULL ORDER BY name", (org["id"],)).fetchall()
+    return templates.TemplateResponse(request, "invite.html", {
+        "invite": org, "owner": owner, "account": user, "free": free, "code": code})
+
+
+@app.post("/invite/{code}")
+def accept_invite(request: Request, code: str, player_id: str = Form("")):
+    """Join a 🏠 Mi pádel as one of its unclaimed players, or as a new one ("new")."""
+    user = auth.current_user(request)
+    if user is None:
+        raise LoginRequired(f"/invite/{code}")
+    with db.connect() as conn:
+        org = invited_org(conn, code)
+        mine = conn.execute("SELECT id FROM players WHERE organization_id = ? AND user_id = ?",
+                            (org["id"], user["id"])).fetchone()
+        if not mine:
+            if player_id == "new":
+                name = base = clean_name(user["display_name"] or user["username"])
+                n = 2
+                while in_org(org["id"], lambda: find_player(conn, name)):
+                    name, n = f"{base} {n}", n + 1
+                conn.execute("INSERT INTO players (organization_id, name, user_id) "
+                             "VALUES (?, ?, ?)", (org["id"], name, user["id"]))
+            else:
+                player = conn.execute("SELECT * FROM players WHERE id = ? AND organization_id "
+                                      "= ? AND user_id IS NULL",
+                                      (opt_int(player_id), org["id"])).fetchone()
+                if player is None:
+                    return redirect(f"/invite/{code}")
+                users.link_player(conn, user["id"], player["id"])
+    return enter_org(request, org, "/friendlies")
 
 
 def my_players(conn, user_id):
     """The account's players, one per organization, with their organization."""
     return conn.execute(
-        "SELECT p.*, o.name AS org_name, o.slug AS org_slug FROM players p JOIN organizations o "
+        "SELECT p.*, o.name AS org_name, o.slug AS org_slug, o.owner_id AS org_owner "
+        "FROM players p JOIN organizations o "
         "ON o.id = p.organization_id WHERE p.user_id = ? ORDER BY o.name", (user_id,)).fetchall()
 
 
@@ -1424,9 +1594,11 @@ def me_page(request: Request, error: str | None = None, saved: str | None = None
     with db.connect() as conn:
         summaries = [my_summary(conn, p) for p in my_players(conn, user["id"])]
         totals = career(conn, summaries, get_lang(request))
+        unclaimed = my_unclaimed(request, conn, user)
     return templates.TemplateResponse(request, "me.html", {
         "account": user, "summaries": summaries, "career": totals,
-        "friendlies": my_friendlies(summaries), "error": error, "saved": saved})
+        "friendlies": my_friendlies(summaries), "unclaimed": unclaimed,
+        "error": error, "saved": saved})
 
 
 def my_friendlies(summaries):
@@ -1524,7 +1696,7 @@ def linked_player(conn, user_id):
                         (user_id, org_id())).fetchone()
 
 
-@app.get("/users", response_class=HTMLResponse, dependencies=EDIT)
+@app.get("/users", response_class=HTMLResponse, dependencies=CLUB)
 def users_page(request: Request, error: str | None = None, mail: str | None = None):
     with db.connect() as conn:
         rows = [{**u, "player": linked_player(conn, u["id"])}
@@ -1534,7 +1706,7 @@ def users_page(request: Request, error: str | None = None, mail: str | None = No
         "mail_enabled": mailer.enabled()})
 
 
-@app.post("/users/{user_id}/test-email", dependencies=EDIT)
+@app.post("/users/{user_id}/test-email", dependencies=CLUB)
 def account_test_email(request: Request, user_id: int):
     """📧 Probar email on 🔑 Cuentas: email this account, now, the recap of its player's
     latest jornada in this organization (or, without one, a plain test message). Not
@@ -1564,7 +1736,7 @@ def account_test_email(request: Request, user_id: int):
     return redirect("/users?mail=sent" if ok else f"/users?error={mail_error()}")
 
 
-@app.get("/users/{user_id}", response_class=HTMLResponse, dependencies=EDIT)
+@app.get("/users/{user_id}", response_class=HTMLResponse, dependencies=CLUB)
 def user_page(request: Request, user_id: int, error: str | None = None):
     with db.connect() as conn:
         account = managed_user(conn, request, user_id)
@@ -1590,7 +1762,7 @@ def user_action(request, user_id, change):
     return redirect(f"/users/{user_id}")
 
 
-@app.post("/users/{user_id}", dependencies=EDIT)
+@app.post("/users/{user_id}", dependencies=CLUB)
 def update_user(request: Request, user_id: int, username: str = Form(""),
                 email: str = Form(""), first_name: str = Form(""), last_name: str = Form(""),
                 display_name: str = Form(""), phone_country: str = Form(""),
@@ -1601,7 +1773,7 @@ def update_user(request: Request, user_id: int, username: str = Form(""),
         phone=phone))
 
 
-@app.post("/users/{user_id}/password", dependencies=EDIT)
+@app.post("/users/{user_id}/password", dependencies=CLUB)
 def reset_user_password(request: Request, user_id: int, password: str = Form("")):
     return user_action(request, user_id,
                        lambda conn, u: users.set_password(conn, u["id"], password))
@@ -1617,7 +1789,7 @@ def set_user_role(request: Request, user_id: int, role: str = Form(""),
     return user_action(request, user_id, change)
 
 
-@app.post("/users/{user_id}/link", dependencies=EDIT)
+@app.post("/users/{user_id}/link", dependencies=CLUB)
 def link_user_player(request: Request, user_id: int, player_id: int = Form(...),
                      merge: str = Form("")):
     """Link a free player to the account, or with `merge` fold a duplicate into the
@@ -1628,7 +1800,7 @@ def link_user_player(request: Request, user_id: int, player_id: int = Form(...),
     return user_action(request, user_id, change)
 
 
-@app.post("/users/{user_id}/unlink", dependencies=EDIT)
+@app.post("/users/{user_id}/unlink", dependencies=CLUB)
 def unlink_user_player(request: Request, user_id: int):
     def change(conn, u):
         player = linked_player(conn, u["id"])
@@ -1688,7 +1860,7 @@ def tournaments_page(request: Request, error: str | None = None, past: str = "")
         })
 
 
-@app.post("/tournaments", dependencies=EDIT)
+@app.post("/tournaments", dependencies=CLUB)
 def add_tournament(name: str = Form(...), held_on: str = Form(""),
                    rule_type_id: str = Form("1"), points_per_match: str = Form(""),
                    players: list[int] = Form([]), new_players: list[str] = Form([]),
@@ -1748,6 +1920,8 @@ def tournament_page(request: Request, tournament_id: int, error: str | None = No
             "my_player_id": my_player_id(request, conn),
             "ladder_started": bool(set_rows(conn, tournament_id=tournament_id, limit=1)),
             "can_add_friendly": can_add_friendly(request, conn),
+            "invite": invite_share(request, auth.current_org(request))
+                      if auth.current_org(request)["owner_id"] else None,
         })
 
 
@@ -2259,7 +2433,7 @@ def add_rey_matchday(request, conn, tournament, form, played_on, number, _):
     return redirect(f"/matchdays/{matchday_id}")
 
 
-@app.get("/courts", dependencies=EDIT)
+@app.get("/courts", dependencies=CLUB)
 def latest_courts():
     """The '+ Courts' button: the courts of the latest matchday."""
     with db.connect() as conn:
@@ -2748,7 +2922,7 @@ def local_time(sent_at):
     return when.strftime("%H:%M")
 
 
-@app.get("/emails", response_class=HTMLResponse, dependencies=EDIT)
+@app.get("/emails", response_class=HTMLResponse, dependencies=CLUB)
 def emails_page(request: Request, day: str | None = None, status: str = "", kind: str = ""):
     """📬 Emails (admins): every email this organization's accounts got (or didn't) on one
     league day, with how it went; filtered by status and kind."""
@@ -3168,7 +3342,7 @@ def send_test_reminder(request, conn, user, player_id, tournament_id=None):
     return "sent" if ok else mail_error()
 
 
-@app.post("/users/{user_id}/test-reminder", dependencies=EDIT)
+@app.post("/users/{user_id}/test-reminder", dependencies=CLUB)
 def account_test_reminder(request: Request, user_id: int):
     """⏰ Probar recordatorio on 🔑 Cuentas: email this account, now, the game-day reminder
     of its player's next jornada (whatever its date), to try it. Not recorded, so the

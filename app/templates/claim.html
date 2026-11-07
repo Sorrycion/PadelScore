@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ _("claim_title", name=player.name) }} · PadelScore{% endblock %}
+{% block content %}
+{# A friend's link to a player made for them in friendlies (main.claim_page). #}
+<h1>👋 {{ _("claim_title", name=player.name) }}</h1>
+<p>{{ _("claim_intro", who=(creator.display_name or creator.username) if creator else "PadelScore", sets=_("n_sets", n=sets)) }}</p>
+{% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+{% if player.user_id %}
+<p class="empty">{{ _("claim_taken") }}</p>
+{% elif not account %}
+<p class="inline">
+  <a class="button" href="/signup?next={{ here|urlencode }}">✨ {{ _("create_account") }}</a>
+  <a class="button secondary" href="/login?next={{ here|urlencode }}">{{ _("login") }}</a>
+</p>
+{% else %}
+<form method="post" action="{{ here }}" class="inline">
+  <button type="submit">✅ {{ _("claim_yes", name=player.name) }}</button>
+</form>
+<p class="muted">{{ _("claim_merge_hint") }}</p>
+{% endif %}
+{% endblock %}
