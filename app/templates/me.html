@@ -38,10 +38,28 @@
 <ul class="matches">{% for m in friendlies.recent %}{% include "_match_row.html" %}{% endfor %}</ul>
 {% endif %}
 
+{% if unclaimed %}
+<h2 id="friends">👥 {{ _("my_unclaimed") }}</h2>
+<p class="muted">{{ _("my_unclaimed_hint") }}</p>
+<ul class="cards">
+  {% for u in unclaimed %}
+  <li class="card">
+    <strong>👤 {{ u.player.name }}</strong>
+    <div class="meta muted">{{ "🏠" if u.player.owner_id else "🏢" }} {{ u.player.org_name }} · {{ _("n_sets", n=u.player.sets) }}</div>
+    <p class="inline">
+      <a class="button whatsapp" href="{{ u.share.whatsapp }}" target="_blank" rel="noopener">📲 {{ _("invite_whatsapp") }}</a>
+      <button type="button" class="secondary" data-copy="{{ u.share.url }}" data-done="{{ _('pdf_copied') }}"
+              onclick="navigator.clipboard.writeText(this.dataset.copy).then(() => { this.textContent = this.dataset.done; })">📋 {{ _("invite_copy") }}</button>
+    </p>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
 {% for s in summaries %}
 <section class="court-block court-{{ loop.cycle('a', 'b') }}">
   <div class="court-head">
-    <h2>🏢 {{ s.player.org_name }}</h2>
+    <h2>{{ "🏠" if s.player.org_owner else "🏢" }} {{ s.player.org_name }}</h2>
     <form method="post" action="/enter" class="inline">
       <input type="hidden" name="name" value="{{ s.player.org_name }}">
       <input type="hidden" name="next" value="/players/{{ s.player.id }}">

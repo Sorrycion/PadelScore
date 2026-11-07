@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ _("invite_title") }} · PadelScore{% endblock %}
+{% block content %}
+{# An invitation to a 🏠 Mi pádel (main.invite_page): make an account or log in, then
+   say who you are among its players. #}
+<h1>🏠 {{ _("invite_from", name=owner.display_name or owner.username) }}</h1>
+<p>{{ _("invite_intro") }}</p>
+{% if not account %}
+<p class="inline">
+  <a class="button" href="/signup?next=/invite/{{ code }}">✨ {{ _("create_account") }}</a>
+  <a class="button secondary" href="/login?next=/invite/{{ code }}">{{ _("login") }}</a>
+</p>
+{% else %}
+<form method="post" action="/invite/{{ code }}" class="stack card">
+  <strong>{{ _("invite_who") }}</strong>
+  {% for p in free %}
+  <label class="check"><input type="radio" name="player_id" value="{{ p.id }}" required> 👤 {{ p.name }}</label>
+  {% endfor %}
+  <label class="check"><input type="radio" name="player_id" value="new" required {% if not free %}checked{% endif %}> ✨ {{ _("invite_new", name=account.display_name or account.username) }}</label>
+  <button type="submit">{{ _("invite_join") }}</button>
+</form>
+{% endif %}
+{% endblock %}

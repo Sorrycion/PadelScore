@@ -28,7 +28,7 @@ SECTIONS = ("standings", "tournaments", "players", "matchdays", "matches", "meda
             "courts", "users", "emails", "friendlies")  # pages of one organization: /<slug>/<section>/...
 RESERVED = {"static", "enter", "login", "logout", "lang", "rules", "orgs", "me", "health",
             "signup", "join", "sw.js", "r", "install", "tasks", "unsubscribe", "welcome",
-            *SECTIONS}
+            "invite", "claim", *SECTIONS}
 
 
 def slugify(name):
@@ -82,6 +82,35 @@ def create_org(conn, name, admin_user="", password="", user_id=None):
         for table in ("players", "tournaments"):
             conn.execute(f"UPDATE {table} SET organization_id = ? WHERE organization_id IS NULL",
                          (org_id,))
+    return org_id
+
+
+def personal_of(conn, user_id):
+    """The account's 🏠 Mi pádel (its own private organization), or None."""
+    return conn.execute("SELECT * FROM organizations WHERE owner_id = ?", (user_id,)).fetchone()
+
+
+def create_personal(conn, user_id):
+    """The account's 🏠 Mi pádel, made if it has none: a private organization it owns,
+    with an invitation code and the account's player in it. Returns its id."""
+    found = personal_of(conn, user_id)
+    if found:
+        return found["id"]
+    user = users.get(conn, user_id)
+    base = name = f"Mi pádel de {user['username']}"
+    n = 2
+    while conn.execute("SELECT 1 FROM organizations WHERE name = ? COLLATE NOCASE",
+                       (name,)).fetchone():
+        name, n = f"{base} {n}", n + 1
+    org_id = conn.execute(
+        "INSERT INTO organizations (name, admin_user, admin_password, secret, slug, owner_id, "
+        "invite_code) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (name, f"~{user['username']}", user["password"], secrets.token_hex(32),
+         unique_slug(conn, name), user_id, secrets.token_urlsafe(9))).lastrowid
+    player = " ".join((user["display_name"] or user["username"]).split())
+    player_id = conn.execute("INSERT INTO players (organization_id, name, user_id) "
+                             "VALUES (?, ?, ?)", (org_id, player, user_id)).lastrowid
+    assert player_id
     return org_id
 
 

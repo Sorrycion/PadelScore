@@ -96,6 +96,21 @@ def seed(dbfile):
         tournament("Liga de Verano", today - timedelta(days=120), 3, 0, ended=1)
         tournament("Liga de Otoño", today - timedelta(days=21), 3, 1)
         other_formats(conn, org, ids, rule, today)
+        # 🏠 Ana's Mi pádel: a friendly with three friends who have no account yet.
+        mine = orgs.create_personal(conn, ana)
+        me = conn.execute("SELECT id FROM players WHERE organization_id = ? AND user_id = ?",
+                          (mine, ana)).fetchone()[0]
+        pals = [conn.execute("INSERT INTO players (organization_id, name, created_by) "
+                             "VALUES (?, ?, ?)", (mine, n, ana)).lastrowid
+                for n in ("Pepe Luna", "Sofía Mar", "Raúl Cruz")]
+        t = conn.execute("INSERT INTO tournaments (organization_id, name, held_on, rule_type_id, "
+                         "player_password) VALUES (?, 'Amistosos', ?, ?, 'mi-padel-demo')",
+                         (mine, (today - timedelta(days=2)).isoformat(), rule["amistosos"])).lastrowid
+        d = conn.execute("INSERT INTO matchdays (tournament_id, number, played_on) VALUES "
+                         "(?, 1, ?)", (t, (today - timedelta(days=2)).isoformat())).lastrowid
+        conn.execute("INSERT INTO matches (matchday_id, court, a1, a2, b1, b2, team_a_games, "
+                     "team_b_games, winner) VALUES (?, 1, ?, ?, ?, ?, 6, 4, 'A')",
+                     (d, me, pals[0], pals[1], pals[2]))
         conn.execute("INSERT INTO email_log (day, organization_id, user_id, address, kind, "
                      "subject, status) VALUES (?, ?, ?, 'ana@example.com', 'reminder', "
                      "'⏰ Hoy juegas: Jornada 4 · Liga de Otoño', 'sent')",
@@ -205,7 +220,14 @@ def ids(dbfile):
         out[key] = one("SELECT id FROM tournaments WHERE name = ?", name)
         out[key + "_md"] = one("SELECT MAX(id) FROM matchdays WHERE tournament_id = ?", out[key])
     out["ladder_match"] = one("SELECT id FROM matches WHERE matchday_id = ?", out["ladder_md"])
-    out["friendlies"] = one("SELECT id FROM tournaments WHERE name = 'Amistosos'")
+    out["friendlies"] = one("SELECT id FROM tournaments WHERE name = 'Amistosos' ORDER BY id")
+    # 🏠 Ana's Mi pádel: its invitation, and the claim link of a friend without an account.
+    from app import auth
+    conn.row_factory = sqlite3.Row
+    mine = conn.execute("SELECT * FROM organizations WHERE owner_id IS NOT NULL").fetchone()
+    pepe = one("SELECT id FROM players WHERE name = 'Pepe Luna'")
+    out["invite"] = mine["invite_code"]
+    out["claim"] = f"/claim/{pepe}/{auth.claim_token(dict(mine), pepe)}"
     conn.close()
     return out
 
@@ -246,7 +268,7 @@ def page(dbfile, outdir, name, who, url, options=()):
     (Path(outdir) / f"{name}.html").write_text(html, encoding="utf-8")
 
 
-def shoot(chrome, outdir, name, height=4400):
+def shoot(chrome, outdir, name, height=7000):
     """<name>.png: the page at phone width (500 px), cut where the page ends."""
     from PIL import Image
     html, png = Path(outdir) / f"{name}.html", Path(outdir) / f"{name}.png"
@@ -339,6 +361,8 @@ def pages_for(i):
         "friendly_new": ("player", f"{s}/friendlies/new"),
         "friendlies": ("player", f"{s}/tournaments/{i['friendlies']}"),
         "friendly_stats": ("player", f"{s}/players/{i['ana']}/stats?only=friendlies"),
+        "mp_invite": ("anon", f"/invite/{i['invite']}"),
+        "mp_claim": ("anon", i["claim"]),
     }
 
 

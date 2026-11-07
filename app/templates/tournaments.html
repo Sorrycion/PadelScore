@@ -3,7 +3,7 @@
 {% block content %}
 <h1>{{ _("tournaments") }}</h1>
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
-{% if editor %}
+{% if editor and not org.owner_id %}{# a 🏠 Mi pádel has only its Amistosos #}
 <details class="create" id="new-tournament" {% if error or not tournaments %}open{% endif %}>
   <summary class="button">{{ _("create_tournament") }}</summary>
   <form method="post" action="/tournaments" class="card stack" id="tournament-form">

@@ -1,0 +1,11 @@
+{# 🔗 Invite friends to a 🏠 Mi pádel. Needs: invite (main.invite_share: url, whatsapp). #}
+<section class="card join-card invite-card">
+  <h2>🔗 {{ _("invite_title") }}</h2>
+  <p class="muted">{{ _("invite_hint") }}</p>
+  <p class="inline">
+    <a class="button whatsapp" href="{{ invite.whatsapp }}" target="_blank" rel="noopener">📲 {{ _("invite_whatsapp") }}</a>
+    <button type="button" class="secondary" data-copy="{{ invite.url }}" data-done="{{ _('pdf_copied') }}"
+            onclick="navigator.clipboard.writeText(this.dataset.copy).then(() => { this.textContent = this.dataset.done; })">📋 {{ _("invite_copy") }}</button>
+  </p>
+  <p class="muted invite-url"><code>{{ invite.url }}</code></p>
+</section>
