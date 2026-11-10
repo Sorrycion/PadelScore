@@ -118,8 +118,12 @@ flowchart TD
   and Elo is hard to explain. So the points are wins (the user's idea) and the table adds
   ✅ won, ❌ lost, % and ± games; ties go by games difference. Head-to-head (⚔️ Cara a
   cara) answers "whom do I beat".
-- **Where players see it:** 🤝 Amistosos in the menu (`/friendlies`: its tournament, or
-  how it works before the first one); Amistosos is always in their tournaments (home,
+- **Where players see it:** 🤝 Amistosos in the menu is **🤝 Mis amistosos**
+  (`/friendlies`, the user's request 2026-11-10): the account's own friendlies in every
+  organization (Mi pádel and clubs), its totals and a **Contra quién** table (sets won
+  and lost against each rival, `friendly_record`). Only its own, even for admins; each
+  set links to its organization (`_match_row`'s `org_prefix`) and is edited there. The
+  club's whole table is the Amistosos tournament, under Torneos; Amistosos is always in their tournaments (home,
   `/me`); `/me` has **🤝 Mis amistosos** (every organization added up, and the latest);
   Estadísticas has a **🎾 Todo | 🤝 Amistosos** filter (`?only=friendlies`).
 

@@ -33,7 +33,7 @@ MENU_COMMON = [
     "**Clasificación:** la tabla del torneo actual de la organización.",
     "**Torneos:** todos los torneos, en curso y pasados.",
     "**Sets:** todos los sets jugados y por jugar, con filtros por torneo, jornada y jugador.",
-    "**Amistosos:** tus partidos amistosos con todos los de la organización.",
+    "**Amistosos:** tus amistosos de todas tus organizaciones y tu récord contra cada rival.",
     "**Jugadores:** la lista de jugadores de la organización y la página de cada uno.",
     "**Reglamento:** las reglas de cada tipo de torneo (Liga de amigos, Americano, "
     "Mexicano, Manual, Retas, Rey de la cancha, Escalafón).",
@@ -288,8 +288,8 @@ ADMIN_MANUAL = {
         {"title": "Amistosos", "blocks": [
             ("p", "**Amistosos** es el torneo de los partidos amistosos de la organización. "
                   "Cada organización tiene uno, y todos sus jugadores están en él (también los "
-                  "nuevos). Se crea solo con el primer amistoso. Ábrelo desde el menú, en "
-                  "**Amistosos**."),
+                  "nuevos). Se crea solo con el primer amistoso. Su clasificación completa "
+                  "está en **Torneos**."),
             ("steps", ["Toca **Nuevo amistoso** (en Amistosos o en una de sus jornadas).",
                        "Elige la **fecha**. Si ese día ya hay jornada de amistosos, el amistoso "
                        "se agrega a ella en la siguiente cancha; si no, se crea una jornada "
@@ -574,8 +574,8 @@ PLAYER_MANUAL = {
         {"title": "Amistosos", "blocks": [
             ("p", "**Amistosos** es el torneo de los partidos amistosos de la organización. "
                   "Cada organización tiene uno, y todos sus jugadores están en él (también los "
-                  "nuevos). Se crea solo con el primer amistoso. Ábrelo desde el menú, en "
-                  "**Amistosos**."),
+                  "nuevos). Se crea solo con el primer amistoso. Su clasificación completa "
+                  "está en **Torneos**."),
             ("steps", ["Toca **Nuevo amistoso** (en Amistosos o en una de sus jornadas).",
                        "Elige la **fecha**. Si ese día ya hay jornada de amistosos, el amistoso "
                        "se agrega a ella en la siguiente cancha; si no, se crea una jornada "
@@ -594,6 +594,12 @@ PLAYER_MANUAL = {
                          "juegas.",
                          "Quien juega más puede sumar más puntos: para comparar, mira el **%** y "
                          "el **Cara a cara**."]),
+            ("h", "Mis amistosos"),
+            ("p", "En el menú, **Amistosos** abre **Mis amistosos**: todos los amistosos que "
+                  "has jugado, en cualquier organización (tu Mi pádel y tus clubes), tus "
+                  "totales y una tabla **Contra quién** con cuántas veces le has ganado y "
+                  "perdido a cada rival. Solo ves los tuyos."),
+            ("shots", [("my_friendlies", 0, 1300, "Mis amistosos")]),
         ]},
         {"title": "Tus estadísticas y medallas", "blocks": [
             ("p", "En el menú, **Mi resumen** abre tu página de jugador, con cuatro pestañas:"),
