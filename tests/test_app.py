@@ -836,7 +836,8 @@ def test_jornada_recap_and_its_share_link(league):
     shared = league.get(link, follow_redirects=False)
     assert shared.status_code == 200 and "<h1>Ana</h1>" in shared.text
     assert "See the tournament" in shared.text and "Choose" not in shared.text
-    assert league.get(link[:-2] + "00", follow_redirects=False).status_code == 404
+    wrong = link[:-1] + ("1" if link[-1] == "0" else "0")  # always another token
+    assert league.get(wrong, follow_redirects=False).status_code == 404
     assert league.get("/r/1/1/2/" + link.rsplit("/", 1)[1]).status_code == 404  # other player
 
 
@@ -2156,7 +2157,8 @@ def test_jornada_recaps_are_emailed_the_next_day_once(with_players, monkeypatch)
     # The unsubscribe link works without logging in; /me turns recaps back on.
     link = re.search(r"(/unsubscribe/\d+/[0-9a-f]+)", html).group(1)
     c.cookies.clear()
-    assert c.get(link[:-2] + "00").status_code == 404
+    wrong = link[:-1] + ("1" if link[-1] == "0" else "0")  # always another token
+    assert c.get(wrong).status_code == 404
     assert c.get(link).status_code == 200
     with db.connect() as conn:
         assert conn.execute("SELECT email_recaps FROM users WHERE username = 'analo'"
@@ -2206,7 +2208,8 @@ def test_jornada_summary_pdf_and_whatsapp(with_players):
     c.post("/logout")
     c.cookies.clear()
     assert c.get(public).content.startswith(b"%PDF")
-    assert c.get(public[:-2] + "00").status_code == 404
+    wrong = public[:-1] + ("1" if public[-1] == "0" else "0")  # always another token
+    assert c.get(wrong).status_code == 404
     assert c.get("/r/1/2/summary/" + public.rsplit("/", 1)[1]).status_code == 404  # another jornada
 
 
