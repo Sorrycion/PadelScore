@@ -3113,6 +3113,31 @@ def test_mi_padel_comes_with_the_account_and_is_private(locked):
     assert "Are you Leo?" in c.get(claim_leo).text and "already has an account" in c.get(claim_leo).text
 
 
+def test_admins_see_only_their_own_friendlies_at_home(league):
+    c = league
+    with db.connect() as conn:  # Ana has an account (her Mi pádel comes with her login)
+        ana = users.create_user(conn, "player", "analo", "clave-larga", email="ana@example.com")
+        users.link_player(conn, ana, 1)
+        orgs.set_superadmin(conn, "julio", "super")
+    c.post("/logout")
+    c.post("/login", data={"username": "analo", "password": "clave-larga", "role": "account"})
+    with db.connect() as conn:
+        mine = orgs.personal_of(conn, ana)
+    c.post(f"/{mine['slug']}/friendlies", data={"played_on": "2026-11-06", "a1": "Ana",
+                                                "a2": "Max", "b1": "Leo", "b2": "Eva",
+                                                "team_a_games": "6", "team_b_games": "1"})
+    c.post("/club/friendlies", data={"played_on": "2026-11-06", "a1": "Ana", "a2": "Bea",
+                                     "b1": "Carlos", "b2": "Diego", "team_a_games": "6",
+                                     "team_b_games": "2"})
+    c.post("/logout")
+    # The super admin and the club's admin run Club, but play no friendly.
+    for user, password in (("julio", "super"), ("admin", "secreto")):
+        c.post("/login", data={"username": user, "password": password, "role": "account"})
+        mine_ = c.get("/").text.split("My tournaments")[1]
+        assert "Liga Amigos" in mine_ and "Amistosos" not in mine_, user
+        c.post("/logout")
+
+
 def test_jornada_pdf_has_a_positions_chart(league):
     from app import report
     calls = []

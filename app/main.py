@@ -924,10 +924,13 @@ def by_date(tournaments, upcoming):
 
 def account_home(conn, user):
     """(tournaments, sets to play) of an account, across organizations: the tournaments
-    its players play (with position and points) and, for admins, those they run."""
+    its players play (with position and points) and, for admins, those they run. Other
+    people's friendlies aren't shown: no 🏠 Mi pádel but one's own, and a club's
+    🤝 Amistosos only if the account plays in it (its players' part, below)."""
     found, upcoming, latest = {}, [], []
     if user["role"] == "super":
-        admin_of = conn.execute("SELECT * FROM organizations ORDER BY name").fetchall()
+        admin_of = conn.execute("SELECT * FROM organizations WHERE owner_id IS NULL "
+                                "ORDER BY name").fetchall()
     elif user["role"] == "org_admin":
         admin_of = conn.execute("SELECT * FROM organizations WHERE id = ?",
                                 (user["organization_id"],)).fetchall()
@@ -935,7 +938,8 @@ def account_home(conn, user):
         admin_of = []
     for org in admin_of:
         for t in in_org(org["id"], lambda: all_tournaments(conn)):
-            found[t["id"]] = home_tournament(t, org, "admin")
+            if t["rule_code"] != AMISTOSOS:
+                found[t["id"]] = home_tournament(t, org, "admin")
     for player in my_players(conn, user["id"]):
         org = {"id": player["organization_id"], "name": player["org_name"]}
         summary = my_summary(conn, player)
