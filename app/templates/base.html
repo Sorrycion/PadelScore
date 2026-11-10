@@ -42,7 +42,7 @@
   <header class="topbar">
     <div class="brand-box">
       <a class="brand" href="/">🎾 PadelScore</a>
-      {% if org or superadmin %}<div class="org-line">
+      {% if (org or superadmin) and not landing %}<div class="org-line">
         {% if org %}<a href="/enter" title="{{ _('change_org') }}">{{ "🏠" if org.owner_id else "🏢" }} {{ org.name }}</a>{% endif %}
         {% if editor and not org.owner_id %}<a href="/users">🔑 {{ _("nav_users") }}</a><a href="/emails">📬 {{ _("nav_emails") }}</a>{% endif %}
         {% if superadmin %}<a href="/orgs">⭐ {{ _("nav_orgs") }}</a>{% endif %}
@@ -52,6 +52,8 @@
     <label for="menu-toggle" class="menu-backdrop" aria-hidden="true"></label>
     <div class="menu-panel">
     {# Main sections: a row of pills on wide screens, a list in the ☰ menu on phones. #}
+    {# The welcome page (landing) shows no organization's sections. #}
+    {% if not landing %}
     <nav class="tabbar">
       {% set on_my_page = my_player and path.startswith("/players/%d"|format(my_player.id)) %}
       {% for url, icon, key, active in [
@@ -66,6 +68,7 @@
       {% if loop.first and my_player %}<a href="/players/{{ my_player.id }}" {% if on_my_page %}class="active" aria-current="page"{% endif %}><span class="icon" aria-hidden="true">🙋</span>{{ _("my_summary") }}</a>{% endif %}
       {% endfor %}
     </nav>
+    {% endif %}
     <div class="top-actions">
       {% if editor and not org.owner_id %}<a class="button" href="/courts">{{ _("nav_courts") }}</a>{% endif %}
       <a class="install-link" href="/install">📲 {{ _("install_app") }}</a>

@@ -1631,15 +1631,18 @@ def test_first_organization_adopts_existing_data(tmp_path, monkeypatch):
         conn.execute("INSERT INTO players (organization_id, name) VALUES (2, 'A')")  # per org
 
 
-def test_enter_page_lists_the_top_ten_organizations(league):
+def test_enter_page_finds_organizations_only_when_searched(league):
     with db.connect() as conn:
-        for i in range(11):
-            orgs.create_org(conn, f"Org {i:02d}", f"admin{i}", "x")
+        for name in ("Pádel Norte", "Padel Sur", "Tenis Club"):
+            orgs.create_org(conn, name, name.split()[1].lower(), "x")
     league.cookies.delete("org")
     page = league.get("/enter").text
+    assert 'class="org-pick"' not in page  # nothing listed until you search
+    page = league.get("/enter?q=padel").text  # accents and case don't count
     names = re.findall(r'class="org-pick"><span>🏢 ([^<]+)</span>', page)
-    assert names[0] == "Club" and len(names) == 10  # the most tournaments first, then by name
-    assert "Org 09" not in names and "Org 08" in names
+    assert names == ["Padel Sur", "Pádel Norte"] or names == ["Pádel Norte", "Padel Sur"]
+    assert "No organization is called" in league.get("/enter?q=zz").text
+    assert 'class="org-pick"' not in league.get("/enter?q=p").text  # 2 letters at least
     r = league.post("/enter", data={"name": "Club", "next": "/"})
     assert "Liga Amigos" in r.text
 
@@ -1876,11 +1879,24 @@ def test_home_is_the_login_until_someone_logs_in(locked):
     locked.cookies.delete("org")
     r = locked.get("/", follow_redirects=False)
     assert r.status_code == 200 and 'name="role" value="account"' in r.text
-    assert "Just looking" in r.text and "/enter?next=/standings" in r.text
+    # Log in, create an account, find an organization; no organization's sections.
+    assert 'href="/signup"' in r.text and 'action="/enter"' in r.text and 'name="q"' in r.text
+    assert 'class="tabbar"' not in r.text and "🏢 Club" not in r.text
+    assert "Club's tournaments" not in r.text
+    # A browser that remembers a club: its tournaments in a table, with a search box.
     locked.post("/enter", data={"name": "Club", "next": "/"})
     r = locked.get("/")
-    assert "Just looking" in r.text and 'href="/standings"' in r.text  # standings: one tap
+    assert 'class="tabbar"' not in r.text and "Club's tournaments" in r.text
+    assert 'id="club-tournaments" data-filterable' in r.text and "Liga Amigos" in r.text
     assert "Standings" in locked.get("/standings").text
+
+
+def test_a_new_account_enters_its_mi_padel_not_the_remembered_club(locked):
+    locked.post("/enter", data={"name": "Club", "next": "/"})
+    r = locked.post("/signup", data={"first_name": "Zoe", "display_name": "Zoe",
+                                     "username": "zoe", "email": "zoe@example.com",
+                                     "password": "clave-larga", "password2": "clave-larga"})
+    assert "🏠 Mi pádel de zoe" in r.text and "🏢 Club" not in r.text
 
 
 def test_home_lists_the_accounts_tournaments_and_next_sets_by_date(with_players):

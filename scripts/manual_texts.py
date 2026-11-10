@@ -103,7 +103,9 @@ ADMIN_MANUAL = {
                          "el administrador.",
                          "**Jugadores:** para crear una cuenta de jugador, o entrar solo con la "
                          "contraseña de un torneo para anotar resultados.",
-                         "**Solo mirar:** ver la clasificación de una organización sin entrar."]),
+                         "**Buscar organización:** escribe el nombre de tu club para ver sus "
+                         "torneos y clasificaciones. La entrada no muestra ninguna organización "
+                         "hasta que la buscas."]),
             ("shots", [("login", 0, None, "La entrada"),
                        ("admin_home", 0, None, "Inicio del administrador")]),
             ("p", "Ya adentro, **Inicio** muestra tus torneos (los de tu organización, marcados "

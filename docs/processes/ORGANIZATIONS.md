@@ -131,15 +131,17 @@ flowchart TD
     B -- yes --> C[Page of that organization]
     B -- no --> D{super admin?}
     D -- yes --> E["/orgs: list of all organizations"]
-    D -- no --> F["/enter: top 10 organizations + type a name"]
-    F -- tap or type name --> G[Set org cookie] --> C
+    D -- no --> F["/enter: 🔍 search by (part of) the name;<br/>nothing listed before searching"]
+    F -- tap a result --> G[Set org cookie] --> C
     E -- Entrar --> G
     H["/login as org admin"] --> G
     I["/login with a player password"] --> G
 ```
 
-- `/enter` lists the 10 organizations with the most tournaments (then by name) as
-  one-tap buttons. Below the list, any organization's name can be typed.
+- `/enter` lists **no organization until you search** (the user's request, 2026-11-10:
+  a visitor sees no organization they didn't look for). `?q=` (2 letters at least)
+  shows the clubs whose name contains it, ignoring case and accents
+  (`main.search_orgs`); a 🏠 Mi pádel is never found.
 - The header shows "🏢 name". Tapping it goes back to `/enter` to change organization.
 - Pages open without an organization: `/enter`, `/login`, `/logout`, `/static`,
   `/lang`, `/rules`, `/orgs`.
