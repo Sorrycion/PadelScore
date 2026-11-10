@@ -41,8 +41,10 @@ flowchart LR
     organization, oldest date first. Each has a link to enter its result (the set's
     Edit page, see [SETS.md](SETS.md)).
   - **🏆 Mis torneos:** every tournament the account plays (🎾, with position and points)
-    or runs (🛠️ Admin: all of their organization's for an org admin, every
-    organization's for a super admin). Tournaments still going come first.
+    or runs (🛠️ Admin: all of their organization's for an org admin, every club's for
+    a super admin). Tournaments still going come first. **Only your own friendlies**
+    (the user's request, 2026-11-10): no other account's 🏠 Mi pádel, and a club's
+    🤝 Amistosos only if you play in it, even for its admin.
   - A **guest** sees the tournaments whose password the browser has, with all their
     pending sets.
 - Links into another organization go through `/enter`, which switches the browser to
