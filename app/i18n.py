@@ -230,7 +230,6 @@ TEXT = {
     "already_playing": {"es": "Ya juegas este torneo como {name}",
                         "en": "You already play this tournament as {name}"},
     "enter_result": {"es": "Resultado", "en": "Result"},
-    "choose_org": {"es": "Elegir organización", "en": "Choose an organization"},
     "hello_name": {"es": "Hola, {name}", "en": "Hi, {name}"},
     "hello_guest": {"es": "Hola", "en": "Hi"},
     "my_upcoming_sets": {"es": "Mis próximos sets", "en": "My next sets"},
@@ -241,13 +240,21 @@ TEXT = {
                         "en": "You're a guest with a tournament's password. Make an account "
                               "to see all your tournaments together."},
     "home_login_title": {"es": "🎾 Bienvenido a PadelScore", "en": "🎾 Welcome to PadelScore"},
-    "home_login_hint": {"es": "Entra para ver tus torneos y tus próximos sets.",
-                        "en": "Log in to see your tournaments and your next sets."},
-    "just_looking": {"es": "Solo mirar", "en": "Just looking"},
-    "just_looking_org": {"es": "Sigue viendo la clasificación de {name} sin entrar.",
-                         "en": "Keep viewing {name}'s standings without logging in."},
-    "just_looking_hint": {"es": "Elige una organización para ver sus clasificaciones.",
-                          "en": "Choose an organization to see its standings."},
+    "home_login_hint": {"es": "Lleva tus partidos de pádel, tus ligas y tus estadísticas. "
+                              "Entra con tu cuenta, créala gratis o busca tu club.",
+                        "en": "Keep your padel games, leagues and stats. Log in, create a "
+                              "free account or find your club."},
+    "find_org": {"es": "Buscar organización", "en": "Find an organization"},
+    "find_org_hint": {"es": "¿Tu club ya usa PadelScore? Búscalo por su nombre para ver sus "
+                            "torneos y clasificaciones.",
+                      "en": "Does your club already use PadelScore? Search for it by name to "
+                            "see its tournaments and standings."},
+    "find_org_placeholder": {"es": "Nombre del club…", "en": "Club name…"},
+    "find_org_none": {"es": "Ninguna organización se llama «{q}».",
+                      "en": "No organization is called “{q}”."},
+    "search": {"es": "Buscar", "en": "Search"},
+    "club_tournaments": {"es": "Torneos de {name}", "en": "{name}'s tournaments"},
+    "find_tournament": {"es": "Buscar torneo por nombre…", "en": "Search a tournament by name…"},
     "add_tournament": {"es": "➕ Agregar torneo", "en": "➕ Add tournament"},
     "no_tournaments": {"es": "Aún no hay torneos.", "en": "No tournaments yet."},
     "no_matchdays": {"es": "Aún no hay jornadas.", "en": "No matchdays yet."},
@@ -459,15 +466,13 @@ TEXT = {
 
     # Organizations
     "enter_title": {"es": "🏢 Entrar a una organización", "en": "🏢 Enter an organization"},
-    "enter_hint": {"es": "Elige tu organización para ver sus torneos, clasificaciones y "
-                         "jugadores.",
-                   "en": "Choose your organization to see its tournaments, standings and "
-                         "players."},
+    "enter_hint": {"es": "Escribe el nombre (o parte del nombre) de tu organización para ver "
+                         "sus torneos, clasificaciones y jugadores.",
+                   "en": "Type the name (or part of it) of your organization to see its tournaments, "
+                         "standings and players."},
     "enter_login_hint": {"es": '¿Eres administrador o jugador con contraseña? <a href="{url}">Entra aquí</a>.',
                          "en": 'An admin, or a player with a password? <a href="{url}">Log in here</a>.'},
     "org_name": {"es": "🏢 Organización", "en": "🏢 Organization"},
-    "enter_other": {"es": "¿No está en la lista? Escribe su nombre:",
-                    "en": "Not in the list? Type its name:"},
     "enter": {"es": "➡️ Entrar", "en": "➡️ Enter"},
     "change_org": {"es": "Cambiar de organización", "en": "Change organization"},
     "current_org": {"es": "Actual", "en": "Current"},

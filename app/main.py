@@ -897,7 +897,13 @@ def home(request: Request, error: str | None = None):
                                          else guest_home(request, conn))
         personal = orgs.personal_of(conn, user["id"]) if user else None
     if not user and not tournaments:
-        return templates.TemplateResponse(request, "login.html", {"next": "/", "home": True})
+        # The club this browser remembers (org cookie): its tournaments, below everything.
+        club = auth.current_org(request)
+        with db.connect() as conn:
+            remembered = all_tournaments(conn) if club and club["owner_id"] is None else []
+        return templates.TemplateResponse(request, "login.html", {
+            "next": "/", "home": True, "landing": True,
+            "club": club if remembered else None, "club_tournaments": remembered})
     return templates.TemplateResponse(request, "home.html", {
         "tournaments": tournaments, "upcoming": upcoming, "account": user, "error": error,
         "latest": latest, "personal": personal,
@@ -1006,21 +1012,26 @@ def set_language(lang: str, next: str = "/"):
     return response
 
 
-def top_orgs(conn, limit=10):
-    """The organizations with the most tournaments (then by name), for the enter page."""
-    return conn.execute(
-        "SELECT o.name, (SELECT COUNT(*) FROM tournaments t WHERE t.organization_id = o.id) "
-        "AS tournaments FROM organizations o WHERE o.owner_id IS NULL "  # clubs, not Mi pádel
-        "ORDER BY tournaments DESC, o.name LIMIT ?",
-        (limit,)).fetchall()
+def search_orgs(conn, query, limit=20):
+    """Clubs whose name contains `query` (case, accents and spacing don't count; 2
+    letters at least). A 🏠 Mi pádel is never found: it's private."""
+    key = name_key(query)
+    if len(key) < 2:
+        return []
+    found = [o for o in conn.execute("SELECT o.name, (SELECT COUNT(*) FROM tournaments t WHERE "
+                                     "t.organization_id = o.id) AS tournaments FROM "
+                                     "organizations o WHERE o.owner_id IS NULL ORDER BY o.name")
+             if key in name_key(o["name"])]
+    return found[:limit]
 
 
 @app.get("/enter", response_class=HTMLResponse)
-def enter_page(request: Request, next: str = "/"):
-    """Choose the organization to see: one of the top ones, or any by its name."""
+def enter_page(request: Request, next: str = "/", q: str = ""):
+    """🔍 Find an organization by (part of) its name: nothing is listed until you search,
+    so a visitor sees no organization they didn't look for."""
     with db.connect() as conn:
         return templates.TemplateResponse(request, "enter.html", {
-            "next": safe_next(next), "orgs": top_orgs(conn)})
+            "next": safe_next(next), "q": q.strip(), "orgs": search_orgs(conn, q)})
 
 
 @app.post("/enter")
@@ -1032,10 +1043,22 @@ def enter(request: Request, name: str = Form(""), next: str = Form("/")):
         if org is None:
             time.sleep(1)  # slow down guessing
             return templates.TemplateResponse(request, "enter.html", {
-                "next": safe_next(next), "name": name, "error": "err_unknown_org",
-                "orgs": top_orgs(conn),
+                "next": safe_next(next), "q": name, "error": "err_unknown_org",
+                "orgs": search_orgs(conn, name),
             }, status_code=404)
     return enter_org(request, org, safe_next(next))
+
+
+def enter_mine(request, conn, user, response, always=False):
+    """The browser views the account's 🏠 Mi pádel: always after signing up (a new
+    account has no club yet); after logging in, only if it views no organization (a club
+    being looked at, e.g. to join one of its tournaments, stays)."""
+    if not always and auth.current_org(request):
+        return response
+    mine = orgs.personal_of(conn, user["id"])
+    if mine:
+        response.set_cookie(auth.ORG_COOKIE, auth.org_cookie(mine), **cookie_options(request))
+    return response
 
 
 def enter_org(request, org, next_url="/"):
@@ -1085,9 +1108,10 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
                 response = enter_org(request, org, wanted if current
                                      and current["id"] == org["id"] and wanted else "/")
             else:
+                response = redirect(wanted or "/")
                 if user["role"] == "player":
                     orgs.create_personal(conn, user["id"])  # older accounts get theirs now
-                response = redirect(wanted or "/")
+                    enter_mine(request, conn, user, response)
             response.set_cookie(auth.USER_COOKIE, auth.user_cookie(user), **cookie)
             return response
         current = auth.current_org(request)
@@ -1387,6 +1411,9 @@ def signup(request: Request, t: str = Form(""), who: str = Form(""),
         user = users.get(conn, user_id)
     response = redirect(safe_next(next_url) if next_url else "/me" if tournament else "/")
     response.set_cookie(auth.USER_COOKIE, auth.user_cookie(user), **cookie_options(request))
+    if not tournament:  # from a tournament, the browser already views its club
+        with db.connect() as conn:
+            enter_mine(request, conn, user, response, always=True)
     return response
 
 

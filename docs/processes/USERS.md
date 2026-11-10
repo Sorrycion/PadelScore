@@ -17,18 +17,25 @@ logs in with its **username or email** and password. Players can also come in as
 
 ```mermaid
 flowchart LR
-    R["/ (not logged in)"] --> L["login: 👤 Mi cuenta · 🎾 Jugadores · 👀 Solo mirar"]
+    R["/ (not logged in): welcome page"] --> L["👤 Mi cuenta · 🎾 Jugadores (✨ Crear cuenta)<br/>· 🔍 Buscar organización"]
     L -- username/email + password --> U{role}
     U -- org_admin --> O["enters their organization"] --> H
     U -- "super / player" --> H["/ home: ⏳ Mis próximos sets (by date)<br/>+ 🏆 Mis torneos (every organization)"]
     L -- tournament password --> G["cookie player_{tid}<br/>(+ enters its organization)"] --> W["/welcome: account or guest"]
-    L -- "👀 Solo mirar" --> V["/standings of the organization"]
+    L -- "🔍 club name" --> V["/enter?q=…: matching clubs"]
+    R -. "browser remembers a club" .-> T["its tournaments in a table<br/>(search by name)"]
 ```
 
 ## The home page (`/`)
 
-- **Nobody logged in:** `/` is the login, with a third section, 👀 **Solo mirar**,
-  that goes to the organization's standings (`/standings`) or to choosing one.
+- **Nobody logged in:** `/` is the welcome page (the user's request, 2026-11-10): 👤 Mi
+  cuenta (log in), 🎾 Jugadores (✨ Crear cuenta, and the guest tournament password
+  folded away) and 🔍 Buscar organización. It shows **no organization**: no club menu
+  (`landing` hides the sections and the organization line). Only if the browser
+  remembers a club (its org cookie) does it add, below everything, that club's
+  tournaments in a table with a search box (`table-filter.js`).
+- **A new account** enters its 🏠 Mi pádel (not a club left in the browser). Logging in
+  enters it only if the browser views no organization (`main.enter_mine`).
 - **Logged in:** `/` lists:
   - **⏳ Mis próximos sets:** the pending sets of the account's players, in every
     organization, oldest date first. Each has a link to enter its result (the set's

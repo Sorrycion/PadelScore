@@ -45,16 +45,37 @@
   </section>
 
   {% if home %}
-  <section class="card login-section" id="login-visitor">
-    <h2>👀 {{ _("just_looking") }}</h2>
-    {% if org %}
-    <p class="muted">{{ _("just_looking_org", name=org.name) }}</p>
-    <a class="button secondary" href="/standings">🏆 {{ _("nav_standings") }}</a>
-    {% else %}
-    <p class="muted">{{ _("just_looking_hint") }}</p>
-    <a class="button secondary" href="/enter?next=/standings">🏢 {{ _("choose_org") }}</a>
-    {% endif %}
+  <section class="card login-section" id="find-org">
+    <h2>🔍 {{ _("find_org") }}</h2>
+    <p class="muted">{{ _("find_org_hint") }}</p>
+    <form method="get" action="/enter" class="inline">
+      <input type="search" name="q" minlength="2" placeholder="{{ _('find_org_placeholder') }}" aria-label="{{ _('find_org') }}" required>
+      <button type="submit" class="secondary">🔍 {{ _("search") }}</button>
+    </form>
   </section>
   {% endif %}
 </div>
+
+{% if club_tournaments %}
+{# The club this browser remembers: its tournaments, with a search box (table-filter.js). #}
+<h2>🏆 {{ _("club_tournaments", name=club.name) }}</h2>
+<input type="search" class="table-search" data-filter="club-tournaments" placeholder="{{ _('find_tournament') }}" aria-label="{{ _('find_tournament') }}">
+<p class="muted"><span data-filter-count="club-tournaments">{{ club_tournaments|length }}</span> / {{ club_tournaments|length }}</p>
+<div class="scroll">
+<table class="data-table" id="club-tournaments" data-filterable>
+  <thead><tr><th>{{ _("tournament_name") }}</th><th>{{ _("rule_type") }}</th><th>{{ _("date") }}</th><th></th></tr></thead>
+  <tbody>
+  {% for t in club_tournaments %}
+  <tr>
+    <td><a href="/tournaments/{{ t.id }}"><strong>{{ t.name }}</strong></a></td>
+    <td>{{ RULE_ICONS.get(t.rule_code, "") }} {{ t.rule_type }}</td>
+    <td>{{ t.held_on }}</td>
+    <td>{% if t.ended %}🏁{% else %}🎾{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<script src="/static/table-filter.js?v={{ css_version }}" defer></script>
+{% endif %}
 {% endblock %}

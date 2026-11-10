@@ -1,9 +1,16 @@
 {% extends "base.html" %}
 {% block title %}{{ _("enter_title") }} · PadelScore{% endblock %}
 {% block content %}
+{# 🔍 Find an organization (main.enter_page): nothing is listed until you search. #}
 <h1>{{ _("enter_title") }}</h1>
 <p class="muted">{{ _("enter_hint") }}</p>
 {% if error %}<p class="error">{{ _(error) }}</p>{% endif %}
+<form method="get" action="/enter" class="inline">
+  <input type="hidden" name="next" value="{{ next }}">
+  <input type="search" name="q" value="{{ q or '' }}" minlength="2" placeholder="{{ _('find_org_placeholder') }}" aria-label="{{ _('find_org') }}" required autofocus>
+  <button type="submit">🔍 {{ _("search") }}</button>
+</form>
+{% if q %}
 {% if orgs %}
 <ul class="cards org-list">
   {% for o in orgs %}
@@ -14,14 +21,7 @@
   </form></li>
   {% endfor %}
 </ul>
-<p class="muted">{{ _("enter_other") }}</p>
+{% else %}<p class="empty">{{ _("find_org_none", q=q) }}</p>{% endif %}
 {% endif %}
-<form method="post" action="/enter" class="stack card">
-  <input type="hidden" name="next" value="{{ next }}">
-  <label>{{ _("org_name") }}
-    <input name="name" value="{{ name or '' }}" autocomplete="organization" required>
-  </label>
-  <button type="submit">{{ _("enter") }}</button>
-</form>
 <p class="muted">{{ _("enter_login_hint", url="/login") }}</p>
 {% endblock %}
