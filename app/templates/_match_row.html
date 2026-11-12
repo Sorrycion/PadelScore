@@ -2,9 +2,12 @@
    winning (chance_of, _chance.html). On the matchday page (in_matchday) the sets this
    browser may score (scorable: all for editors, a player's own) get its ✏️ Edit link
    and editable score boxes with a ✏️ (score-inline.js saves them; not for Escalafón,
-   whose 3 sets are typed on the Edit page). #}
+   whose 3 sets are typed on the Edit page). A set listed from any organization (pages
+   of an account, e.g. 🤝 Mis amistosos) carries m.org_prefix ("/<slug>"): its links go to
+   that organization and it has no edit actions (they're made inside it). #}
+{% set px = m.org_prefix or "" %}
 {% set pending = m.team_a_games is none %}
-{% set can_edit = editor or (in_matchday and m.id in scorable) %}
+{% set can_edit = not px and (editor or (in_matchday and m.id in scorable)) %}
 {% set inline = in_matchday and can_edit and m.rule_code != LADDER %}
 <li class="match" id="set-{{ m.id }}">
   {% if inline %}
@@ -23,15 +26,15 @@
   </div>
   {% endif %}
   <div class="teams">
-    <div class="team a {% if m.winner == 'A' %}winner{% endif %}"><a href="/players/{{ m.a1_id }}">{{ m.a1 }}</a><a href="/players/{{ m.a2_id }}">{{ m.a2 }}</a></div>
-    <div class="team b {% if m.winner == 'B' %}winner{% endif %}"><a href="/players/{{ m.b1_id }}">{{ m.b1 }}</a><a href="/players/{{ m.b2_id }}">{{ m.b2 }}</a></div>
+    <div class="team a {% if m.winner == 'A' %}winner{% endif %}"><a href="{{ px }}/players/{{ m.a1_id }}">{{ m.a1 }}</a><a href="{{ px }}/players/{{ m.a2_id }}">{{ m.a2 }}</a></div>
+    <div class="team b {% if m.winner == 'B' %}winner{% endif %}"><a href="{{ px }}/players/{{ m.b1_id }}">{{ m.b1 }}</a><a href="{{ px }}/players/{{ m.b2_id }}">{{ m.b2 }}</a></div>
   </div>
   {% if m.sets_detail %}<p class="sets-detail">🎾 {{ m.sets_detail }}</p>{% endif %}
   {% set chance = chance_of(m) %}
   {% if chance is not none %}{% include "_chance.html" %}{% endif %}
   {% if not in_matchday or can_edit %}
   <div class="set-actions">
-    {% if not in_matchday %}<a class="tag" href="/tournaments/{{ m.tournament_id }}">{{ m.tournament }}</a>{% endif %}
+    {% if not in_matchday %}<a class="tag" href="{{ px }}/tournaments/{{ m.tournament_id }}">{{ m.tournament }}{% if m.org_name and px %} · {{ m.org_name }}{% endif %}</a>{% endif %}
     {% if can_edit %}
     <span class="edit">
       <a href="/matches/{{ m.id }}/edit">{{ _("edit") }}</a>
@@ -44,5 +47,5 @@
     {% endif %}
   </div>
   {% endif %}
-  <a class="chip {% if pending %}pending{% endif %}" href="/matchdays/{{ m.matchday_id }}">{% if pending %}⏳ {% endif %}{% if not in_matchday %}{{ _("round_short" if m.rule_code in ROUND_MODES else "matchday_short", n=m.matchday) }} · {% endif %}{{ _("court_n", n=m.court) }}</a>
+  <a class="chip {% if pending %}pending{% endif %}" href="{{ px }}/matchdays/{{ m.matchday_id }}">{% if pending %}⏳ {% endif %}{% if not in_matchday %}{{ _("round_short" if m.rule_code in ROUND_MODES else "matchday_short", n=m.matchday) }} · {% endif %}{{ _("court_n", n=m.court) }}</a>
 </li>

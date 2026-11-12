@@ -1192,6 +1192,18 @@ TEXT = {
     "err_friendly_not_in": {"es": "Tú tienes que ser uno de los cuatro jugadores.",
                             "en": "You must be one of the four players."},
     "my_friendlies": {"es": "Mis amistosos", "en": "My friendlies"},
+    "my_friendlies_page_hint": {
+        "es": "Todos los amistosos que has jugado, en cualquier organización, y cómo vas "
+              "contra cada rival. Solo los tuyos.",
+        "en": "Every friendly you've played, in any organization, and how you do against "
+              "each rival. Only yours."},
+    "against_whom": {"es": "Contra quién", "en": "Against whom"},
+    "rival": {"es": "Rival", "en": "Rival"},
+    "my_friendly_games": {"es": "Mis partidos", "en": "My games"},
+    "no_friendlies_yet": {"es": "Aún no has jugado amistosos.",
+                          "en": "You haven't played any friendlies yet."},
+    "club_friendlies_table": {"es": "Clasificación de Amistosos de {name}",
+                              "en": "{name}'s Friendlies standings"},
     "my_friendlies_hint": {"es": "Tus amistosos de todas tus organizaciones.",
                            "en": "Your friendlies in all your organizations."},
     "all_sets": {"es": "Todo", "en": "Everything"},

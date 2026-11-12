@@ -1,13 +1,45 @@
 {% extends "base.html" %}
-{% block title %}🤝 Amistosos · PadelScore{% endblock %}
+{% block title %}🤝 {{ _("my_friendlies") }} · PadelScore{% endblock %}
 {% block content %}
-{# 🤝 Amistosos before the organization's first friendly (afterwards /friendlies opens
-   its tournament). #}
-<p class="eyebrow"><a class="plain" href="/rules#amistosos">🤝 Amistosos</a></p>
-<h1>🤝 {{ _("friendlies") }}</h1>
+{# 🤝 Mis amistosos (main.friendlies_page): the account's own friendlies in every
+   organization, its record against each rival, and where to record a new one. #}
+<h1>🤝 {{ _("my_friendlies") }}</h1>
+{% if not account %}
 <p>{{ _("friendlies_intro") }}</p>
-{% if can_add %}<p class="inline"><a class="button" href="/friendlies/new">{{ _("new_friendly") }}</a></p>
-{% else %}<p class="muted">{{ _("friendlies_login") }}</p>{% endif %}
-<p class="muted">{{ _("amistosos_note") }}</p>
+<p class="muted">{{ _("friendlies_login") }}</p>
+<p class="inline"><a class="button" href="/login?next=/friendlies">{{ _("login") }}</a>
+  <a class="button secondary" href="/signup">✨ {{ _("create_account") }}</a></p>
+{% else %}
+<p class="muted">{{ _("my_friendlies_page_hint") }}</p>
+{% if new_url %}<p class="inline"><a class="button" href="{{ new_url }}">{{ _("new_friendly") }}</a></p>{% endif %}
 {% if invite %}{% include "_invite_card.html" %}{% endif %}
+{% if sets %}
+{% set f = record %}
+<div class="tiles">
+  <div class="tile"><strong>{{ f.played }}</strong><span>{{ _("sets") }}</span></div>
+  <div class="tile"><strong class="up">{{ f.won }}</strong><span>{{ _("won") }}</span></div>
+  <div class="tile"><strong class="down">{{ f.lost }}</strong><span>{{ _("lost") }}</span></div>
+  <div class="tile"><strong>{{ f.win_pct }}%</strong><span>{{ _("win_pct") }}</span></div>
+</div>
+
+<h2>⚔️ {{ _("against_whom") }}</h2>
+<div class="scroll">
+<table class="standings">
+  <thead><tr><th>👤 {{ _("rival") }}</th><th title="{{ _('won') }}">✅</th><th title="{{ _('lost') }}">❌</th><th>%</th></tr></thead>
+  <tbody>
+  {% for r in f.rivals %}
+  <tr><td>{{ r.name }}</td><td>{{ r.won }}</td><td>{{ r.lost }}</td>
+      <td class="muted-cell">{{ (100 * r.won / (r.won + r.lost))|round|int if r.won + r.lost else 0 }}%</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>🎾 {{ _("my_friendly_games") }}</h2>
+<ul class="matches">{% for m in sets %}{% include "_match_row.html" %}{% endfor %}</ul>
+{% else %}
+<p class="empty">{{ _("no_friendlies_yet") }}</p>
+{% endif %}
+{% if club %}<p class="muted"><a href="/tournaments/{{ club.id }}">🏆 {{ _("club_friendlies_table", name=org.name) }}</a></p>{% endif %}
+{% endif %}
 {% endblock %}

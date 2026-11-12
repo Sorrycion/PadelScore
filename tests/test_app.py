@@ -3141,6 +3141,40 @@ def test_admins_see_only_their_own_friendlies_at_home(league):
         c.post("/logout")
 
 
+def test_my_friendlies_page_shows_only_mine_in_every_organization(league):
+    c = league
+    with db.connect() as conn:
+        ana = users.create_user(conn, "player", "analo", "clave-larga", email="ana@example.com",
+                                display_name="Ana")
+        users.link_player(conn, ana, 1)
+        orgs.set_superadmin(conn, "julio", "super")
+    c.post("/logout")
+    c.post("/login", data={"username": "analo", "password": "clave-larga", "role": "account"})
+    with db.connect() as conn:
+        mine = orgs.personal_of(conn, ana)
+    c.post(f"/{mine['slug']}/friendlies", data={"played_on": "2026-11-05", "a1": "Ana",
+                                                "a2": "Max", "b1": "Leo", "b2": "Eva",
+                                                "team_a_games": "6", "team_b_games": "1"})
+    c.post("/club/friendlies", data={"played_on": "2026-11-06", "a1": "Ana", "a2": "Bea",
+                                     "b1": "Carlos", "b2": "Leo", "team_a_games": "2",
+                                     "team_b_games": "6"})
+    c.post("/club/friendlies", data={"played_on": "2026-11-06", "a1": "Bea", "a2": "Carlos",
+                                     "b1": "Diego", "b2": "Elena", "team_a_games": "6",
+                                     "team_b_games": "0"})  # not Ana's (an admin recorded it)
+    page = c.get("/club/friendlies").text
+    games = page.split("My games")[1]
+    assert games.count('class="match"') == 2 and "Elena" not in games  # hers, both orgs
+    assert f'href="/{mine["slug"]}/players/' in games  # each set links to its own org
+    rivals = page.split("Against whom")[1].split("</table>")[0]
+    leo = rivals.split("<td>Leo</td>")[1].split("</tr>")[0]
+    assert "<td>1</td><td>1</td>" in leo  # beat Leo once, lost once
+    c.post("/logout")
+    # The super admin plays no friendly: none of anyone else's.
+    c.post("/login", data={"username": "julio", "password": "super", "role": "account"})
+    page = c.get("/club/friendlies").text
+    assert "haven't played any friendlies" in page and 'class="match"' not in page
+
+
 def test_jornada_pdf_has_a_positions_chart(league):
     from app import report
     calls = []

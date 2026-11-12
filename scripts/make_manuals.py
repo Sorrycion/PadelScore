@@ -361,6 +361,7 @@ def pages_for(i):
         "friendly_new": ("player", f"{s}/friendlies/new"),
         "friendlies": ("player", f"{s}/tournaments/{i['friendlies']}"),
         "friendly_stats": ("player", f"{s}/players/{i['ana']}/stats?only=friendlies"),
+        "my_friendlies": ("player", f"{s}/friendlies"),
         "mp_invite": ("anon", f"/invite/{i['invite']}"),
         "mp_claim": ("anon", i["claim"]),
     }

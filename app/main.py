@@ -642,17 +642,50 @@ def can_add_friendly(request, conn):
     return auth.is_editor(request) or my_player_id(request, conn) is not None
 
 
+def friendly_record(sets, my_ids):
+    """(played, won, lost, win %) and, per rival (by name), sets won and lost against
+    them, most played first: the account's friendlies (`my_ids`: its players)."""
+    rivals, won = {}, 0
+    for s in sets:
+        side = "A" if {s["a1_id"], s["a2_id"]} & my_ids else "B"
+        win = s["winner"] == side
+        won += win
+        for k in (("b1", "b2") if side == "A" else ("a1", "a2")):
+            r = rivals.setdefault(name_key(s[k]), {"name": s[k], "won": 0, "lost": 0})
+            r["won" if win else "lost"] += s["winner"] is not None
+    lost = sum(1 for s in sets if s["winner"] is not None) - won
+    rows = sorted(rivals.values(), key=lambda r: (-(r["won"] + r["lost"]), r["name"].lower()))
+    return {"played": len(sets), "won": won, "lost": lost,
+            "win_pct": round(100 * won / len(sets)) if sets else 0, "rivals": rows}
+
+
 @app.get("/friendlies", response_class=HTMLResponse)
 def friendlies_page(request: Request):
-    """🤝 Amistosos: its tournament page, or (before the first friendly) how it works."""
+    """🤝 Mis amistosos: every friendly the account played, in any organization (only its
+    own: not other people's, even for admins), with its record against each rival. The
+    club's whole 🤝 Amistosos table is under Torneos."""
+    user = auth.current_user(request)
+    org = auth.current_org(request)
     with db.connect() as conn:
-        tournament = friendlies_tournament(conn)
-        if tournament:
-            return redirect(f"/tournaments/{tournament['id']}")
-        org = auth.current_org(request)
-        return templates.TemplateResponse(request, "friendlies.html", {
-            "can_add": can_add_friendly(request, conn),
-            "invite": invite_share(request, org) if org["owner_id"] else None})
+        club = friendlies_tournament(conn)
+        mine_here = my_player_id(request, conn)
+        personal = orgs.personal_of(conn, user["id"]) if user else None
+        sets, my_ids = [], set()
+        for player in my_players(conn, user["id"]) if user else []:
+            my_ids.add(player["id"])
+            played = in_org(player["organization_id"], lambda: [
+                s for s in set_rows(conn, player_id=player["id"])
+                if s["rule_code"] == AMISTOSOS and is_played(s)])
+            sets += [dict(s, org_name=player["org_name"], org_prefix=f"/{player['org_slug']}")
+                     for s in played]
+    sets.sort(key=lambda s: (s["played_on"], s["matchday"], s["court"]), reverse=True)
+    # Where "🤝 Nuevo amistoso" records it: here if you play here, else your Mi pádel.
+    new_url = ("/friendlies/new" if mine_here or auth.is_editor(request)
+               else f"/{personal['slug']}/friendlies/new" if personal else None)
+    return templates.TemplateResponse(request, "friendlies.html", {
+        "account": user, "sets": sets, "record": friendly_record(sets, my_ids),
+        "new_url": new_url, "club": club,
+        "invite": invite_share(request, org) if org and org["owner_id"] else None})
 
 
 def friendly_form(request, conn, form, error=None, status_code=200):
@@ -1640,8 +1673,9 @@ def my_friendlies(summaries):
         if s["friendlies"]:
             orgs_.append({"name": s["player"]["org_name"],
                           "totals": stats.totals(s["friendlies"], s["player"]["id"])})
-    played = sorted((dict(m, org_name=s["player"]["org_name"]) for s in summaries
-                     for m in s["friendlies"]),
+    played = sorted((dict(m, org_name=s["player"]["org_name"],
+                          org_prefix=f"/{s['player']['org_slug']}")
+                     for s in summaries for m in s["friendlies"]),
                     key=lambda m: (m["played_on"], m["matchday"], m["court"]), reverse=True)
     totals = {k: sum(o["totals"][k] for o in orgs_) for k in ("played", "won", "lost")}
     totals["win_pct"] = round(100 * totals["won"] / totals["played"]) if totals["played"] else 0
